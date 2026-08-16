@@ -32,6 +32,7 @@ Desktop.ini
 # Cursor local plans and transient state
 .cursor/plans/
 .cursor/memory/
+.cursor/hooks/state/
 
 # codebase-memory-mcp local graph snapshot
 .codebase-memory/

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/cbm-index-hook.ps1",
+        "timeout": 15
+      }
+    ],
+    "afterTabFileEdit": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/cbm-index-hook.ps1",
+        "timeout": 15
+      }
+    ],
+    "stop": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/cbm-index-hook.ps1",
+        "timeout": 15,
+        "loop_limit": 1
+      }
+    ]
+  }
+}

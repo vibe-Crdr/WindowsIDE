@@ -39,4 +39,4 @@
 
 ## MCP
 
-プロジェクト MCP の使い分けは `.cursor/rules/project-mcp.mdc`。
+プロジェクト MCP の使い分けは `.cursor/rules/project-mcp.mdc`。エージェントまたは Tab がこのリポジトリを編集したあと、`stop` hook が codebase-memory の `index_repository`（project `WindowsIDE`）を一度実行するようフォローアップする。

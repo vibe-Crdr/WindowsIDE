@@ -20,3 +20,5 @@ Python launchers exist because this repo path contains `デスクトップ`. Do 
 Workspace source edits stay on built-in Read / Write / StrReplace / Grep. Local git stays on Shell. GitHub MCP is for the GitHub API; fall back to `gh` if that server is down.
 
 Never print `GITHUB_PERSONAL_ACCESS_TOKEN` or put a PAT in files. Memory storage is `.cursor/memory/` (gitignored). Filesystem and Excel are scoped to the project root only.
+
+CBM auto-watch follows the ASCII `cbm-session` cwd, not this repo. `.cursor/hooks.json` marks the graph dirty on `afterFileEdit` / `afterTabFileEdit`, then a `stop` follow-up asks the agent to call `index_repository` once for project `WindowsIDE` (this workspace path, `mode` `full`). Do not index Auto_DayTrador or the LOCALAPPDATA placeholder. Transient dirty state is `.cursor/hooks/state/` (gitignored).

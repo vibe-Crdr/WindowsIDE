@@ -1,0 +1,22 @@
+---
+description: WindowsIDE project MCP servers and when to use each one
+alwaysApply: true
+---
+
+# Project MCP servers
+
+Call `GetMcpTools` then `CallMcpTool`. Do not invent MCP results if a server is missing.
+
+| Need | Server id | Launcher |
+|------|-----------|----------|
+| Decisions, prefs, gotchas across chats | `windows-ide-memory` (mcp-memory-service) | `scripts/run_memory_mcp.py` |
+| Code structure, callers, impact | `codebase-memory` | `scripts/run_codebase_memory_mcp.py` |
+| Sandboxed file trees / metadata / moves | `windows-ide-filesystem` | `scripts/run_filesystem_mcp.py` |
+| GitHub issues, PRs, search, remote API | `windows-ide-github` | remote Copilot MCP |
+| Workbook read/write under this repo | `windows-ide-excel` | `scripts/run_excel_mcp.py` |
+
+Python launchers exist because this repo path contains `デスクトップ`. Do not replace them with raw `npx` + `${workspaceFolder}` unless asked.
+
+Workspace source edits stay on built-in Read / Write / StrReplace / Grep. Local git stays on Shell. GitHub MCP is for the GitHub API; fall back to `gh` if that server is down.
+
+Never print `GITHUB_PERSONAL_ACCESS_TOKEN` or put a PAT in files. Memory storage is `.cursor/memory/` (gitignored). Filesystem and Excel are scoped to the project root only.

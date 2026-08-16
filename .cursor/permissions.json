@@ -1,0 +1,9 @@
+{
+  "mcpAllowlist": [
+    "windows-ide-memory:*",
+    "codebase-memory:*",
+    "windows-ide-filesystem:*",
+    "windows-ide-github:*",
+    "windows-ide-excel:*"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "windows-ide-memory": {
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "args": [
+        "${workspaceFolder}/scripts/run_memory_mcp.py"
+      ],
+      "env": {
+        "UV_PYTHON_PREFERENCE": "only-managed",
+        "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec",
+        "MCP_MEMORY_SQLITE_PATH": "${workspaceFolder}/.cursor/memory/sqlite_vec.db",
+        "MCP_MEMORY_BACKUPS_PATH": "${workspaceFolder}/.cursor/memory/backups",
+        "MCP_MEMORY_SQLITE_PRAGMAS": "journal_mode=WAL,busy_timeout=15000,cache_size=20000",
+        "MCP_ENTITY_LINKING_ENABLED": "1",
+        "MCP_MEMORY_USE_ONNX": "1",
+        "MCP_CUSTOM_MEMORY_TYPES": "{\"ops\": []}"
+      }
+    },
+    "codebase-memory": {
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "args": [
+        "${workspaceFolder}/scripts/run_codebase_memory_mcp.py"
+      ],
+      "env": {
+        "CBM_ALLOWED_ROOT": "${workspaceFolder}"
+      }
+    },
+    "windows-ide-filesystem": {
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "args": [
+        "${workspaceFolder}/scripts/run_filesystem_mcp.py"
+      ]
+    },
+    "windows-ide-github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "windows-ide-excel": {
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "args": [
+        "${workspaceFolder}/scripts/run_excel_mcp.py"
+      ]
+    }
+  }
+}

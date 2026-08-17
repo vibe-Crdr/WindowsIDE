@@ -794,7 +794,7 @@ namespace WindowsIDE.Editor
             this.document.CaretColumn = end.Column;
             this.document.CollapseSelection();
             this.document.MarkDirty();
-            this.SyncHighlight(editLine);
+            this.SyncHighlight(editLine, end.Line);
             this.EnsureCaretVisible();
             this.NotifyChanged();
         }
@@ -1254,12 +1254,17 @@ namespace WindowsIDE.Editor
 
         private void SyncHighlight(int editLine)
         {
+            this.SyncHighlight(editLine, editLine);
+        }
+
+        private void SyncHighlight(int editLine, int lastModifiedLine)
+        {
             if (this.document == null || this.document.HighlightSession == null)
             {
                 return;
             }
 
-            this.document.HighlightSession.SyncAfterEdit(this.document.Buffer, editLine);
+            this.document.HighlightSession.SyncAfterEdit(this.document.Buffer, editLine, lastModifiedLine);
         }
 
         private void DrawRun(Graphics g, Brush fg, string text, float x, int y)

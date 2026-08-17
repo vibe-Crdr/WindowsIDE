@@ -560,6 +560,8 @@ namespace WindowsIDE.Tests
             Check("ps hash comment", KindAt(ps, "# hi", 0, 0) == TokenKind.Comment);
             Check("ps if keyword", KindAt(ps, "if ($true)", 0, 0) == TokenKind.Keyword);
             Check("ps cmdlet text", KindAt(ps, "Get-ChildItem", 0, 0) == TokenKind.Text);
+            Check("ps ForEach-Object text", KindAt(ps, "ForEach-Object", 0, 0) == TokenKind.Text);
+            Check("ps foreach keyword", KindAt(ps, "foreach ($x in $y)", 0, 0) == TokenKind.Keyword);
             List<Token> pb = new List<Token>();
             int pbe;
             ps.ScanLine("<# block", 0, pb, out pbe);
@@ -634,6 +636,26 @@ namespace WindowsIDE.Tests
             session.InvalidateFrom(0);
             session.SyncAfterEdit(buf, 0);
             Check("session after invalidate block", session.GetStartState(1) == CSharpLexer.BlockComment);
+
+            TextBuffer sameCount = new TextBuffer();
+            sameCount.SetText("void Foo()\n{\n    int x;\n}");
+            HighlightSession replaceSession = new HighlightSession();
+            replaceSession.Reset(LanguageKind.CSharp, sameCount.LineCount);
+            replaceSession.SyncAfterEdit(sameCount, 0);
+            sameCount.Delete(new BufferPoint(1, 0), new BufferPoint(3, 0));
+            BufferPoint replaced = sameCount.Insert(1, 0, "{\n    /*");
+            replaceSession.SyncAfterEdit(sameCount, 1, replaced.Line);
+            Check("same-count replace last line", replaced.Line == 2);
+            Check("same-count replace opens block", replaceSession.GetStartState(3) == CSharpLexer.BlockComment);
+
+            BufferPoint inserted = sameCount.Insert(2, sameCount.GetLine(2).Length, "\n    still");
+            replaceSession.SyncAfterEdit(sameCount, 2, inserted.Line);
+            Check("insert after block start line3", replaceSession.GetStartState(3) == CSharpLexer.BlockComment);
+            Check("insert after block start line4", replaceSession.GetStartState(4) == CSharpLexer.BlockComment);
+
+            sameCount.Delete(new BufferPoint(3, 0), new BufferPoint(4, 0));
+            replaceSession.SyncAfterEdit(sameCount, 3, 3);
+            Check("delete keeps block at 3", replaceSession.GetStartState(3) == CSharpLexer.BlockComment);
 
             string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-hl-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);

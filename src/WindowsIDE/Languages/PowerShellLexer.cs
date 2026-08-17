@@ -121,7 +121,9 @@ namespace WindowsIDE.Languages
                 {
                     int end = ScanChars.ReadIdent(line, i);
                     string word = line.Substring(i, end - i);
-                    TokenKind kind = PowerShellKeywords.Set.Contains(word) ? TokenKind.Keyword : TokenKind.Text;
+                    // ForEach-Object のようなハイフン名はキーワードにしない。
+                    bool hyphenName = end < line.Length && line[end] == '-';
+                    TokenKind kind = (!hyphenName && PowerShellKeywords.Set.Contains(word)) ? TokenKind.Keyword : TokenKind.Text;
                     ScanChars.Add(tokens, i, end - i, kind);
                     i = end;
                     continue;

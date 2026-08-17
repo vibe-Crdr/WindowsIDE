@@ -60,11 +60,22 @@ namespace WindowsIDE.Languages
         }
 
         /// <summary>
-        /// 編集行から前方再走査する。開始状態が一致したら止める。
+        /// 編集行から前方再走査する。lastModifiedLine は editLine と同じ。
         /// </summary>
         /// <param name="buffer">本文。</param>
         /// <param name="editLine">編集開始行。</param>
         public void SyncAfterEdit(TextBuffer buffer, int editLine)
+        {
+            this.SyncAfterEdit(buffer, editLine, editLine);
+        }
+
+        /// <summary>
+        /// 編集開始行から前方再走査する。開始状態が一致しても lastModifiedLine より前では止めない。
+        /// </summary>
+        /// <param name="buffer">本文。</param>
+        /// <param name="editLine">編集開始行。</param>
+        /// <param name="lastModifiedLine">変更範囲の最終行。これより前は early-stop しない。</param>
+        public void SyncAfterEdit(TextBuffer buffer, int editLine, int lastModifiedLine)
         {
             if (buffer == null)
             {
@@ -85,6 +96,16 @@ namespace WindowsIDE.Languages
             if (editLine >= lineCount)
             {
                 editLine = lineCount - 1;
+            }
+
+            if (lastModifiedLine < editLine)
+            {
+                lastModifiedLine = editLine;
+            }
+
+            if (lastModifiedLine >= lineCount)
+            {
+                lastModifiedLine = lineCount - 1;
             }
 
             int oldCount = this.startStates.Length;
@@ -115,7 +136,7 @@ namespace WindowsIDE.Languages
                         this.validThrough = i + 1;
                     }
 
-                    if (comparable && old == endState)
+                    if (comparable && old == endState && i >= lastModifiedLine)
                     {
                         this.validThrough = oldValid;
                         return;

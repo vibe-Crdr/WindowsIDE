@@ -1,0 +1,5 @@
+{
+  "name": "WindowsIDE",
+  "user": "ubuntu",
+  "install": "python3 -m py_compile scripts/*.py && python3 scripts/check_sources.py"
+}

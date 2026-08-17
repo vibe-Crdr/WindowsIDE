@@ -28,6 +28,10 @@
 
 P0 では下パネルを出さない。問題一覧・出力・デバッグ・ターミナル用のコントロールは作らない。画面はメニュー、`SplitContainer`（左ツリー | 右タブ+編集器）、ステータスバーだけ。Ctrl+P / Ctrl+F / Ctrl+Shift+P はバインドしない。
 
+### P1 ハイライト
+
+P1 の字句ハイライトは既存 Theme 色（Keyword / StringLiteral / Number / Comment / Foreground）だけを使う。新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。下パネルと Ctrl+F はまだ無い。
+
 単位は 96dpi DIP。`Form.Size` は外枠（ClientSize ではない）。
 
 - 起動 Size 1280×800 DIP、MinimumSize 960×600 DIP

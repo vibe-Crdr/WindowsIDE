@@ -45,6 +45,8 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.dll
 
 P0 では `System.Management.Automation.dll` / `Microsoft.CSharp.dll` / Office PIA / `System.Xml.Linq.dll` は足さない。後のフェーズで足すときは [decisions.md](decisions.md) を更新してから。
 
+P1 F-HL でも `/r` は増やさない。`WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する。Languages は Theme / WinForms を参照しない。
+
 ## レスポンスファイル
 
 `build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。

@@ -20,6 +20,14 @@ P0 は単一 WinExe のダークシェル。自前 `TextView`、左ツリー（�
 
 P0 の非対象: 字句ハイライト、検索、問題一覧、csc/PS/cmd 実行、統合ターミナル、VBA 同期、デバッグ、コマンドパレット、クイックオープン、補完、Git、Vim、WPF、RichTextBox 着色、NuGet、下パネル、Excel COM。
 
+## P1 F-HL スライス
+
+P1 最初のスライスは字句ハイライト 4 言語（R3 / F-HL）。`WindowsIDE.Languages` を新設する。検索・実行・下パネルは入れない。
+
+| ID | P1 F-HL でやる | P1 F-HL でやらない |
+| --- | --- | --- |
+| F-HL | 拡張子だけで C# / VBA / PowerShell / cmd / Plain を判定（無題・不明は Plain）。行開始状態 + 行スキャナで Keyword / String / Comment / Number / Text を区別。既存 Theme 色。ステータス先頭に言語名。`HighlightSession` は Document に持ち、タブ切替で捨てない。キーワードはソース内静的表 | 検索、Ctrl+F/P、下パネル、問題一覧、csc/PS/cmd 実行、ターミナル、Enter 自動インデント、複数行一括インデント、補完、セマンティック、折りたたみ、括弧強調、RichTextBox 着色、Roslyn、Regex ホットパス、新しい `/r`、新しい Theme 色、言語手動切替、workspace.xml 言語キー、FileKind 削除/言語化、メニュー「ファイルを開く」、D&D、VBA 同期、Excel COM |
+
 ## ワークベンチ
 
 | ID | 優先 | 内容 | 受け入れ |

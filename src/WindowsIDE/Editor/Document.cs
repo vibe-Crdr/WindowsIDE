@@ -1,10 +1,11 @@
 ﻿using System;
 using System.IO;
+using WindowsIDE.Languages;
 
 namespace WindowsIDE.Editor
 {
     /// <summary>
-    /// 開いている文書。バッファ、Undo、エンコーディング、キャレット、スクロールを持つ。
+    /// 開いている文書。バッファ、Undo、エンコーディング、キャレット、スクロール、ハイライト状態を持つ。
     /// </summary>
     public sealed class Document
     {
@@ -15,6 +16,7 @@ namespace WindowsIDE.Editor
         private TextBuffer buffer;
         private UndoStack undo;
         private FileEncodingInfo encodingInfo;
+        private HighlightSession highlightSession;
         private bool isDirty;
         private int caretLine;
         private int caretColumn;
@@ -28,6 +30,7 @@ namespace WindowsIDE.Editor
             this.buffer = new TextBuffer();
             this.undo = new UndoStack();
             this.encodingInfo = new FileEncodingInfo();
+            this.highlightSession = new HighlightSession();
             this.isDirty = false;
             this.caretLine = 0;
             this.caretColumn = 0;
@@ -62,6 +65,18 @@ namespace WindowsIDE.Editor
 
         /// <summary>開いたときのエンコーディング。</summary>
         public FileEncodingInfo EncodingInfo { get { return this.encodingInfo; } }
+
+        /// <summary>パスの拡張子から都度判定する言語。</summary>
+        public LanguageKind Language
+        {
+            get { return LanguageDetector.FromPath(this.filePath); }
+        }
+
+        /// <summary>行開始状態。タブ切替では捨てない。</summary>
+        public HighlightSession HighlightSession
+        {
+            get { return this.highlightSession; }
+        }
 
         /// <summary>未保存なら true。</summary>
         public bool IsDirty { get { return this.isDirty; } set { this.isDirty = value; } }
@@ -111,6 +126,7 @@ namespace WindowsIDE.Editor
             doc.untitledName = "無題-" + untitledSerial.ToString();
             untitledSerial++;
             doc.buffer.NewLine = "\r\n";
+            doc.ResetHighlight();
             return doc;
         }
 
@@ -137,6 +153,7 @@ namespace WindowsIDE.Editor
             doc.buffer.SetText(text);
             doc.undo.Clear();
             doc.isDirty = false;
+            doc.ResetHighlight();
             return doc;
         }
 
@@ -160,9 +177,14 @@ namespace WindowsIDE.Editor
         /// <param name="path">保存先。</param>
         public void SaveAs(string path)
         {
+            LanguageKind before = this.Language;
             this.WriteTo(path);
             this.filePath = Path.GetFullPath(path);
             this.untitledName = null;
+            if (before != this.Language)
+            {
+                this.ResetHighlight();
+            }
         }
 
         /// <summary>
@@ -210,6 +232,12 @@ namespace WindowsIDE.Editor
         public void MarkDirty()
         {
             this.isDirty = true;
+        }
+
+        private void ResetHighlight()
+        {
+            this.highlightSession.Reset(this.Language, this.buffer.LineCount);
+            this.highlightSession.SyncAfterEdit(this.buffer, 0);
         }
 
         private void WriteTo(string path)

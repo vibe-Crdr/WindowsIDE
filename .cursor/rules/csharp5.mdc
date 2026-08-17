@@ -1,0 +1,34 @@
+---
+description: C# 5 only — no C# 6+ syntax in product code
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# C# 5
+
+Framework `csc.exe` は C# 5 まで。C# 6 以降は書かない。`var`・LINQ・`async`/`await`（catch/finally の外）は可。
+
+```csharp
+// ❌ C# 6+
+string s = $"n={n}";
+string y = obj?.Name;
+string n = nameof(value);
+public int X { get; set; } = 1;
+public int Get() => 1;
+if (o is string t) { }
+int.TryParse(text, out var k);
+
+// ✅ C# 5
+string s = string.Format("n={0}", n);
+string y = (obj == null) ? null : obj.Name;
+string n = "value";
+private int x;
+public int X { get { return this.x; } set { this.x = value; } }
+public int Get() { return 1; }
+string t = o as string;
+if (t != null) { }
+int k;
+int.TryParse(text, out k);
+```
+
+禁止の例: 補間、`?.`、`nameof`、自動プロパティ初期化、式形式メンバー、`out var`、タプル、パターン、ローカル関数、`catch` 内 `await`、nullable 参照、record、`new()`。

@@ -1,0 +1,23 @@
+---
+description: PowerShell 5.1 and cmd constraints for product and build scripts
+globs: "**/*.{ps1,cmd,bat}"
+alwaysApply: false
+---
+
+# PowerShell 5.1 and cmd
+
+製品・ビルド・ユーザー向けスクリプトは Windows PowerShell 5.1 と cmd だけ。
+
+```powershell
+# ❌ PS7
+pwsh -File .\build\compile.ps1
+if ($a && $b) { }
+$path = $null ?? "d"
+
+# ✅ 5.1
+powershell.exe -NoProfile -File .\build\compile.ps1
+if ($a -and $b) { }
+if ($null -ne $path) { $use = $path } else { $use = "d" }
+```
+
+`scripts/` の MCP 起動 Python はこのルールの対象外。ただし製品から呼ばない。

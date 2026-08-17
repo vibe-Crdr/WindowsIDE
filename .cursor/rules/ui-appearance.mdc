@@ -1,0 +1,15 @@
+---
+description: Dark neovim-like UI and dual fonts
+globs: "src/**/*.cs"
+alwaysApply: false
+---
+
+# UI appearance
+
+`docs/ui.md` に従う。ライトテーマは作らない。
+
+- 背景 `#1a1b26` 系。枠は薄く、編集領域を広く。
+- 半角英数記号は `Cascadia Mono` のみ（同梱）。Cascadia Code は使わない。OS インストールは要求しない。EXE に同梱して `PrivateFontCollection` / `AddFontResourceEx(FR_PRIVATE)` で読む。`docs/fonts.md`。
+- 全角: 源ノ角ゴシックも同様に同梱。`C:\Windows\Fonts` へ入れない。
+- グリフごとにフォントを切り替える。RichTextBox で色付けしない。オーナー描画。
+- 同梱の読み込み失敗時だけ Consolas / Yu Gothic / MS Gothic に退避し、ステータスへエラーを出す。

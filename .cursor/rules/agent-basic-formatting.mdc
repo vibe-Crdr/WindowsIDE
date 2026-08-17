@@ -1,0 +1,20 @@
+---
+description: Hardware assumptions and comment conventions for product code
+alwaysApply: true
+---
+
+# Agent basics
+
+## Environment
+
+Assume this PC: Windows 11 64-bit, 16 GB RAM, Intel i7-1165G7 class. Keep the IDE and agent workflows light.
+
+Product runtime is PowerShell 5.1 and Framework 4.8.1. Do not assume `pwsh`, `dotnet`, or extra SDKs.
+
+## Comments
+
+Public types and methods get a short summary (Japanese is fine): purpose, parameters, return value. Skip comments that only repeat the name. Comment non-obvious rules (Excel COM, encoding, csc flags, font fallback).
+
+## PowerShell 5.1
+
+In `*.ps1` used by the product or `build/`: no `&&` / `||` chains, no `??`, no PowerShell 7 syntax. Use `powershell.exe`, not `pwsh`.

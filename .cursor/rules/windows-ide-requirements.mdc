@@ -1,0 +1,17 @@
+---
+description: WindowsIDE の要件・凍結環境・文書の優先順位
+alwaysApply: true
+---
+
+# WindowsIDE Requirements
+
+仕様の正は `docs/`。実装前に `docs/requirements.md` と `docs/constraints.md` と `docs/decisions.md` を読む。
+
+- 製品はローカル IDE。ホスト言語は C# 5、VBA、Windows PowerShell 5.1、cmd のみ。
+- コンパイラは `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`（C# 5）。別 csc は使わない。
+- ランタイムは .NET Framework 4.8.1。NuGet と第三者 DLL は禁止。
+- 製品コードは C# 5。ビルドスクリプトは PowerShell 5.1 と cmd。Python は `scripts/` の Cursor MCP だけ。
+- VBA はディスク上でディレクトリ管理し、Excel へは平坦に同期する。Excel 側名は `filename` / `folder_prefix` を設定で切替。手順は `docs/vba-workspace.md`。
+- UI はダーク、薄い枠。半角は Cascadia Mono のみ、全角は源ノ角ゴシック。フォントは EXE 同梱（`docs/fonts.md`）。OS への事前インストールは要求しない。Cascadia Code は使わない。
+- IDE 機能の必須/後回しは `docs/ide-features.md`。編集器コントロールを NuGet で導入しない。
+- 確定していない項目は `docs/decisions.md` の提案を使う。覆すときは文書を先に更新する。

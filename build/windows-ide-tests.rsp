@@ -1,0 +1,30 @@
+# WindowsIDE.Tests — same Framework csc. No font resources so FontLoader.Load hits fallback.
+# /noconfig must be on the csc command line, not in this file.
+/nostdlib
+/platform:x64
+/target:exe
+/debug+
+/utf8output
+/out:build\out\WindowsIDE.Tests.exe
+/r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\mscorlib.dll
+/r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.dll
+/r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Core.dll
+/r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Drawing.dll
+/r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Xml.dll
+tests\WindowsIDE.Tests\Program.cs
+src\WindowsIDE\StartupArgs.cs
+src\WindowsIDE\Ui\DpiUtil.cs
+src\WindowsIDE\Ui\Theme.cs
+src\WindowsIDE\Ui\NativeCaption.cs
+src\WindowsIDE\Ui\Fonts\FontLoader.cs
+src\WindowsIDE\Ui\Fonts\NativeFonts.cs
+src\WindowsIDE\Ui\Fonts\GlyphClassifier.cs
+src\WindowsIDE\Ui\Fonts\DualFontPainter.cs
+src\WindowsIDE\Editor\ImeLayout.cs
+src\WindowsIDE\Editor\TextBuffer.cs
+src\WindowsIDE\Editor\UndoStack.cs
+src\WindowsIDE\Editor\FileEncoding.cs
+src\WindowsIDE\Editor\Document.cs
+src\WindowsIDE\Workspace\PathGuard.cs
+src\WindowsIDE\Workspace\WorkspaceSettings.cs
+src\WindowsIDE\Workspace\FileKind.cs

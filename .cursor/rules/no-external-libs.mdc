@@ -1,0 +1,14 @@
+---
+description: No NuGet or third-party libraries in the product
+alwaysApply: true
+---
+
+# No external libraries
+
+製品（`src/`、`build/`、配布 EXE）に外部ライブラリを入れない。
+
+禁止: NuGet、`packages.config`、PackageReference、第三者 DLL のコピー、AvalonEdit / Scintilla / DockPanelSuite / Roslyn / Newtonsoft.Json、git submodule の依存コード。
+
+許可: `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\` の Framework DLL、Windows PowerShell 5.1 の `System.Management.Automation`、Office COM。新しい `/r` は `docs/build.md` と `docs/decisions.md` を更新してから。SIL OFL のフォントファイル（`assets/fonts/`）はアセットであり、外部ライブラリではない。
+
+編集器・ドッキング・ハイライト・JSON 相当は自前か上記インボックスだけ。`scripts/` の Python は Cursor MCP 専用で EXE に混ぜない。

@@ -36,3 +36,15 @@ Desktop.ini
 
 # codebase-memory-mcp local graph snapshot
 .codebase-memory/
+
+# Product build output (csc.exe)
+bin/
+obj/
+build/out/
+*.exe
+*.pdb
+*.dll
+!scripts/**/*.py
+
+# Font fetch leftovers. ttf/otf and LICENSE stay tracked.
+assets/fonts/**/*.zip

@@ -45,6 +45,8 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.dll
 
 P0 では `System.Management.Automation.dll` / `Microsoft.CSharp.dll` / Office PIA / `System.Xml.Linq.dll` は足さない。後のフェーズで足すときは [decisions.md](decisions.md) を更新してから。
 
+P1 F-HL でも `/r` は増やさない。`WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する。Languages は Theme / WinForms を参照しない。
+
 ## レスポンスファイル
 
 `build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。
@@ -82,3 +84,5 @@ powershell.exe -NoProfile -File .\build\compile-tests.ps1
 5. 出力フォルダに第三者 DLL が増えていない
 6. 埋め込みリソース名 `WindowsIDE.Fonts.CascadiaMonoRegular` / `CascadiaMonoBold` / `SourceHanSansJpRegular` がある
 7. `app.config` を `WindowsIDE.exe.config` としてコピーする
+
+製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 3 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL ファイルバージョン、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。

@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using WindowsIDE.Languages;
 using WindowsIDE.Ui;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
@@ -39,6 +41,7 @@ namespace WindowsIDE.Editor
         private bool ignoreScroll;
         private int lastDpi;
         private int wheelLeftover;
+        private readonly List<Token> paintTokens;
 
         /// <summary>
         /// 空の編集器を作る。
@@ -50,6 +53,7 @@ namespace WindowsIDE.Editor
             this.lineHeight = 18;
             this.asciiWidth = 8f;
             this.imeComposition = "";
+            this.paintTokens = new List<Token>();
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable | ControlStyles.ResizeRedraw | ControlStyles.EnableNotifyMessage, true);
             this.TabStop = true;
             this.BackColor = Theme.EditorBackground;
@@ -155,6 +159,8 @@ namespace WindowsIDE.Editor
             }
 
             this.document.Undo.Undo(this.document.Buffer);
+            this.document.HighlightSession.InvalidateFrom(0);
+            this.document.HighlightSession.SyncAfterEdit(this.document.Buffer, 0);
             this.document.MarkDirty();
             this.ClampCaret();
             this.NotifyChanged();
@@ -171,6 +177,8 @@ namespace WindowsIDE.Editor
             }
 
             this.document.Undo.Redo(this.document.Buffer);
+            this.document.HighlightSession.InvalidateFrom(0);
+            this.document.HighlightSession.SyncAfterEdit(this.document.Buffer, 0);
             this.document.MarkDirty();
             this.ClampCaret();
             this.NotifyChanged();
@@ -508,12 +516,16 @@ namespace WindowsIDE.Editor
                 this.PaintSelection(g, first, last, textArea);
 
                 using (SolidBrush fg = new SolidBrush(Theme.Foreground))
+                using (SolidBrush keywordBrush = new SolidBrush(Theme.Keyword))
+                using (SolidBrush stringBrush = new SolidBrush(Theme.StringLiteral))
+                using (SolidBrush numberBrush = new SolidBrush(Theme.Number))
+                using (SolidBrush commentBrush = new SolidBrush(Theme.Comment))
                 using (SolidBrush caretBrush = new SolidBrush(Theme.Foreground))
                 {
                     for (int i = first; i <= last; i++)
                     {
                         int y = (i - first) * this.lineHeight;
-                        this.DrawLineText(g, fg, i, y, textArea);
+                        this.DrawLineText(g, fg, keywordBrush, stringBrush, numberBrush, commentBrush, i, y, textArea);
                     }
 
                     float prefixWidth = 0f;
@@ -746,6 +758,7 @@ namespace WindowsIDE.Editor
             this.document.CaretColumn = Math.Max(0, this.document.CaretColumn - remove);
             this.document.CollapseSelection();
             this.document.MarkDirty();
+            this.SyncHighlight(line);
             this.NotifyChanged();
         }
 
@@ -756,9 +769,14 @@ namespace WindowsIDE.Editor
                 return;
             }
 
+            int editLine = this.document.CaretLine;
             bool compound = this.document.HasSelection();
             if (compound)
             {
+                BufferPoint selStart;
+                BufferPoint selEnd;
+                this.document.GetSelection(out selStart, out selEnd);
+                editLine = selStart.Line;
                 this.document.Undo.BeginCompound();
                 this.DeleteSelectionCore();
             }
@@ -776,6 +794,7 @@ namespace WindowsIDE.Editor
             this.document.CaretColumn = end.Column;
             this.document.CollapseSelection();
             this.document.MarkDirty();
+            this.SyncHighlight(editLine, end.Line);
             this.EnsureCaretVisible();
             this.NotifyChanged();
         }
@@ -787,8 +806,12 @@ namespace WindowsIDE.Editor
                 return;
             }
 
+            BufferPoint a;
+            BufferPoint b;
+            this.document.GetSelection(out a, out b);
             this.DeleteSelectionCore();
             this.document.MarkDirty();
+            this.SyncHighlight(a.Line);
             this.NotifyChanged();
         }
 
@@ -817,6 +840,7 @@ namespace WindowsIDE.Editor
                 return;
             }
 
+            int editLine;
             if (this.document.CaretColumn > 0)
             {
                 int line = this.document.CaretLine;
@@ -827,6 +851,7 @@ namespace WindowsIDE.Editor
                 this.document.Buffer.Delete(a, b);
                 this.document.Undo.RecordDelete(line, col, ch);
                 this.document.CaretColumn = col;
+                editLine = line;
             }
             else
             {
@@ -839,10 +864,12 @@ namespace WindowsIDE.Editor
                 this.document.Undo.RecordDelete(line - 1, prevLen, deleted);
                 this.document.CaretLine = line - 1;
                 this.document.CaretColumn = prevLen;
+                editLine = line - 1;
             }
 
             this.document.CollapseSelection();
             this.document.MarkDirty();
+            this.SyncHighlight(editLine);
             this.EnsureCaretVisible();
             this.NotifyChanged();
         }
@@ -881,6 +908,7 @@ namespace WindowsIDE.Editor
 
             this.document.CollapseSelection();
             this.document.MarkDirty();
+            this.SyncHighlight(line);
             this.NotifyChanged();
         }
 
@@ -1138,9 +1166,18 @@ namespace WindowsIDE.Editor
             return new BufferPoint(line, col);
         }
 
-        private void DrawLineText(Graphics g, Brush fg, int line, int y, Rectangle textArea)
+        private void DrawLineText(Graphics g, Brush fg, Brush keywordBrush, Brush stringBrush, Brush numberBrush, Brush commentBrush, int line, int y, Rectangle textArea)
         {
             string text = this.document.Buffer.GetLine(line);
+            this.paintTokens.Clear();
+            if (this.document.HighlightSession != null)
+            {
+                int startState = this.document.HighlightSession.GetStartState(line);
+                ILineLexer lexer = LexerRegistry.Get(this.document.Language);
+                int endState;
+                lexer.ScanLine(text, startState, this.paintTokens, out endState);
+            }
+
             float x = this.gutterWidth + this.GetTextInset() - this.hScroll.Value;
             int i = 0;
             while (i < text.Length)
@@ -1171,7 +1208,8 @@ namespace WindowsIDE.Editor
 
                 if (x + w >= this.gutterWidth && x <= textArea.Right && ch.Length > 0)
                 {
-                    g.DrawString(ch, font, fg, x, y + this.BaselineOffset(font), this.typographic);
+                    Brush brush = this.BrushForToken(this.TokenKindAt(i), fg, keywordBrush, stringBrush, numberBrush, commentBrush);
+                    g.DrawString(ch, font, brush, x, y + this.BaselineOffset(font), this.typographic);
                 }
 
                 x += w;
@@ -1181,6 +1219,52 @@ namespace WindowsIDE.Editor
                     break;
                 }
             }
+        }
+
+        private TokenKind TokenKindAt(int index)
+        {
+            for (int t = 0; t < this.paintTokens.Count; t++)
+            {
+                Token token = this.paintTokens[t];
+                if (index >= token.Start && index < token.Start + token.Length)
+                {
+                    return token.Kind;
+                }
+            }
+
+            return TokenKind.Text;
+        }
+
+        private Brush BrushForToken(TokenKind kind, Brush fg, Brush keywordBrush, Brush stringBrush, Brush numberBrush, Brush commentBrush)
+        {
+            switch (kind)
+            {
+                case TokenKind.Keyword:
+                    return keywordBrush;
+                case TokenKind.String:
+                    return stringBrush;
+                case TokenKind.Number:
+                    return numberBrush;
+                case TokenKind.Comment:
+                    return commentBrush;
+                default:
+                    return fg;
+            }
+        }
+
+        private void SyncHighlight(int editLine)
+        {
+            this.SyncHighlight(editLine, editLine);
+        }
+
+        private void SyncHighlight(int editLine, int lastModifiedLine)
+        {
+            if (this.document == null || this.document.HighlightSession == null)
+            {
+                return;
+            }
+
+            this.document.HighlightSession.SyncAfterEdit(this.document.Buffer, editLine, lastModifiedLine);
         }
 
         private void DrawRun(Graphics g, Brush fg, string text, float x, int y)

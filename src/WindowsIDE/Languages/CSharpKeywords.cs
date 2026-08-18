@@ -1,0 +1,101 @@
+﻿using System;
+
+namespace WindowsIDE.Languages
+{
+    /// <summary>
+    /// C# の予約語と、採用する文脈キーワード。LINQ クエリ語は含まない。
+    /// </summary>
+    public static class CSharpKeywords
+    {
+        /// <summary>照合に使う語。Ordinal。</summary>
+        public static readonly string[] Words = new string[]
+        {
+            "abstract",
+            "as",
+            "async",
+            "await",
+            "base",
+            "bool",
+            "break",
+            "byte",
+            "case",
+            "catch",
+            "char",
+            "checked",
+            "class",
+            "const",
+            "continue",
+            "decimal",
+            "default",
+            "delegate",
+            "do",
+            "double",
+            "dynamic",
+            "else",
+            "enum",
+            "event",
+            "explicit",
+            "extern",
+            "false",
+            "finally",
+            "fixed",
+            "float",
+            "for",
+            "foreach",
+            "goto",
+            "if",
+            "implicit",
+            "in",
+            "int",
+            "interface",
+            "internal",
+            "is",
+            "lock",
+            "long",
+            "namespace",
+            "new",
+            "null",
+            "object",
+            "operator",
+            "out",
+            "override",
+            "params",
+            "partial",
+            "private",
+            "protected",
+            "public",
+            "readonly",
+            "ref",
+            "return",
+            "sbyte",
+            "sealed",
+            "short",
+            "sizeof",
+            "stackalloc",
+            "static",
+            "string",
+            "struct",
+            "switch",
+            "this",
+            "throw",
+            "true",
+            "try",
+            "typeof",
+            "uint",
+            "ulong",
+            "unchecked",
+            "unsafe",
+            "ushort",
+            "using",
+            "var",
+            "virtual",
+            "void",
+            "volatile",
+            "while",
+            "yield"
+        };
+
+        /// <summary>Ordinal のキーワード集合。</summary>
+        public static readonly KeywordSet Set = new KeywordSet(Words, StringComparer.Ordinal);
+    }
+}

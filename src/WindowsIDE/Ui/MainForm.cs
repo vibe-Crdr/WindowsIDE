@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Windows.Forms;
 using WindowsIDE.Editor;
+using WindowsIDE.Languages;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
 
@@ -22,6 +23,7 @@ namespace WindowsIDE.Ui
         private TabStrip tabs;
         private TextView editor;
         private StatusStrip status;
+        private ToolStripStatusLabel statusLang;
         private ToolStripStatusLabel statusPos;
         private ToolStripStatusLabel statusEnc;
         private ToolStripStatusLabel statusFont;
@@ -349,13 +351,17 @@ namespace WindowsIDE.Ui
             this.status.Renderer = new DarkMenuRenderer();
             this.status.BackColor = Theme.StatusBar;
             this.status.SizingGrip = false;
+            this.statusLang = new ToolStripStatusLabel("プレーン");
             this.statusPos = new ToolStripStatusLabel("1:1");
             this.statusEnc = new ToolStripStatusLabel("UTF-8 BOM");
             this.statusFont = new ToolStripStatusLabel("");
+            this.statusLang.ForeColor = Theme.Foreground;
             this.statusPos.ForeColor = Theme.Foreground;
             this.statusEnc.ForeColor = Theme.Foreground;
             this.statusFont.ForeColor = Theme.Foreground;
             this.statusFont.Spring = true;
+            this.status.Items.Add(this.statusLang);
+            this.status.Items.Add(new ToolStripStatusLabel("  |  ") { ForeColor = Theme.Comment });
             this.status.Items.Add(this.statusPos);
             this.status.Items.Add(new ToolStripStatusLabel("  |  ") { ForeColor = Theme.Comment });
             this.status.Items.Add(this.statusEnc);
@@ -905,11 +911,13 @@ namespace WindowsIDE.Ui
             Document doc = (this.editor == null) ? null : this.editor.Document;
             if (doc == null)
             {
+                this.statusLang.Text = LanguageDetector.GetDisplayName(LanguageKind.Plain);
                 this.statusPos.Text = "1:1";
                 this.statusEnc.Text = "";
                 return;
             }
 
+            this.statusLang.Text = LanguageDetector.GetDisplayName(doc.Language);
             this.statusPos.Text = (doc.CaretLine + 1).ToString() + ":" + (doc.CaretColumn + 1).ToString();
             this.statusEnc.Text = doc.EncodingInfo.GetDisplayName();
             this.tabs.RefreshTabs();

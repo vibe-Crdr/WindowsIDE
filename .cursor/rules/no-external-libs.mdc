@@ -11,4 +11,4 @@ alwaysApply: true
 
 許可: `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\` の Framework DLL、Windows PowerShell 5.1 の `System.Management.Automation`、Office COM。新しい `/r` は `docs/build.md` と `docs/decisions.md` を更新してから。SIL OFL のフォントファイル（`assets/fonts/`）はアセットであり、外部ライブラリではない。
 
-編集器・ドッキング・ハイライト・JSON 相当は自前か上記インボックスだけ。`scripts/` の Python は Cursor MCP 専用で EXE に混ぜない。
+編集器・ドッキング・ハイライト・JSON 相当は自前か上記インボックスだけ。`scripts/` の Python は Cursor 用（MCP 起動と凍結検査）で、EXE に混ぜない。

@@ -6,7 +6,7 @@
 WindowsIDE/                     この git リポジトリ（Cursor で編集）
   docs/                         仕様（正）
   .cursor/                      MCP と rules。製品に含めない
-  scripts/                      MCP 起動用 Python。製品に含めない
+  scripts/                      Cursor 用 Python（MCP 起動と凍結検査）。製品に含めない
   src/WindowsIDE/               製品 C# 5 ソース（実装時）
   build/                        compile.ps1 と csc レスポンスファイル（実装時）
   tests/                        オフライン検証（実装時）
@@ -49,7 +49,7 @@ flowchart LR
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML |
-| `WindowsIDE.Languages` | 言語判定、字句解析、キーワード |
+| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、行開始状態（`HighlightSession`）、キーワード |
 | `WindowsIDE.Build` | `csc` 引数、診断パース |
 | `WindowsIDE.Debug` | セッション、ブレーク、出力 |
 | `WindowsIDE.Host.PowerShell` | 実行と PS デバッガ |

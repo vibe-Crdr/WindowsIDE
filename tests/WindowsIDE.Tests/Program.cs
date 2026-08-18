@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
 using WindowsIDE.Editor;
+using WindowsIDE.Languages;
 using WindowsIDE.Ui;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
@@ -38,6 +40,9 @@ namespace WindowsIDE.Tests
             RunNativeCaption();
             RunImeLayout();
             RunStartupArgs();
+            RunLanguageDetector();
+            RunLexers();
+            RunHighlightSession();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
             return (failed == 0) ? 0 : 1;
@@ -146,6 +151,8 @@ namespace WindowsIDE.Tests
                 Check("Document.Open FilePath", string.Equals(doc.FilePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase));
                 Check("Document.Open UTF-8 BOM", doc.EncodingInfo.IsUtf8 && doc.EncodingInfo.HasBom);
                 Check("Document.Open IsDirty", doc.IsDirty == false);
+                Check("Document.Open Language CSharp", doc.Language == LanguageKind.CSharp);
+                Check("Document.Open highlight start", doc.HighlightSession.GetStartState(0) == 0);
             }
             finally
             {
@@ -467,6 +474,252 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void RunLanguageDetector()
+        {
+            Check("ext .cs", LanguageDetector.FromPath("C:\\src\\App.cs") == LanguageKind.CSharp);
+            Check("ext .CS", LanguageDetector.FromPath("Foo.CS") == LanguageKind.CSharp);
+            Check("ext .bas", LanguageDetector.FromPath("Lib.bas") == LanguageKind.Vba);
+            Check("ext .cls", LanguageDetector.FromPath("Mod.cls") == LanguageKind.Vba);
+            Check("ext .ps1", LanguageDetector.FromPath("run.ps1") == LanguageKind.PowerShell);
+            Check("ext .psm1", LanguageDetector.FromPath("mod.psm1") == LanguageKind.PowerShell);
+            Check("ext .psd1", LanguageDetector.FromPath("mod.psd1") == LanguageKind.PowerShell);
+            Check("ext .cmd", LanguageDetector.FromPath("clean.cmd") == LanguageKind.Cmd);
+            Check("ext .bat", LanguageDetector.FromPath("go.bat") == LanguageKind.Cmd);
+            Check("untitled null", LanguageDetector.FromPath(null) == LanguageKind.Plain);
+            Check("empty path", LanguageDetector.FromPath("") == LanguageKind.Plain);
+            Check("no extension", LanguageDetector.FromPath("C:\\a\\README") == LanguageKind.Plain);
+            Check("ext .frm", LanguageDetector.FromPath("Form1.frm") == LanguageKind.Plain);
+            Check("ext .vbs", LanguageDetector.FromPath("a.vbs") == LanguageKind.Plain);
+            Check("ext .csx", LanguageDetector.FromPath("script.csx") == LanguageKind.Plain);
+            Check("ext .txt", LanguageDetector.FromPath("note.txt") == LanguageKind.Plain);
+            Check("display C#", LanguageDetector.GetDisplayName(LanguageKind.CSharp) == "C#");
+            Check("display VBA", LanguageDetector.GetDisplayName(LanguageKind.Vba) == "VBA");
+            Check("display PowerShell", LanguageDetector.GetDisplayName(LanguageKind.PowerShell) == "PowerShell");
+            Check("display cmd", LanguageDetector.GetDisplayName(LanguageKind.Cmd) == "cmd");
+            Check("display Plain", LanguageDetector.GetDisplayName(LanguageKind.Plain) == "プレーン");
+
+            Document untitled = Document.CreateUntitled();
+            Check("untitled Language Plain", untitled.Language == LanguageKind.Plain);
+        }
+
+        private static void RunLexers()
+        {
+            CSharpLexer cs = new CSharpLexer();
+            Check("cs class keyword", KindAt(cs, "class Foo", 0, 0) == TokenKind.Keyword);
+            Check("cs classic text", KindAt(cs, "classic", 0, 0) == TokenKind.Text);
+            Check("cs line comment", KindAt(cs, "int x; // hi", 0, 8) == TokenKind.Comment);
+            Check("cs string", KindAt(cs, "x = \"str\";", 0, 5) == TokenKind.String);
+            Check("cs char", KindAt(cs, "c = 'x';", 0, 5) == TokenKind.String);
+            Check("cs decimal", KindAt(cs, "n = 123;", 0, 4) == TokenKind.Number);
+            Check("cs hex", KindAt(cs, "n = 0xFF;", 0, 4) == TokenKind.Number);
+            Check("cs at ident", KindAt(cs, "@class", 0, 0) == TokenKind.Text);
+
+            List<Token> t0 = new List<Token>();
+            int e0;
+            cs.ScanLine("/* start", 0, t0, out e0);
+            Check("cs block open state", e0 == CSharpLexer.BlockComment);
+            List<Token> t1 = new List<Token>();
+            int e1;
+            cs.ScanLine("middle", e0, t1, out e1);
+            Check("cs block middle comment", KindAtTokens(t1, 0) == TokenKind.Comment);
+            Check("cs block mid state", e1 == CSharpLexer.BlockComment);
+            List<Token> t2 = new List<Token>();
+            int e2;
+            cs.ScanLine("*/ class", e1, t2, out e2);
+            Check("cs block close then class", KindAtTokens(t2, 3) == TokenKind.Keyword);
+            Check("cs block closed state", e2 == 0);
+            Check("cs next line keyword", KindAt(cs, "class", e2, 0) == TokenKind.Keyword);
+
+            List<Token> v0 = new List<Token>();
+            int ve0;
+            cs.ScanLine("@\"hello", 0, v0, out ve0);
+            Check("cs verbatim open", ve0 == CSharpLexer.VerbatimString);
+            Check("cs verbatim open string", KindAtTokens(v0, 2) == TokenKind.String);
+            List<Token> v1 = new List<Token>();
+            int ve1;
+            cs.ScanLine("world\"", ve0, v1, out ve1);
+            Check("cs verbatim body", KindAtTokens(v1, 0) == TokenKind.String);
+            Check("cs verbatim closed", ve1 == 0);
+
+            List<Token> pre = new List<Token>();
+            int pe;
+            cs.ScanLine("#if DEBUG // z", 0, pre, out pe);
+            Check("cs directive if", KindAtTokens(pre, 1) == TokenKind.Keyword);
+            Check("cs directive rest", KindAtTokens(pre, 4) == TokenKind.Text);
+            Check("cs directive comment", KindAtTokens(pre, 11) == TokenKind.Comment);
+
+            VbaLexer vba = new VbaLexer();
+            Check("vba tick comment", KindAt(vba, "' note", 0, 0) == TokenKind.Comment);
+            Check("vba rem comment", KindAt(vba, "  Rem hello", 0, 2) == TokenKind.Comment);
+            Check("vba Sub keyword", KindAt(vba, "Sub Main", 0, 0) == TokenKind.Keyword);
+            Check("vba remote text", KindAt(vba, "Remote", 0, 0) == TokenKind.Text);
+
+            PowerShellLexer ps = new PowerShellLexer();
+            Check("ps hash comment", KindAt(ps, "# hi", 0, 0) == TokenKind.Comment);
+            Check("ps if keyword", KindAt(ps, "if ($true)", 0, 0) == TokenKind.Keyword);
+            Check("ps cmdlet text", KindAt(ps, "Get-ChildItem", 0, 0) == TokenKind.Text);
+            Check("ps ForEach-Object text", KindAt(ps, "ForEach-Object", 0, 0) == TokenKind.Text);
+            Check("ps foreach keyword", KindAt(ps, "foreach ($x in $y)", 0, 0) == TokenKind.Keyword);
+            List<Token> pb = new List<Token>();
+            int pbe;
+            ps.ScanLine("<# block", 0, pb, out pbe);
+            Check("ps block open", pbe == PowerShellLexer.BlockComment);
+            List<Token> pb2 = new List<Token>();
+            int pbe2;
+            ps.ScanLine("mid", pbe, pb2, out pbe2);
+            Check("ps block mid", KindAtTokens(pb2, 0) == TokenKind.Comment);
+            List<Token> pb3 = new List<Token>();
+            int pbe3;
+            ps.ScanLine("#> if", pbe2, pb3, out pbe3);
+            Check("ps block close if", KindAtTokens(pb3, 3) == TokenKind.Keyword);
+
+            List<Token> hs = new List<Token>();
+            int hse;
+            ps.ScanLine("$x = @\"", 0, hs, out hse);
+            Check("ps here double open", hse == PowerShellLexer.HereStringDouble);
+            List<Token> hs2 = new List<Token>();
+            int hse2;
+            ps.ScanLine("hello", hse, hs2, out hse2);
+            Check("ps here body", KindAtTokens(hs2, 0) == TokenKind.String);
+            List<Token> hs3 = new List<Token>();
+            int hse3;
+            ps.ScanLine("\"@", hse2, hs3, out hse3);
+            Check("ps here close", hse3 == 0);
+
+            List<Token> hss = new List<Token>();
+            int hsse;
+            ps.ScanLine("@'", 0, hss, out hsse);
+            Check("ps here single open", hsse == PowerShellLexer.HereStringSingle);
+            List<Token> hss2 = new List<Token>();
+            int hsse2;
+            ps.ScanLine("z", hsse, hss2, out hsse2);
+            Check("ps here single body", KindAtTokens(hss2, 0) == TokenKind.String);
+            List<Token> hss3 = new List<Token>();
+            int hsse3;
+            ps.ScanLine("'@", hsse2, hss3, out hsse3);
+            Check("ps here single close", hsse3 == 0);
+
+            CmdLexer cmd = new CmdLexer();
+            Check("cmd if keyword", KindAt(cmd, "if exist a", 0, 0) == TokenKind.Keyword);
+            Check("cmd echo keyword", KindAt(cmd, "echo hello", 0, 0) == TokenKind.Keyword);
+            Check("cmd rem comment", KindAt(cmd, "rem note", 0, 0) == TokenKind.Comment);
+            Check("cmd colon comment", KindAt(cmd, ":: note", 0, 0) == TokenKind.Comment);
+
+            PlainLexer plain = new PlainLexer();
+            Check("plain class text", KindAt(plain, "class if rem", 0, 0) == TokenKind.Text);
+            Check("plain if text", KindAt(plain, "class if rem", 0, 6) == TokenKind.Text);
+        }
+
+        private static void RunHighlightSession()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("/*\ncomment\nstill\n*/\nclass C\n{\n}");
+            HighlightSession session = new HighlightSession();
+            session.Reset(LanguageKind.CSharp, buf.LineCount);
+            session.SyncAfterEdit(buf, 0);
+            Check("session line0 normal", session.GetStartState(0) == 0);
+            Check("session line1 block", session.GetStartState(1) == CSharpLexer.BlockComment);
+            Check("session line2 block", session.GetStartState(2) == CSharpLexer.BlockComment);
+            Check("session line4 normal", session.GetStartState(4) == 0);
+            int afterClass = session.GetStartState(5);
+            int afterBrace = session.GetStartState(6);
+
+            buf.Delete(new BufferPoint(4, 6), new BufferPoint(4, 7));
+            buf.Insert(4, 6, "D");
+            session.SyncAfterEdit(buf, 4);
+            Check("session stable line5", session.GetStartState(5) == afterClass);
+            Check("session stable line6", session.GetStartState(6) == afterBrace);
+            Check("session class still normal", session.GetStartState(4) == 0);
+
+            session.InvalidateFrom(0);
+            session.SyncAfterEdit(buf, 0);
+            Check("session after invalidate block", session.GetStartState(1) == CSharpLexer.BlockComment);
+
+            TextBuffer sameCount = new TextBuffer();
+            sameCount.SetText("void Foo()\n{\n    int x;\n}");
+            HighlightSession earlyStop = new HighlightSession();
+            HighlightSession replaceSession = new HighlightSession();
+            earlyStop.Reset(LanguageKind.CSharp, sameCount.LineCount);
+            replaceSession.Reset(LanguageKind.CSharp, sameCount.LineCount);
+            earlyStop.SyncAfterEdit(sameCount, 0);
+            replaceSession.SyncAfterEdit(sameCount, 0);
+            sameCount.Delete(new BufferPoint(1, 0), new BufferPoint(3, 0));
+            BufferPoint replaced = sameCount.Insert(1, 0, "{\n    /*\n");
+            Check("same-count replace lines", sameCount.LineCount == 4);
+            Check("same-count replace last line", replaced.Line == 3);
+            earlyStop.SyncAfterEdit(sameCount, 1);
+            replaceSession.SyncAfterEdit(sameCount, 1, replaced.Line);
+            Check("two-arg early-stop stale", earlyStop.GetStartState(3) != CSharpLexer.BlockComment);
+            Check("same-count replace opens block", replaceSession.GetStartState(3) == CSharpLexer.BlockComment);
+
+            BufferPoint inserted = sameCount.Insert(2, sameCount.GetLine(2).Length, "\n    still");
+            replaceSession.SyncAfterEdit(sameCount, 2, inserted.Line);
+            Check("insert after block line count", sameCount.LineCount == 5);
+            Check("insert after block start line3", replaceSession.GetStartState(3) == CSharpLexer.BlockComment);
+            Check("insert after block start line4", replaceSession.GetStartState(4) == CSharpLexer.BlockComment);
+
+            sameCount.Delete(new BufferPoint(3, 0), new BufferPoint(4, 0));
+            replaceSession.SyncAfterEdit(sameCount, 3, 3);
+            Check("delete after block line count", sameCount.LineCount == 4);
+            Check("delete keeps block at 3", replaceSession.GetStartState(3) == CSharpLexer.BlockComment);
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-hl-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string csPath = Path.Combine(dir, "moved.cs");
+            try
+            {
+                Document doc = Document.CreateUntitled();
+                Check("session untitled plain", doc.Language == LanguageKind.Plain);
+                File.WriteAllText(csPath, "class A\r\n{\r\n}\r\n", Encoding.UTF8);
+                doc.SaveAs(csPath);
+                Check("session saveas csharp", doc.Language == LanguageKind.CSharp);
+                Check("session saveas reset start", doc.HighlightSession.GetStartState(0) == 0);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(csPath))
+                    {
+                        File.Delete(csPath);
+                    }
+                }
+                catch (IOException)
+                {
+                }
+
+                try
+                {
+                    Directory.Delete(dir, false);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static TokenKind KindAt(ILineLexer lexer, string line, int startState, int index)
+        {
+            List<Token> tokens = new List<Token>();
+            int endState;
+            lexer.ScanLine(line, startState, tokens, out endState);
+            return KindAtTokens(tokens, index);
+        }
+
+        private static TokenKind KindAtTokens(List<Token> tokens, int index)
+        {
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                Token token = tokens[i];
+                if (index >= token.Start && index < token.Start + token.Length)
+                {
+                    return token.Kind;
+                }
+            }
+
+            return TokenKind.Text;
         }
     }
 }

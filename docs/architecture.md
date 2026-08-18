@@ -49,7 +49,7 @@ flowchart LR
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML |
-| `WindowsIDE.Languages` | 言語判定、字句解析、キーワード |
+| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、行開始状態（`HighlightSession`）、キーワード |
 | `WindowsIDE.Build` | `csc` 引数、診断パース |
 | `WindowsIDE.Debug` | セッション、ブレーク、出力 |
 | `WindowsIDE.Host.PowerShell` | 実行と PS デバッガ |

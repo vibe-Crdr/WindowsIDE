@@ -41,13 +41,15 @@ namespace WindowsIDE.Languages
                 if (c == '\'')
                 {
                     ScanChars.Add(tokens, i, line.Length - i, TokenKind.Comment);
-                    return;
+                    i = line.Length;
+                    continue;
                 }
 
                 if (this.IsRemStart(line, i))
                 {
                     ScanChars.Add(tokens, i, line.Length - i, TokenKind.Comment);
-                    return;
+                    i = line.Length;
+                    continue;
                 }
 
                 if (c == '"')
@@ -77,6 +79,8 @@ namespace WindowsIDE.Languages
                 ScanChars.Add(tokens, i, 1, TokenKind.Text);
                 i++;
             }
+
+            IdentifierClassifier.Apply(LanguageKind.Vba, line, tokens);
         }
 
         private bool IsRemStart(string line, int index)

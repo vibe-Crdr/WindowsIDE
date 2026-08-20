@@ -5,13 +5,15 @@ using WindowsIDE.Editor;
 namespace WindowsIDE.Languages
 {
     /// <summary>
-    /// 文書ごとの行開始状態。トークンはキャッシュせず、描画時に可視行だけ走査する。
+    /// 文書ごとの行開始状態と識別子オーバーレイ。字句トークンは描画時に可視行だけ走査する。
     /// </summary>
     public sealed class HighlightSession
     {
         private LanguageKind language;
         private int[] startStates;
         private int validThrough;
+        private string workspaceRoot;
+        private List<ClassifySpan>[] overlay;
 
         /// <summary>
         /// 空のセッションを Plain・1 行で作る。
@@ -22,6 +24,14 @@ namespace WindowsIDE.Languages
             this.startStates = new int[1];
             this.startStates[0] = 0;
             this.validThrough = 0;
+            this.overlay = null;
+        }
+
+        /// <summary>型名収集に使うワークスペースルート。無くてよい。</summary>
+        public string WorkspaceRoot
+        {
+            get { return this.workspaceRoot; }
+            set { this.workspaceRoot = value; }
         }
 
         /// <summary>
@@ -40,6 +50,7 @@ namespace WindowsIDE.Languages
             this.startStates = new int[lineCount];
             this.startStates[0] = 0;
             this.validThrough = 0;
+            this.overlay = null;
         }
 
         /// <summary>
@@ -82,75 +93,147 @@ namespace WindowsIDE.Languages
                 return;
             }
 
-            int lineCount = buffer.LineCount;
-            if (lineCount < 1)
+            try
             {
-                lineCount = 1;
-            }
-
-            if (editLine < 0)
-            {
-                editLine = 0;
-            }
-
-            if (editLine >= lineCount)
-            {
-                editLine = lineCount - 1;
-            }
-
-            if (lastModifiedLine < editLine)
-            {
-                lastModifiedLine = editLine;
-            }
-
-            if (lastModifiedLine >= lineCount)
-            {
-                lastModifiedLine = lineCount - 1;
-            }
-
-            int oldCount = this.startStates.Length;
-            bool countChanged = oldCount != lineCount;
-            int oldValid = this.validThrough;
-            this.ResizeStates(lineCount);
-            this.startStates[0] = 0;
-            if (editLine > this.validThrough)
-            {
-                editLine = this.validThrough;
-            }
-
-            ILineLexer lexer = LexerRegistry.Get(this.language);
-            List<Token> scratch = new List<Token>();
-            int i = editLine;
-            while (i < lineCount)
-            {
-                scratch.Clear();
-                int endState;
-                lexer.ScanLine(buffer.GetLine(i), this.startStates[i], scratch, out endState);
-                if (i + 1 < lineCount)
+                int lineCount = buffer.LineCount;
+                if (lineCount < 1)
                 {
-                    int old = this.startStates[i + 1];
-                    bool comparable = !countChanged && (i + 1 <= oldValid);
-                    this.startStates[i + 1] = endState;
-                    if (this.validThrough < i + 1)
-                    {
-                        this.validThrough = i + 1;
-                    }
-
-                    if (comparable && old == endState && i >= lastModifiedLine)
-                    {
-                        this.validThrough = oldValid;
-                        return;
-                    }
-                }
-                else if (this.validThrough < i)
-                {
-                    this.validThrough = i;
+                    lineCount = 1;
                 }
 
-                i++;
+                if (editLine < 0)
+                {
+                    editLine = 0;
+                }
+
+                if (editLine >= lineCount)
+                {
+                    editLine = lineCount - 1;
+                }
+
+                if (lastModifiedLine < editLine)
+                {
+                    lastModifiedLine = editLine;
+                }
+
+                if (lastModifiedLine >= lineCount)
+                {
+                    lastModifiedLine = lineCount - 1;
+                }
+
+                int oldCount = this.startStates.Length;
+                bool countChanged = oldCount != lineCount;
+                int oldValid = this.validThrough;
+                this.ResizeStates(lineCount);
+                this.startStates[0] = 0;
+                if (editLine > this.validThrough)
+                {
+                    editLine = this.validThrough;
+                }
+
+                ILineLexer lexer = LexerRegistry.Get(this.language);
+                List<Token> scratch = new List<Token>();
+                int i = editLine;
+                while (i < lineCount)
+                {
+                    scratch.Clear();
+                    int endState;
+                    lexer.ScanLine(buffer.GetLine(i), this.startStates[i], scratch, out endState);
+                    if (i + 1 < lineCount)
+                    {
+                        int old = this.startStates[i + 1];
+                        bool comparable = !countChanged && (i + 1 <= oldValid);
+                        this.startStates[i + 1] = endState;
+                        if (this.validThrough < i + 1)
+                        {
+                            this.validThrough = i + 1;
+                        }
+
+                        if (comparable && old == endState && i >= lastModifiedLine)
+                        {
+                            this.validThrough = oldValid;
+                            return;
+                        }
+                    }
+                    else if (this.validThrough < i)
+                    {
+                        this.validThrough = i;
+                    }
+
+                    i++;
+                }
+
+                this.validThrough = lineCount - 1;
+            }
+            finally
+            {
+                this.RebuildSemantic(buffer);
+            }
+        }
+
+        /// <summary>
+        /// 可視行の識別子トークンに束縛結果を載せる。
+        /// </summary>
+        /// <param name="line">行。</param>
+        /// <param name="tokens">ScanLine の結果。</param>
+        public void ApplyIdentifierOverlay(int line, List<Token> tokens)
+        {
+            if (tokens == null || this.overlay == null || line < 0 || line >= this.overlay.Length)
+            {
+                return;
             }
 
-            this.validThrough = lineCount - 1;
+            List<ClassifySpan> spans = this.overlay[line];
+            if (spans == null || spans.Count == 0)
+            {
+                return;
+            }
+
+            for (int t = 0; t < tokens.Count; t++)
+            {
+                Token token = tokens[t];
+                if (token.Kind == TokenKind.Keyword || token.Kind == TokenKind.String ||
+                    token.Kind == TokenKind.Comment || token.Kind == TokenKind.Number)
+                {
+                    continue;
+                }
+
+                TokenKind found = TokenKind.Text;
+                bool hit = false;
+                for (int s = 0; s < spans.Count; s++)
+                {
+                    ClassifySpan span = spans[s];
+                    if (token.Start >= span.Start && token.Start < span.Start + span.Length)
+                    {
+                        found = span.Kind;
+                        hit = true;
+                    }
+                }
+
+                if (hit)
+                {
+                    token.Kind = found;
+                    tokens[t] = token;
+                }
+            }
+        }
+
+        private void RebuildSemantic(TextBuffer buffer)
+        {
+            int lineCount = 1;
+            if (buffer != null && buffer.LineCount > 0)
+            {
+                lineCount = buffer.LineCount;
+            }
+
+            List<ClassifySpan>[] next = new List<ClassifySpan>[lineCount];
+            for (int i = 0; i < lineCount; i++)
+            {
+                next[i] = new List<ClassifySpan>();
+            }
+
+            this.overlay = next;
+            SemanticClassifier.Classify(this.language, buffer, this.workspaceRoot, next);
         }
 
         /// <summary>

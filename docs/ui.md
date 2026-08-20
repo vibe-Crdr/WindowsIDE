@@ -30,7 +30,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 
 ### P1 ハイライト
 
-P1 の字句ハイライトは既存 Theme 色（Keyword / StringLiteral / Number / Comment / Foreground）だけを使う。新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。下パネルと Ctrl+F はまだ無い。
+P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。下パネルと Ctrl+F はまだ無い。
 
 単位は 96dpi DIP。`Form.Size` は外枠（ClientSize ではない）。
 
@@ -55,6 +55,10 @@ P1 の字句ハイライトは既存 Theme 色（Keyword / StringLiteral / Numbe
 | キーワード | `#bb9af7` |
 | 文字列 | `#9ece6a` |
 | 数値 | `#ff9e64` |
+| ローカル | `#7dcfff` |
+| インスタンス | `#2ac3de` |
+| メソッド | `#e0af68` |
+| 型 | `#73daca` |
 | ステータスバー | `#16161e` |
 
 ライトテーマは作らない。

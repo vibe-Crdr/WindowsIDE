@@ -13,6 +13,7 @@
 /r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Drawing.dll
 /r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Windows.Forms.dll
 /r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Xml.dll
+/r:C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll
 /resource:assets\fonts\cascadia\CascadiaMono-Regular.ttf,WindowsIDE.Fonts.CascadiaMonoRegular
 /resource:assets\fonts\cascadia\CascadiaMono-Bold.ttf,WindowsIDE.Fonts.CascadiaMonoBold
 /resource:assets\fonts\source-han-sans\SourceHanSansJP-Regular.otf,WindowsIDE.Fonts.SourceHanSansJpRegular
@@ -55,6 +56,14 @@ src\WindowsIDE\Languages\VbaLexer.cs
 src\WindowsIDE\Languages\PowerShellLexer.cs
 src\WindowsIDE\Languages\CmdLexer.cs
 src\WindowsIDE\Languages\PlainLexer.cs
+src\WindowsIDE\Languages\IdentifierClassifier.cs
+src\WindowsIDE\Languages\ClassifySpan.cs
+src\WindowsIDE\Languages\SemanticClassifier.cs
+src\WindowsIDE\Languages\PowerShellSemantic.cs
+src\WindowsIDE\Languages\VbaSemantic.cs
+src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
+src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
+src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\WorkspaceFolder.cs
 src\WindowsIDE\Workspace\PathGuard.cs

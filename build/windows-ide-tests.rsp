@@ -11,6 +11,7 @@
 /r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Core.dll
 /r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Drawing.dll
 /r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Xml.dll
+/r:C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll
 tests\WindowsIDE.Tests\Program.cs
 src\WindowsIDE\StartupArgs.cs
 src\WindowsIDE\Ui\DpiUtil.cs
@@ -41,6 +42,14 @@ src\WindowsIDE\Languages\VbaLexer.cs
 src\WindowsIDE\Languages\PowerShellLexer.cs
 src\WindowsIDE\Languages\CmdLexer.cs
 src\WindowsIDE\Languages\PlainLexer.cs
+src\WindowsIDE\Languages\IdentifierClassifier.cs
+src\WindowsIDE\Languages\ClassifySpan.cs
+src\WindowsIDE\Languages\SemanticClassifier.cs
+src\WindowsIDE\Languages\PowerShellSemantic.cs
+src\WindowsIDE\Languages\VbaSemantic.cs
+src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
+src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
+src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\PathGuard.cs
 src\WindowsIDE\Workspace\WorkspaceSettings.cs

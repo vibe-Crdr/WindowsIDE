@@ -520,12 +520,16 @@ namespace WindowsIDE.Editor
                 using (SolidBrush stringBrush = new SolidBrush(Theme.StringLiteral))
                 using (SolidBrush numberBrush = new SolidBrush(Theme.Number))
                 using (SolidBrush commentBrush = new SolidBrush(Theme.Comment))
+                using (SolidBrush localBrush = new SolidBrush(Theme.Local))
+                using (SolidBrush instanceBrush = new SolidBrush(Theme.Instance))
+                using (SolidBrush methodBrush = new SolidBrush(Theme.Method))
+                using (SolidBrush typeBrush = new SolidBrush(Theme.Type))
                 using (SolidBrush caretBrush = new SolidBrush(Theme.Foreground))
                 {
                     for (int i = first; i <= last; i++)
                     {
                         int y = (i - first) * this.lineHeight;
-                        this.DrawLineText(g, fg, keywordBrush, stringBrush, numberBrush, commentBrush, i, y, textArea);
+                        this.DrawLineText(g, fg, keywordBrush, stringBrush, numberBrush, commentBrush, localBrush, instanceBrush, methodBrush, typeBrush, i, y, textArea);
                     }
 
                     float prefixWidth = 0f;
@@ -1166,7 +1170,7 @@ namespace WindowsIDE.Editor
             return new BufferPoint(line, col);
         }
 
-        private void DrawLineText(Graphics g, Brush fg, Brush keywordBrush, Brush stringBrush, Brush numberBrush, Brush commentBrush, int line, int y, Rectangle textArea)
+        private void DrawLineText(Graphics g, Brush fg, Brush keywordBrush, Brush stringBrush, Brush numberBrush, Brush commentBrush, Brush localBrush, Brush instanceBrush, Brush methodBrush, Brush typeBrush, int line, int y, Rectangle textArea)
         {
             string text = this.document.Buffer.GetLine(line);
             this.paintTokens.Clear();
@@ -1176,6 +1180,7 @@ namespace WindowsIDE.Editor
                 ILineLexer lexer = LexerRegistry.Get(this.document.Language);
                 int endState;
                 lexer.ScanLine(text, startState, this.paintTokens, out endState);
+                this.document.HighlightSession.ApplyIdentifierOverlay(line, this.paintTokens);
             }
 
             float x = this.gutterWidth + this.GetTextInset() - this.hScroll.Value;
@@ -1208,7 +1213,7 @@ namespace WindowsIDE.Editor
 
                 if (x + w >= this.gutterWidth && x <= textArea.Right && ch.Length > 0)
                 {
-                    Brush brush = this.BrushForToken(this.TokenKindAt(i), fg, keywordBrush, stringBrush, numberBrush, commentBrush);
+                    Brush brush = this.BrushForToken(this.TokenKindAt(i), fg, keywordBrush, stringBrush, numberBrush, commentBrush, localBrush, instanceBrush, methodBrush, typeBrush);
                     g.DrawString(ch, font, brush, x, y + this.BaselineOffset(font), this.typographic);
                 }
 
@@ -1235,7 +1240,7 @@ namespace WindowsIDE.Editor
             return TokenKind.Text;
         }
 
-        private Brush BrushForToken(TokenKind kind, Brush fg, Brush keywordBrush, Brush stringBrush, Brush numberBrush, Brush commentBrush)
+        private Brush BrushForToken(TokenKind kind, Brush fg, Brush keywordBrush, Brush stringBrush, Brush numberBrush, Brush commentBrush, Brush localBrush, Brush instanceBrush, Brush methodBrush, Brush typeBrush)
         {
             switch (kind)
             {
@@ -1247,6 +1252,14 @@ namespace WindowsIDE.Editor
                     return numberBrush;
                 case TokenKind.Comment:
                     return commentBrush;
+                case TokenKind.Local:
+                    return localBrush;
+                case TokenKind.Instance:
+                    return instanceBrush;
+                case TokenKind.Method:
+                    return methodBrush;
+                case TokenKind.Type:
+                    return typeBrush;
                 default:
                     return fg;
             }

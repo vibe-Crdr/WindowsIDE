@@ -40,6 +40,8 @@
 | ID | 内容 |
 | --- | --- |
 | P11 | 言語は拡張子のみ。無題・不明は Plain。字句は行開始状態 + 行スキャナ。Regex / Roslyn は使わない。キーワードはソース内静的表。 |
+| P12 | C# の識別子色は自前束縛（行レキサの上にオーバーレイ）。TokenKind Local / Instance / Method / Type。ファイル内シンボル表 + ワークスペース `.cs` 型名 + Framework Reflection（既存 `/r` と同じ DLL を LoadFrom）。Roslyn・Regex ホットパスは使わない。VBA / PowerShell は行内ヒューリスティックを土台にし、型名は言語ごとの走査で Type にする。cmd は型なし（`%VAR%` / ラベルのみ）。Theme 色は tokyonight。Languages は Theme を参照しない。 |
+| P13 | PowerShell ハイライトだけ `System.Management.Automation.dll`（GAC `v4.0_3.0.0.0__31bf3856ad364e35`）を `/r` する。`Parser.ParseInput` の AST を使う。実行ホスト（Runspace）はこの参照ではまだ作らない。 |
 
 ## 提案（確認待ち）
 

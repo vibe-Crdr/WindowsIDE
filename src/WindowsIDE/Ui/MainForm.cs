@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows.Forms;
 using WindowsIDE.Editor;
 using WindowsIDE.Languages;
+using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
 
@@ -141,6 +142,7 @@ namespace WindowsIDE.Ui
             this.activatedRebuildMouseDefer = false;
             this.UnhookActivatedRebuildIdle();
             this.tree.Rebuild();
+            this.RefreshWorkspaceTypes();
         }
 
         private void HookActivatedRebuildIdle()
@@ -180,6 +182,7 @@ namespace WindowsIDE.Ui
             }
 
             this.tree.Rebuild();
+            this.RefreshWorkspaceTypes();
         }
 
         /// <summary>DPI 変更は base のみ。本文フォント再生成は TextView の Handle/AfterParent に任せる。</summary>
@@ -523,12 +526,57 @@ namespace WindowsIDE.Ui
 
         private void AttachDocument(Document doc)
         {
+            this.ApplyWorkspaceToDocument(doc);
             this.editor.SaveViewState();
             this.editor.Document = doc;
             this.editor.RestoreViewState();
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             this.editor.Focus();
+        }
+
+        private void ApplyWorkspaceToDocument(Document doc)
+        {
+            if (doc == null || doc.HighlightSession == null)
+            {
+                return;
+            }
+
+            if (this.workspace != null)
+            {
+                doc.HighlightSession.WorkspaceRoot = this.workspace.RootPath;
+                doc.HighlightSession.InvalidateFrom(0);
+                doc.HighlightSession.SyncAfterEdit(doc.Buffer, 0);
+            }
+        }
+
+        private void RefreshWorkspaceTypes()
+        {
+            WorkspaceTypeNames.Invalidate();
+            if (this.tabs == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < this.tabs.Tabs.Count; i++)
+            {
+                this.ApplyWorkspaceToDocument(this.tabs.Tabs[i]);
+            }
+        }
+
+        private void RefreshWorkspaceTypesAfterCsSave(Document doc)
+        {
+            if (doc == null || string.IsNullOrEmpty(doc.FilePath))
+            {
+                return;
+            }
+
+            if (!string.Equals(Path.GetExtension(doc.FilePath), ".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            this.RefreshWorkspaceTypes();
         }
 
         /// <summary>
@@ -639,6 +687,11 @@ namespace WindowsIDE.Ui
                 this.tree.BindWorkspace(this.workspace.RootPath);
                 this.ApplyEditorSettings(this.workspace.Settings.FontSize, this.workspace.Settings.TabSize);
                 this.Text = "WindowsIDE - " + this.workspace.RootPath;
+                WorkspaceTypeNames.Invalidate();
+                if (this.editor != null)
+                {
+                    this.ApplyWorkspaceToDocument(this.editor.Document);
+                }
                 return true;
             }
             catch (Exception ex)
@@ -866,6 +919,7 @@ namespace WindowsIDE.Ui
             }
 
             this.EnsureWorkspaceXml();
+            this.RefreshWorkspaceTypesAfterCsSave(doc);
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             return true;

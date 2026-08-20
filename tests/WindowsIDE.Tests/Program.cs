@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using WindowsIDE.Editor;
 using WindowsIDE.Languages;
+using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Ui;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
@@ -42,6 +43,7 @@ namespace WindowsIDE.Tests
             RunStartupArgs();
             RunLanguageDetector();
             RunLexers();
+            RunCSharpBind();
             RunHighlightSession();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
@@ -508,13 +510,13 @@ namespace WindowsIDE.Tests
         {
             CSharpLexer cs = new CSharpLexer();
             Check("cs class keyword", KindAt(cs, "class Foo", 0, 0) == TokenKind.Keyword);
-            Check("cs classic text", KindAt(cs, "classic", 0, 0) == TokenKind.Text);
+            Check("cs classic local", KindAtCs("classic", 0, 0) == TokenKind.Local);
             Check("cs line comment", KindAt(cs, "int x; // hi", 0, 8) == TokenKind.Comment);
             Check("cs string", KindAt(cs, "x = \"str\";", 0, 5) == TokenKind.String);
             Check("cs char", KindAt(cs, "c = 'x';", 0, 5) == TokenKind.String);
             Check("cs decimal", KindAt(cs, "n = 123;", 0, 4) == TokenKind.Number);
             Check("cs hex", KindAt(cs, "n = 0xFF;", 0, 4) == TokenKind.Number);
-            Check("cs at ident", KindAt(cs, "@class", 0, 0) == TokenKind.Text);
+            Check("cs at ident", KindAtCs("@class", 0, 0) == TokenKind.Local);
 
             List<Token> t0 = new List<Token>();
             int e0;
@@ -554,13 +556,13 @@ namespace WindowsIDE.Tests
             Check("vba tick comment", KindAt(vba, "' note", 0, 0) == TokenKind.Comment);
             Check("vba rem comment", KindAt(vba, "  Rem hello", 0, 2) == TokenKind.Comment);
             Check("vba Sub keyword", KindAt(vba, "Sub Main", 0, 0) == TokenKind.Keyword);
-            Check("vba remote text", KindAt(vba, "Remote", 0, 0) == TokenKind.Text);
+            Check("vba remote local", KindAt(vba, "Remote", 0, 0) == TokenKind.Local);
 
             PowerShellLexer ps = new PowerShellLexer();
             Check("ps hash comment", KindAt(ps, "# hi", 0, 0) == TokenKind.Comment);
             Check("ps if keyword", KindAt(ps, "if ($true)", 0, 0) == TokenKind.Keyword);
-            Check("ps cmdlet text", KindAt(ps, "Get-ChildItem", 0, 0) == TokenKind.Text);
-            Check("ps ForEach-Object text", KindAt(ps, "ForEach-Object", 0, 0) == TokenKind.Text);
+            Check("ps cmdlet method", KindAt(ps, "Get-ChildItem", 0, 0) == TokenKind.Method);
+            Check("ps ForEach-Object method", KindAt(ps, "ForEach-Object", 0, 0) == TokenKind.Method);
             Check("ps foreach keyword", KindAt(ps, "foreach ($x in $y)", 0, 0) == TokenKind.Keyword);
             List<Token> pb = new List<Token>();
             int pbe;
@@ -610,6 +612,139 @@ namespace WindowsIDE.Tests
             PlainLexer plain = new PlainLexer();
             Check("plain class text", KindAt(plain, "class if rem", 0, 0) == TokenKind.Text);
             Check("plain if text", KindAt(plain, "class if rem", 0, 6) == TokenKind.Text);
+
+            Check("cs local x", KindAtCs("int x;", 0, 4) == TokenKind.Local);
+            Check("cs method call", KindAtCs("obj.Foo(", 0, 4) == TokenKind.Method);
+            Check("cs instance bar", KindAtCs("obj.Bar;", 0, 4) == TokenKind.Instance);
+            Check("cs this instance", KindAtCs("this.x", 0, 5) == TokenKind.Instance);
+            Check("cs new type", KindAtCs("new Foo()", 0, 4) == TokenKind.Type);
+            Check("cs class name", KindAtCs("class Foo", 0, 6) == TokenKind.Type);
+            Check("cs method M", KindAtCs("M(", 0, 0) == TokenKind.Method);
+            Check("cs comment keeps ident", KindAt(cs, "// Foo(", 0, 3) == TokenKind.Comment);
+            Check("cs string keeps ident", KindAt(cs, "\"Foo(\"", 0, 1) == TokenKind.String);
+            Check("vba sub name", KindAt(vba, "Sub Main", 0, 4) == TokenKind.Method);
+            Check("vba dim local", KindAt(vba, "Dim x", 0, 4) == TokenKind.Local);
+            Check("vba me instance", KindAt(vba, "Me.Name", 0, 3) == TokenKind.Instance);
+            Check("vba as type", KindAtLang(LanguageKind.Vba, "As Foo", 0, 3) == TokenKind.Type);
+            Check("ps dollar local", KindAt(ps, "$x", 0, 1) == TokenKind.Local);
+            Check("ps member instance", KindAt(ps, "$o.Name", 0, 3) == TokenKind.Instance);
+            Check("ps function name", KindAt(ps, "function Foo", 0, 9) == TokenKind.Method);
+            Check("ps childitem method", KindAt(ps, "Get-ChildItem", 0, 4) == TokenKind.Method);
+            Check("cmd env local", KindAt(cmd, "%PATH%", 0, 1) == TokenKind.Local);
+            Check("cmd label method", KindAt(cmd, ":build", 0, 1) == TokenKind.Method);
+            Check("plain Foo", KindAt(plain, "Foo", 0, 0) == TokenKind.Text);
+            Check("vba sub name with comment", KindAt(vba, "Sub Main() ' c", 0, 4) == TokenKind.Method);
+            Check("vba sub comment stays", KindAt(vba, "Sub Main() ' c", 0, 11) == TokenKind.Comment);
+            Check("vba dim local with comment", KindAt(vba, "Dim x ' c", 0, 4) == TokenKind.Local);
+            Check("vba dim comment stays", KindAt(vba, "Dim x ' c", 0, 6) == TokenKind.Comment);
+            Check("cmd hello with colon comment", KindAt(cmd, "echo hello :: c", 0, 5) == TokenKind.Local);
+            Check("cmd label with colon comment", KindAt(cmd, ":build :: c", 0, 1) == TokenKind.Method);
+            Check("cs local x with line comment", KindAtCs("int x; // c", 0, 4) == TokenKind.Local);
+            Check("ps dollar call local", KindAt(ps, "$foo(", 0, 1) == TokenKind.Local);
+            Check("cmd echo path keyword", KindAt(cmd, "echo path", 0, 5) == TokenKind.Keyword);
+            Check("vba property get name", KindAt(vba, "Property Get Foo", 0, 13) == TokenKind.Method);
+            Check("ps path param local", KindAt(ps, "Get-ChildItem -Path", 0, 15) == TokenKind.Local);
+            Check("ps childitem still method", KindAt(ps, "Get-ChildItem -Path", 0, 4) == TokenKind.Method);
+            Check("cs comment between ident and paren", KindAtCs("M /*c*/ (", 0, 0) == TokenKind.Method);
+        }
+
+        private static void RunCSharpBind()
+        {
+            string nested = "class Foo { void M() { Foo x; } }";
+            Check("bind class name Type", KindAtCs(nested, 0, 6) == TokenKind.Type);
+            Check("bind method M", KindAtCs(nested, 0, 17) == TokenKind.Method);
+            Check("bind Foo type pos", KindAtCs(nested, 0, 23) == TokenKind.Type);
+            Check("bind local x", KindAtCs(nested, 0, 27) == TokenKind.Local);
+
+            string color = "class Color { void M() { Color Color = Color.Red; } }";
+            Check("bind Color decl Type", KindAtCs(color, 0, 6) == TokenKind.Type);
+            Check("bind Color type pos", KindAtCs(color, 0, 25) == TokenKind.Type);
+            Check("bind Color local", KindAtCs(color, 0, 31) == TokenKind.Local);
+            Check("bind Color rhs Type", KindAtCs(color, 0, 39) == TokenKind.Type);
+            Check("bind Red instance", KindAtCs(color, 0, 45) == TokenKind.Instance);
+
+            Check("bind new Foo Type", KindAtCs("new Foo()", 0, 4) == TokenKind.Type);
+            Check("bind obj method", KindAtCs("obj.Bar(", 0, 4) == TokenKind.Method);
+            Check("bind obj instance", KindAtCs("obj.Bar", 0, 4) == TokenKind.Instance);
+            Check("bind int local", KindAtCs("int x; // c", 0, 4) == TokenKind.Local);
+
+            Check("bind Console Type", KindAtCs("Console.WriteLine();", 0, 0) == TokenKind.Type);
+            Check("bind WriteLine Method", KindAtCs("Console.WriteLine();", 0, 8) == TokenKind.Method);
+
+            string broken = "class Foo { int x; !!! void M() { Foo y; } }";
+            Check("bind error still Foo type", KindAtCs(broken, 0, 6) == TokenKind.Type);
+            Check("bind error still y local", KindAtCs(broken, 0, 38) == TokenKind.Local);
+            Check("session overlay Color local", KindAtLang(LanguageKind.CSharp, color, 0, 31) == TokenKind.Local);
+            Check("session overlay Console Type", KindAtLang(LanguageKind.CSharp, "Console.WriteLine();", 0, 0) == TokenKind.Type);
+
+            string leak = "class C { int x; void A(int x) { } void B() { x; } }";
+            Check("bind later field x Instance", KindAtCs(leak, 0, IndexOfIdent(leak, "x", 3)) == TokenKind.Instance);
+
+            string consoleParam = "void A(int Console) { } void B() { Console.WriteLine(); }";
+            Check("bind Console not leaked param", KindAtCs(consoleParam, 0, IndexOfIdent(consoleParam, "Console", 2)) == TokenKind.Type);
+
+            string prop = "class C { int P { get { int y = 1; return y; } } }";
+            Check("bind getter local y", KindAtCs(prop, 0, IndexOfIdent(prop, "y", 1)) == TokenKind.Local);
+            Check("bind getter y use", KindAtCs(prop, 0, IndexOfIdent(prop, "y", 2)) == TokenKind.Local);
+
+            string nestGet = "class C { int P { get { if (a) { } int z = 1; } } void M() { int w; } }";
+            Check("bind getter z after nested brace", KindAtCs(nestGet, 0, IndexOfIdent(nestGet, "z", 1)) == TokenKind.Local);
+            Check("bind method w after property", KindAtCs(nestGet, 0, IndexOfIdent(nestGet, "w", 1)) == TokenKind.Local);
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-ws-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "Other.cs"), "class Other { }\r\n", Encoding.UTF8);
+                WorkspaceTypeNames.Invalidate();
+                TextBuffer buf = new TextBuffer();
+                buf.SetText("Other x;");
+                List<ClassifySpan>[] overlay = new List<ClassifySpan>[buf.LineCount];
+                overlay[0] = new List<ClassifySpan>();
+                CSharpSemantic.Classify(buf, dir, overlay);
+                TokenKind otherKind = TokenKind.Text;
+                for (int i = 0; i < overlay[0].Count; i++)
+                {
+                    ClassifySpan span = overlay[0][i];
+                    if (0 >= span.Start && 0 < span.Start + span.Length)
+                    {
+                        otherKind = span.Kind;
+                    }
+                }
+
+                Check("bind workspace Other Type", otherKind == TokenKind.Type);
+
+                File.WriteAllText(Path.Combine(dir, "NewType.cs"), "class NewType { }\r\n", Encoding.UTF8);
+                TextBuffer fresh = new TextBuffer();
+                fresh.SetText("NewType n;");
+                List<ClassifySpan>[] freshOverlay = new List<ClassifySpan>[fresh.LineCount];
+                freshOverlay[0] = new List<ClassifySpan>();
+                CSharpSemantic.Classify(fresh, dir, freshOverlay);
+                TokenKind newKind = TokenKind.Text;
+                for (int i = 0; i < freshOverlay[0].Count; i++)
+                {
+                    ClassifySpan span = freshOverlay[0][i];
+                    if (0 >= span.Start && 0 < span.Start + span.Length)
+                    {
+                        newKind = span.Kind;
+                    }
+                }
+
+                Check("bind workspace NewType without Invalidate", newKind == TokenKind.Type);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            Check("vba Range Type", KindAtLang(LanguageKind.Vba, "Dim r As Range", 0, 9) == TokenKind.Type);
+            Check("ps type accel", KindAtLang(LanguageKind.PowerShell, "[String]$x", 0, 1) == TokenKind.Type);
         }
 
         private static void RunHighlightSession()
@@ -698,6 +833,66 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static int IndexOfIdent(string text, string name, int nth)
+        {
+            if (text == null || name == null || nth < 1)
+            {
+                return -1;
+            }
+
+            int from = 0;
+            int seen = 0;
+            while (from < text.Length)
+            {
+                int at = text.IndexOf(name, from, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    return -1;
+                }
+
+                bool leftOk = at == 0 || !IsIdentChar(text[at - 1]);
+                int end = at + name.Length;
+                bool rightOk = end >= text.Length || !IsIdentChar(text[end]);
+                if (leftOk && rightOk)
+                {
+                    seen++;
+                    if (seen == nth)
+                    {
+                        return at;
+                    }
+                }
+
+                from = at + 1;
+            }
+
+            return -1;
+        }
+
+        private static bool IsIdentChar(char c)
+        {
+            return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+        }
+
+        private static TokenKind KindAtCs(string text, int line, int index)
+        {
+            return CSharpSemantic.KindAt(text, line, index);
+        }
+
+        private static TokenKind KindAtLang(LanguageKind language, string text, int line, int index)
+        {
+            TextBuffer buffer = new TextBuffer();
+            buffer.SetText(text == null ? "" : text);
+            HighlightSession session = new HighlightSession();
+            session.Reset(language, buffer.LineCount);
+            session.SyncAfterEdit(buffer, 0);
+            List<Token> tokens = new List<Token>();
+            int endState;
+            ILineLexer lexer = LexerRegistry.Get(language);
+            lexer.ScanLine(buffer.GetLine(line), session.GetStartState(line), tokens, out endState);
+            session.ApplyIdentifierOverlay(line, tokens);
+            return KindAtTokens(tokens, index);
         }
 
         private static TokenKind KindAt(ILineLexer lexer, string line, int startState, int index)

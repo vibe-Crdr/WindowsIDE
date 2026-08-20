@@ -26,7 +26,9 @@ P1 最初のスライスは字句ハイライト 4 言語（R3 / F-HL）。`Wind
 
 | ID | P1 F-HL でやる | P1 F-HL でやらない |
 | --- | --- | --- |
-| F-HL | 拡張子だけで C# / VBA / PowerShell / cmd / Plain を判定（無題・不明は Plain）。行開始状態 + 行スキャナで Keyword / String / Comment / Number / Text を区別。既存 Theme 色。ステータス先頭に言語名。`HighlightSession` は Document に持ち、タブ切替で捨てない。キーワードはソース内静的表 | 検索、Ctrl+F/P、下パネル、問題一覧、csc/PS/cmd 実行、ターミナル、Enter 自動インデント、複数行一括インデント、補完、セマンティック、折りたたみ、括弧強調、RichTextBox 着色、Roslyn、Regex ホットパス、新しい `/r`、新しい Theme 色、言語手動切替、workspace.xml 言語キー、FileKind 削除/言語化、メニュー「ファイルを開く」、D&D、VBA 同期、Excel COM |
+| F-HL | 拡張子だけで C# / VBA / PowerShell / cmd / Plain を判定（無題・不明は Plain）。行開始状態 + 行スキャナで Keyword / String / Comment / Number / Text / Local / Instance / Method / Type を区別。C# は自前束縛オーバーレイ（ファイル内シンボル + ワークスペース型名 + BCL Reflection）。VBA / PowerShell は IdentifierClassifier に加え型名走査。cmd は IdentifierClassifier のみ（型なし）。Theme に Local `#7dcfff` / Instance `#2ac3de` / Method `#e0af68` / Type `#73daca` を足す。ステータス先頭に言語名。`HighlightSession` は Document に持ち、タブ切替で捨てない。キーワードはソース内静的表 | 検索、Ctrl+F/P、下パネル、問題一覧、csc/PS/cmd 実行、ターミナル、Enter 自動インデント、複数行一括インデント、補完、Roslyn、折りたたみ、括弧強調、RichTextBox 着色、Regex ホットパス、言語手動切替、workspace.xml 言語キー、FileKind 削除/言語化、メニュー「ファイルを開く」、D&D、VBA 同期、Excel COM |
+
+C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、ユーザーコードの C# 6 以降、読み込んでいないアセンブリ、Excel 未起動の COM 型。cmd にクラスはない。VBA は文頭の識別子で次が文字列／識別子なら Method。
 
 ## ワークベンチ
 
@@ -47,7 +49,7 @@ P1 最初のスライスは字句ハイライト 4 言語（R3 / F-HL）。`Wind
 | F-LN | M | 行番号、現在行 | 行番号はガター内右寄せ、左右 8 DIP。内容が収まるときは編集器バー非表示。全角の長い行でも横バーが出て末尾までスクロールできる。横スクロール時も本文・選択はガターへ描かない |
 | F-FIND | M | ファイル内検索・置換 | 大小無視オプション |
 | F-IND | M | Tab/Shift+Tab、Enter 後インデント | タブ幅設定 |
-| F-HL | M | 字句ハイライト 4 言語 | キーワード・文字列・コメントが区別できる |
+| F-HL | M | 字句ハイライト 4 言語 | キーワード・文字列・コメントに加え、ローカル / メンバー / メソッド / 型が区別できる。名前空間色はしない。C# は自前束縛。Roslyn は使わない |
 | F-BR | S | 対応括弧の強調 | |
 | F-MC | C | マルチカーソル | |
 | F-MM | W | ミニマップ | |

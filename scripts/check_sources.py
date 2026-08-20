@@ -39,6 +39,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 UTF8_BOM = b"\xef\xbb\xbf"
 FRAMEWORK_DIR = r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
+SMA_DLL = (
+    r"C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation"
+    r"\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll"
+)
 
 BUNDLED_FONTS = (
     "assets/fonts/cascadia/CascadiaMono-Regular.ttf",
@@ -140,10 +144,10 @@ def check_rsp(report):
     for rsp in rsp_files:
         references, sources = _parse_rsp(rsp)
         for ref in references:
-            if not ref.startswith(FRAMEWORK_DIR):
+            if not ref.startswith(FRAMEWORK_DIR) and ref != SMA_DLL:
                 report.error(
                     "Out-of-frame reference in " + _rel(rsp) + ": " + ref
-                    + " (only the frozen Framework folder may be referenced)"
+                    + " (only the frozen Framework folder or SMA GAC may be referenced)"
                 )
         for src in sources:
             src_path = PROJECT_ROOT / src.replace("\\", "/")

@@ -41,13 +41,15 @@ namespace WindowsIDE.Languages
                 if (c == ':' && i + 1 < line.Length && line[i + 1] == ':')
                 {
                     ScanChars.Add(tokens, i, line.Length - i, TokenKind.Comment);
-                    return;
+                    i = line.Length;
+                    continue;
                 }
 
                 if (this.IsRemStart(line, i))
                 {
                     ScanChars.Add(tokens, i, line.Length - i, TokenKind.Comment);
-                    return;
+                    i = line.Length;
+                    continue;
                 }
 
                 if (c == '"')
@@ -68,7 +70,8 @@ namespace WindowsIDE.Languages
                 {
                     int end = ScanChars.ReadIdent(line, i);
                     string word = line.Substring(i, end - i);
-                    TokenKind kind = CmdKeywords.Set.Contains(word) ? TokenKind.Keyword : TokenKind.Text;
+                    bool skipKeyword = i > 0 && (line[i - 1] == '%' || line[i - 1] == '!' || line[i - 1] == ':');
+                    TokenKind kind = (!skipKeyword && CmdKeywords.Set.Contains(word)) ? TokenKind.Keyword : TokenKind.Text;
                     ScanChars.Add(tokens, i, end - i, kind);
                     i = end;
                     continue;
@@ -77,6 +80,8 @@ namespace WindowsIDE.Languages
                 ScanChars.Add(tokens, i, 1, TokenKind.Text);
                 i++;
             }
+
+            IdentifierClassifier.Apply(LanguageKind.Cmd, line, tokens);
         }
 
         private bool IsRemStart(string line, int index)

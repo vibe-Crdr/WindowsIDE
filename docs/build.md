@@ -43,9 +43,15 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.dll
 - `System.Windows.Forms.dll`
 - `System.Xml.dll`
 
-P0 では `System.Management.Automation.dll` / `Microsoft.CSharp.dll` / Office PIA / `System.Xml.Linq.dll` は足さない。後のフェーズで足すときは [decisions.md](decisions.md) を更新してから。
+P0 では `Microsoft.CSharp.dll` / Office PIA / `System.Xml.Linq.dll` は足さない。後のフェーズで足すときは [decisions.md](decisions.md) を更新してから。
 
-P1 F-HL でも `/r` は増やさない。`WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する。Languages は Theme / WinForms を参照しない。
+P13: PowerShell ハイライト用にだけ次を `/r` する（実行ホストではない）。
+
+```text
+C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll
+```
+
+`WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する（`IdentifierClassifier.cs` と `Languages/CSharp/` を含む）。Languages は Theme / WinForms を参照しない。BCL 型名は実行時 `Assembly.LoadFrom`（コンパイル `/r` は既存 Framework DLL + SMA）。
 
 ## レスポンスファイル
 

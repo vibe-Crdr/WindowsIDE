@@ -19,6 +19,10 @@ namespace WindowsIDE.Ui
         public static readonly Color Keyword = Color.FromArgb(0xbb, 0x9a, 0xf7);
         public static readonly Color StringLiteral = Color.FromArgb(0x9e, 0xce, 0x6a);
         public static readonly Color Number = Color.FromArgb(0xff, 0x9e, 0x64);
+        public static readonly Color Local = Color.FromArgb(0x7d, 0xcf, 0xff);
+        public static readonly Color Instance = Color.FromArgb(0x2a, 0xc3, 0xde);
+        public static readonly Color Method = Color.FromArgb(0xe0, 0xaf, 0x68);
+        public static readonly Color Type = Color.FromArgb(0x73, 0xda, 0xca);
         public static readonly Color StatusBar = Color.FromArgb(0x16, 0x16, 0x1e);
     }
 }

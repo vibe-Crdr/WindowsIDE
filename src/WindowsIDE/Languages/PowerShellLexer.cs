@@ -139,6 +139,7 @@ namespace WindowsIDE.Languages
                 ScanChars.Add(tokens, i, line.Length - i, kind);
             }
 
+            IdentifierClassifier.Apply(LanguageKind.PowerShell, line, tokens);
             endState = state;
         }
 

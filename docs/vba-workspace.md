@@ -57,6 +57,7 @@ folder_prefix:  vba/Lib/Text/Join.bas   →  Lib_Text_Join
 - コンポーネント名 → 相対パス
 - document モジュール（ThisWorkbook、シート）の対応
 - エンコーディング
+- 将来（フェーズ P8 実装時、提案 P23 は確認待ち）: 参照 GUID を残すことがある。**今は要素を足さない**
 
 Excel で名前を変えたら、次のプルでマップを更新する。ディスク側リネームはプッシュで Excel 側名を合わせる。
 
@@ -66,6 +67,8 @@ Excel で名前を変えたら、次のプルでマップを更新する。デ�
 | --- | --- |
 | プル | ブックを開き（必要なら起動）、VBComponents をエクスポートし、マップに従ってファイルを作る/更新する。IDE に未保存の同名バッファがあれば確認する |
 | プッシュ | ディスクの `.bas` / `.cls` をインポートまたはコード置換する。Excel にだけあるモジュールは削除しない（初回は警告リスト）。削除は別コマンド |
+| コンパイル（フェーズ P7。今は実装しない） | 保存確認のうえディスクを先にプッシュし、対象 VBProject を Excel VBA コンパイラで Compile する。失敗は問題一覧と波線（F-VBA-BLD）。`Application.Run` しない。手動は Excel 未起動なら起動してよい。ライブはマップ済みブックが既に開いているときだけ（提案 P25 は確認待ち）。キーごと禁止 |
+| 参照（フェーズ P8。今は実装しない） | 開いている VBProject の `References` を一覧・追加・削除する（F-VBA-REF）。`.bas` には書かない。ビルトイン VBA / Excel 参照は削除しない。任意 COM は Excel プロセスに載る。明示操作だけ |
 | 実行 | モジュール名とマクロ名を指定し `Application.Run`。失敗は COM メッセージを出力パネルへ |
 
 Excel が開いていて未保存なら、同期前に保存するか中止するかを聞く。
@@ -85,8 +88,20 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 - `VBProject` / `VBComponents` / `CodeModule`
 - エクスポート: `VBComponent.Export`
 - 取り込み: 一時ファイル経由 `Import` または `CodeModule` の一括置換
+- Compile（フェーズ P7）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
+- References（フェーズ P8）: `VBProject.References` の一覧・追加・削除
 
-IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。
+IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。診断 Compile も UI/STA。バックグラウンドスレッドで Excel を触らない。
+
+## フェーズ P7（今は実装しない）
+
+定義へ移動とホバーはディスク上の宣言と直前コメント（F-DOC 枠を含む）を見る。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
+
+診断 Compile は F-VBA-BLD。プッシュ後に Excel VBA コンパイラを使う。Run は明示のまま。ライブは既に開いているマップ済みブックだけ（提案 P25 は確認待ち）。Excel 未起動のライブは走らない。
+
+## フェーズ P8（今は実装しない）
+
+F-VBA-REF: 開いている VBProject の参照。GUID を vba-map に残すかは提案 P23（確認待ち）。今はマップ要素を足さない。
 
 ## ディレクトリが Excel に出ないこと
 

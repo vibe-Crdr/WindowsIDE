@@ -33,10 +33,12 @@ flowchart LR
   ui -->|"COM"| xl
 ```
 
+図の `csc --> child` は手動ビルド成功後の起動経路。常時コンパイルの一時生成物は起動しない。
+
 - UI は WinForms。メインは STA（Excel COM のため `[STAThread]`）。
-- ユーザー C# プログラムは別プロセス。IDE を落とさない。
-- PowerShell は可能なら同一プロセスの Runspace（`System.Management.Automation`）。対話ターミナルは `powershell.exe` をリダイレクトしてもよい。
-- VBA の実行主体は Excel。IDE は同期と `Application.Run`、エラー表示を担う。
+- ユーザー C# プログラムは別プロセス。IDE を落とさない。手動ビルド成功後の起動は `WindowsIDE.Host.Csharp`。常時コンパイル（F-LIVE）の一時生成物は起動しない。
+- PowerShell は可能なら同一プロセスの Runspace（`System.Management.Automation`）。対話ターミナルは `powershell.exe` をリダイレクトしてもよい。波線のために Runspace を増やさない。PS 構文エラー位置は `WindowsIDE.Languages` が `ParseInput` する（実行しない）。
+- VBA の実行主体は Excel。IDE は同期と明示の `Application.Run`、エラー表示を担う。フェーズ P7 で診断専用の Excel Compile を足す（Run はしない。`WindowsIDE.Vba`）。
 
 ## 製品内部（単一 EXE）
 
@@ -45,20 +47,36 @@ flowchart LR
 | 名前空間 | 責務 |
 | --- | --- |
 | `WindowsIDE` | `Program.Main`、起動引数（`StartupArgs`）、未処理例外 |
-| `WindowsIDE.Ui` | メイン枠、テーマ、コマンドパレット |
+| `WindowsIDE.Ui` | メイン枠、テーマ、コマンドパレット。将来: F-PROB への診断反映、ホバーの見た目（既存色。フェーズ P7）、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
-| `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo |
+| `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo。将来: 括弧描画、波線描画、Enter / 自動閉じ / F-DOC の挿入、ホバー枠のホスト、キー記録（フェーズ P7–P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML |
-| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード |
-| `WindowsIDE.Build` | `csc` 引数、診断パース |
+| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード。将来: トークン上の対括弧、F-SIND / F-AC / F-DOC 規則、F-VBA-CASE、位置付きシンボル、F-HOV 抽出、PS `ParseInput` エラー位置、VBA 粗いブロック（構造ヒント。コンパイラと呼ばない）、`MarkdownLexer`（フェーズ P8） |
+| `WindowsIDE.Build` | `csc` 引数、診断パース。将来の常時コンパイル（デバウンス、前回 csc の Kill、一時出力、診断パース）もここ。EXE 起動は持たない。VBA Compile は置かない |
 | `WindowsIDE.Debug` | セッション、ブレーク、出力 |
-| `WindowsIDE.Host.PowerShell` | 実行と PS デバッガ |
+| `WindowsIDE.Host.PowerShell` | 実行と PS デバッガ。波線のために Runspace を増やさない。Parse は Languages |
 | `WindowsIDE.Host.Cmd` | cmd / bat |
-| `WindowsIDE.Host.Csharp` | コンパイルして起動、のち CLR デバッグ |
-| `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期 |
+| `WindowsIDE.Host.Csharp` | コンパイルして起動、のち CLR デバッグ。常時コンパイル（F-LIVE）はここに置かない。VBA Compile は置かない |
+| `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期。将来: プッシュ後の COM Compile 診断（F-VBA-BLD。Run はしない）、References（F-VBA-REF、フェーズ P8） |
+| `WindowsIDE.Macro` | フェーズ P8。キー記録の再生と、パレットコマンド名を PowerShell 5.1 から呼ぶ薄い面。拡張ホストではない |
 | `WindowsIDE.Terminal` | 統合ターミナル |
 
 編集器は `RichTextBox` に色を載せる方式にしない（遅い、フォント混在が苦しい）。`Control` を継承し、GDI+ で行単位描画する。
+
+## 診断の正とコンパイル単位
+
+言語ごとの診断の正:
+
+| 言語 | 正 | 置く名前空間 |
+| --- | --- | --- |
+| C# | 指定 Framework `csc.exe` のみ | `WindowsIDE.Build`。起動は `Host.Csharp` |
+| VBA | Excel VBA コンパイラ（プッシュ後の Compile。Run しない） | `WindowsIDE.Vba`。Build にも Host.Csharp にも置かない |
+| PowerShell | `Parser.ParseInput`（実行しない） | `WindowsIDE.Languages` |
+| cmd | 波線なし（W） | |
+
+`CSharpSemantic` など自前パーサの失敗をコンパイラエラーとして問題一覧に出さない。VbaLexer の推測を VBA コンパイラと呼ばない。常時コンパイル（F-LIVE）は `WindowsIDE.Build` が担い、起動は `WindowsIDE.Host.Csharp` ではない。F-LIVE は csc 専用のまま。
+
+ユーザー C# の常時コンパイル単位は、採用済み提案 P14 どおりワークスペース内すべての `.cs` を 1 単位とする。複数 `Main` は csc エラー。無題 C# は一時ファイルで含める。フェーズ P7 では csproj を作らない。
 
 ## ワークスペース配置（ユーザー側）
 
@@ -83,6 +101,7 @@ MyProject/
 
 ## セキュリティ境界
 
-- ユーザーコードの実行は明示操作（実行 / デバッグ）のときだけ。
-- Excel マクロ実行も明示。自動で全モジュールを走らせない。
+- ユーザーコードの実行は明示操作（実行 / デバッグ）のときだけ。常時コンパイルは診断のみであり、実行ではない。
+- Excel マクロ実行も明示。自動で全モジュールを走らせない。STA の診断 Compile（F-VBA-BLD）は可。バックグラウンドスレッドでは Compile / Run しない。キー入力ごとの同期 Excel Compile は禁止。
+- 任意の COM 参照追加（F-VBA-REF、フェーズ P8）は明示操作だけ。足したコードは Excel プロセスに載る。
 - ワークスペース外への書き込みは、名前を付けて保存などユーザー操作に限る。

@@ -53,6 +53,8 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 
 `WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する（`IdentifierClassifier.cs` と `Languages/CSharp/` を含む）。Languages は Theme / WinForms を参照しない。BCL 型名は実行時 `Assembly.LoadFrom`（コンパイル `/r` は既存 Framework DLL + SMA）。
 
+ユーザーコードの常時コンパイル（F-LIVE、フェーズ P7。今は実装しない）も同じ Framework `csc.exe` を使う。製品の `/r` は増やさない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。
+
 ## レスポンスファイル
 
 `build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。

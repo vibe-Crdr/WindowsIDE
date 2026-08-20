@@ -18,10 +18,10 @@ PowerShell 7 構文は書かない（`&&` / `||` チェーン、`??`、`?:`、nu
 | 項目 | 値 |
 | --- | --- |
 | 製品 | Microsoft 365 Apps（MSO）64-bit |
-| 用途 | Excel の VBA プロジェクト同期とマクロ実行 |
+| 用途 | Excel の VBA プロジェクト同期、診断 Compile（STA。Run とは別）、マクロ実行 |
 | ビットネス | IDE（x64）と Excel（x64）を一致させる。32-bit Excel は対象外 |
 
-VBA プロジェクト オブジェクト モデルへのアクセス信頼は、同期機能の前提である。
+VBA プロジェクト オブジェクト モデルへのアクセス信頼は、同期と診断 Compile の前提である。
 
 ## コンパイラ
 
@@ -76,7 +76,8 @@ IDE には WinForms 等が必要なので、**同じ Framework フォルダ**、
 | --- | --- |
 | IDE 本体 | C# **5** のみ |
 | ビルド / 起動補助 | Windows PowerShell 5.1 と cmd |
-| IDE が扱うユーザーコード | C# 5、VBA、PowerShell 5.1、cmd / `.bat` |
+| IDE が扱うユーザーコード | C# 5、VBA、PowerShell 5.1、cmd / `.bat`（ホスト言語。実行・デバッグ対象） |
+| IDE が扱う編集専用 | Markdown（`.md`）。ホストではない。実行・デバッグ・csc しない（フェーズ P8。今は実装しない） |
 
 C# 6 以降の構文は、コンパイラが落とす。書かない。代表例は `.cursor/rules/csharp5.mdc`。
 

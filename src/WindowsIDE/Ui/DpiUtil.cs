@@ -9,7 +9,7 @@ namespace WindowsIDE.Ui
     /// </summary>
     public static class DpiUtil
     {
-        /// <summary>タブ・ツリー・About のシステム UI フォントサイズ（96dpi DIP）。</summary>
+        /// <summary>サイズは 12 DIP。ファミリは対象による（ツリー／メニュー／ステータスは双フォント、タブ／About はシステム UI）。</summary>
         public const int UiFontDip = 12;
 
         /// <summary>自前スクロールバーの太さ（96dpi DIP）。</summary>

@@ -18,6 +18,10 @@ namespace WindowsIDE.Ui
     {
         private readonly FontLoadResult fonts;
         private WorkspaceFolder workspace;
+        private DarkMenuRenderer chromeRenderer;
+        private Font chromeHalfFont;
+        private Font chromeFullFont;
+        private Padding statusBasePadding;
         private MenuStrip menu;
         private SplitContainer split;
         private FileTreeControl tree;
@@ -55,6 +59,7 @@ namespace WindowsIDE.Ui
             this.BuildStatus();
             this.BuildBody();
             this.MainMenuStrip = this.menu;
+            this.RecreateChromeFonts();
 
             this.ApplyEditorSettings(WorkspaceSettings.DefaultFontSize, WorkspaceSettings.DefaultTabSize);
             this.ApplyWindowMetrics();
@@ -86,6 +91,7 @@ namespace WindowsIDE.Ui
             base.OnHandleCreated(e);
             NativeCaption.Apply(this.Handle);
             this.ApplyWindowMetrics();
+            this.RecreateChromeFonts();
         }
 
         /// <summary>フォルダ再読込（フォーカス復帰）。クリックより後に遅延する。</summary>
@@ -289,11 +295,13 @@ namespace WindowsIDE.Ui
 
         private void BuildMenu()
         {
+            this.chromeRenderer = new DarkMenuRenderer();
             this.menu = new MenuStrip();
-            this.menu.Renderer = new DarkMenuRenderer();
+            this.menu.Renderer = this.chromeRenderer;
             this.menu.BackColor = Theme.Background;
             this.menu.ForeColor = Theme.Foreground;
             this.menu.Padding = new Padding(4, 2, 0, 2);
+            this.menu.DpiChangedAfterParent += this.OnChromeDpiChangedAfterParent;
 
             ToolStripMenuItem file = this.CreateTop("ファイル(&F)");
             file.DropDownItems.Add(this.CreateItem("フォルダを開く(&O)", Keys.Control | Keys.O, this.OnOpenFolder));
@@ -326,17 +334,18 @@ namespace WindowsIDE.Ui
 
         private ToolStripMenuItem CreateTop(string text)
         {
-            ToolStripMenuItem item = new ToolStripMenuItem(text);
+            DualFontMenuItem item = new DualFontMenuItem(text);
             item.ForeColor = Theme.Foreground;
             item.BackColor = Theme.Background;
             item.DropDown.BackColor = Theme.Background;
             item.DropDown.ForeColor = Theme.Foreground;
+            item.DropDown.Renderer = this.chromeRenderer;
             return item;
         }
 
         private ToolStripMenuItem CreateItem(string text, Keys shortcut, EventHandler handler)
         {
-            ToolStripMenuItem item = new ToolStripMenuItem(text);
+            DualFontMenuItem item = new DualFontMenuItem(text);
             item.ForeColor = Theme.Foreground;
             item.BackColor = Theme.Background;
             if (shortcut != Keys.None)
@@ -351,26 +360,91 @@ namespace WindowsIDE.Ui
         private void BuildStatus()
         {
             this.status = new StatusStrip();
-            this.status.Renderer = new DarkMenuRenderer();
+            this.status.Renderer = this.chromeRenderer;
             this.status.BackColor = Theme.StatusBar;
             this.status.SizingGrip = false;
-            this.statusLang = new ToolStripStatusLabel("プレーン");
-            this.statusPos = new ToolStripStatusLabel("1:1");
-            this.statusEnc = new ToolStripStatusLabel("UTF-8 BOM");
-            this.statusFont = new ToolStripStatusLabel("");
-            this.statusLang.ForeColor = Theme.Foreground;
-            this.statusPos.ForeColor = Theme.Foreground;
-            this.statusEnc.ForeColor = Theme.Foreground;
-            this.statusFont.ForeColor = Theme.Foreground;
+            this.statusBasePadding = this.status.Padding;
+            this.status.DpiChangedAfterParent += this.OnChromeDpiChangedAfterParent;
+            this.statusLang = this.CreateStatusLabel("プレーン", Theme.Foreground);
+            this.statusPos = this.CreateStatusLabel("1:1", Theme.Foreground);
+            this.statusEnc = this.CreateStatusLabel("UTF-8 BOM", Theme.Foreground);
+            this.statusFont = this.CreateStatusLabel("", Theme.Foreground);
             this.statusFont.Spring = true;
             this.status.Items.Add(this.statusLang);
-            this.status.Items.Add(new ToolStripStatusLabel("  |  ") { ForeColor = Theme.Comment });
+            this.status.Items.Add(this.CreateStatusLabel("  |  ", Theme.Comment));
             this.status.Items.Add(this.statusPos);
-            this.status.Items.Add(new ToolStripStatusLabel("  |  ") { ForeColor = Theme.Comment });
+            this.status.Items.Add(this.CreateStatusLabel("  |  ", Theme.Comment));
             this.status.Items.Add(this.statusEnc);
-            this.status.Items.Add(new ToolStripStatusLabel("  |  ") { ForeColor = Theme.Comment });
+            this.status.Items.Add(this.CreateStatusLabel("  |  ", Theme.Comment));
             this.status.Items.Add(this.statusFont);
             this.Controls.Add(this.status);
+        }
+
+        private ToolStripStatusLabel CreateStatusLabel(string text, Color color)
+        {
+            DualFontStatusLabel label = new DualFontStatusLabel(text);
+            label.ForeColor = color;
+            return label;
+        }
+
+        /// <summary>
+        /// メニューとステータス用の 12 DIP 双フォントを作り直す。本文 fontSize には連動しない。
+        /// </summary>
+        private void RecreateChromeFonts()
+        {
+            if (this.fonts == null || this.chromeRenderer == null || this.menu == null || this.status == null)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int px = DpiUtil.ToPixels(DpiUtil.UiFontDip, dpi);
+            Font newHalf = this.fonts.CreateHalfWidth(px);
+            Font newFull = this.fonts.CreateFullWidth(px);
+            Font oldHalf = this.chromeHalfFont;
+            Font oldFull = this.chromeFullFont;
+            this.chromeHalfFont = newHalf;
+            this.chromeFullFont = newFull;
+            this.chromeRenderer.SetFonts(newHalf, newFull);
+            this.menu.Font = newHalf;
+            this.status.Font = newHalf;
+
+            int extraTop = 0;
+            int extraBottom = 0;
+            if (newFull.Height > newHalf.Height)
+            {
+                int d = newFull.Height - newHalf.Height;
+                extraTop = d / 2;
+                extraBottom = d - extraTop;
+            }
+
+            this.menu.Padding = new Padding(4, 2 + extraTop, 0, 2 + extraBottom);
+            Padding sp = this.statusBasePadding;
+            this.status.Padding = new Padding(sp.Left, sp.Top + extraTop, sp.Right, sp.Bottom + extraBottom);
+
+            if (oldHalf != null)
+            {
+                oldHalf.Dispose();
+                if (object.ReferenceEquals(oldFull, oldHalf))
+                {
+                    oldFull = null;
+                }
+            }
+
+            if (oldFull != null)
+            {
+                oldFull.Dispose();
+            }
+
+            this.menu.Invalidate();
+            this.status.Invalidate();
+            this.menu.PerformLayout();
+            this.status.PerformLayout();
+        }
+
+        private void OnChromeDpiChangedAfterParent(object sender, EventArgs e)
+        {
+            this.RecreateChromeFonts();
         }
 
         private void BuildBody()
@@ -1008,6 +1082,50 @@ namespace WindowsIDE.Ui
         {
             this.tabs.RefreshTabs();
             this.UpdateStatus();
+        }
+
+        /// <summary>クロム用 Font を破棄する。Renderer は所有しない。</summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (this.menu != null)
+                {
+                    this.menu.DpiChangedAfterParent -= this.OnChromeDpiChangedAfterParent;
+                }
+
+                if (this.status != null)
+                {
+                    this.status.DpiChangedAfterParent -= this.OnChromeDpiChangedAfterParent;
+                }
+
+                if (this.chromeRenderer != null)
+                {
+                    this.chromeRenderer.SetFonts(null, null);
+                }
+            }
+
+            base.Dispose(disposing);
+
+            if (disposing)
+            {
+                if (this.chromeHalfFont != null)
+                {
+                    this.chromeHalfFont.Dispose();
+                    if (object.ReferenceEquals(this.chromeFullFont, this.chromeHalfFont))
+                    {
+                        this.chromeFullFont = null;
+                    }
+
+                    this.chromeHalfFont = null;
+                }
+
+                if (this.chromeFullFont != null)
+                {
+                    this.chromeFullFont.Dispose();
+                    this.chromeFullFont = null;
+                }
+            }
         }
 
         /// <summary>未保存があれば確認する。</summary>

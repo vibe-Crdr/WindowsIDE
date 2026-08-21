@@ -21,6 +21,7 @@ src\WindowsIDE\Ui\Fonts\FontLoader.cs
 src\WindowsIDE\Ui\Fonts\NativeFonts.cs
 src\WindowsIDE\Ui\Fonts\GlyphClassifier.cs
 src\WindowsIDE\Ui\Fonts\DualFontPainter.cs
+src\WindowsIDE\Ui\Fonts\UiMnemonic.cs
 src\WindowsIDE\Editor\ImeLayout.cs
 src\WindowsIDE\Editor\TextBuffer.cs
 src\WindowsIDE\Editor\UndoStack.cs

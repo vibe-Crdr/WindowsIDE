@@ -38,6 +38,7 @@ namespace WindowsIDE.Tests
             RunTabSwitchScroll();
             RunDpiUtil();
             RunDualFontPainter();
+            RunUiMnemonic();
             RunNativeCaption();
             RunImeLayout();
             RunStartupArgs();
@@ -379,6 +380,43 @@ namespace WindowsIDE.Tests
                 }
 
                 Check("Draw leaves pixels left of clip black", leftBlack);
+            }
+        }
+
+        private static void RunUiMnemonic()
+        {
+            int index;
+            string stripped = UiMnemonic.Strip("ファイル(&F)", out index);
+            Check("Strip ファイル(&F) text", stripped == "ファイル(F)");
+            Check("Strip ファイル(&F) index is F", index >= 0 && index < stripped.Length && stripped[index] == 'F');
+
+            stripped = UiMnemonic.Strip("A&&B", out index);
+            Check("Strip A&&B text", stripped == "A&B");
+            Check("Strip A&&B no mnemonic", index == -1);
+
+            stripped = UiMnemonic.Strip("&File", out index);
+            Check("Strip &File text", stripped == "File");
+            Check("Strip &File index 0", index == 0);
+
+            stripped = UiMnemonic.Strip("A&", out index);
+            Check("Strip trailing &", stripped == "A" && index == -1);
+
+            stripped = UiMnemonic.Strip(null, out index);
+            Check("Strip null", stripped == "" && index == -1);
+
+            stripped = UiMnemonic.Strip("", out index);
+            Check("Strip empty", stripped == "" && index == -1);
+
+            using (Bitmap bmp = new Bitmap(400, 80))
+            using (Graphics g = Graphics.FromImage(bmp))
+            using (Font half = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font full = new Font("Yu Gothic", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                float raw = DualFontPainter.Measure(g, "ファイル(&F)", half, full, null);
+                int mi;
+                string visible = UiMnemonic.Strip("ファイル(&F)", out mi);
+                float after = DualFontPainter.Measure(g, visible, half, full, null);
+                Check("Measure raw vs Strip differs", raw != after);
             }
         }
 

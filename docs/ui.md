@@ -90,6 +90,8 @@ Markdown プレビューは新しいテーマ色を足さない。見出しは K
 
 ツリーは **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。
 
+メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブ・About はシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。
+
 同梱の読み込みに失敗したときだけ Consolas / Yu Gothic / MS Gothic に退避し、ステータスへエラーを出す。
 
 ## 編集器の見た目

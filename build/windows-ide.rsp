@@ -27,6 +27,7 @@ src\WindowsIDE\Ui\NativeCaption.cs
 src\WindowsIDE\Ui\ThemedScrollBar.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
+src\WindowsIDE\Ui\FindBar.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
 src\WindowsIDE\Ui\TabStrip.cs
 src\WindowsIDE\Ui\AboutForm.cs
@@ -39,6 +40,7 @@ src\WindowsIDE\Editor\TextBuffer.cs
 src\WindowsIDE\Editor\UndoStack.cs
 src\WindowsIDE\Editor\Document.cs
 src\WindowsIDE\Editor\IndentRules.cs
+src\WindowsIDE\Editor\FindRules.cs
 src\WindowsIDE\Editor\FileEncoding.cs
 src\WindowsIDE\Editor\ImeLayout.cs
 src\WindowsIDE\Editor\TextView.cs

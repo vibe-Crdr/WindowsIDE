@@ -171,7 +171,7 @@ namespace WindowsIDE.Ui
         /// <returns>測る文字列。足さないときは null。</returns>
         internal static string GetShortcutDisplayText(ToolStripMenuItem item)
         {
-            if (item == null || !item.ShowShortcutKeys || item.ShortcutKeys == Keys.None)
+            if (item == null || !item.ShowShortcutKeys)
             {
                 return null;
             }
@@ -180,6 +180,11 @@ namespace WindowsIDE.Ui
             if (text != null && text.Length > 0)
             {
                 return text;
+            }
+
+            if (item.ShortcutKeys == Keys.None)
+            {
+                return null;
             }
 
             TypeConverter converter = TypeDescriptor.GetConverter(typeof(Keys));

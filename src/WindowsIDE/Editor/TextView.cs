@@ -245,6 +245,211 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
+        /// 範囲を選択する。start がアンカー、end がキャレット。Clamp し、キャレットを可視にする。
+        /// </summary>
+        /// <param name="start">選択開始（アンカー）。</param>
+        /// <param name="end">選択終端（キャレット）。</param>
+        public void SelectRange(BufferPoint start, BufferPoint end)
+        {
+            if (this.document == null)
+            {
+                return;
+            }
+
+            start = this.document.Buffer.Clamp(start);
+            end = this.document.Buffer.Clamp(end);
+            this.document.AnchorLine = start.Line;
+            this.document.AnchorColumn = start.Column;
+            this.document.CaretLine = end.Line;
+            this.document.CaretColumn = end.Column;
+            this.EnsureCaretVisible();
+            this.Invalidate();
+            this.RaiseCaretMoved();
+        }
+
+        /// <summary>
+        /// 現在の選択を text で置き換える。選択が無ければ何もしない。text が空なら削除する。
+        /// </summary>
+        /// <param name="text">挿入する文字列。null は空。</param>
+        public void ReplaceSelection(string text)
+        {
+            if (this.document == null || !this.document.HasSelection())
+            {
+                return;
+            }
+
+            if (text == null)
+            {
+                text = "";
+            }
+
+            if (text.Length == 0)
+            {
+                this.DeleteSelection();
+                return;
+            }
+
+            this.InsertText(text);
+        }
+
+        /// <summary>
+        /// 次のリテラルヒットを選び、既存 Selection で示す。選択がクエリと一致していれば終端の直後から探す。
+        /// </summary>
+        /// <param name="query">検索語。</param>
+        /// <param name="ignoreCase">true なら大小無視。</param>
+        /// <param name="wrap">末尾で無ければ先頭へ戻る。</param>
+        /// <returns>ヒットして選択したら true。</returns>
+        public bool FindNext(string query, bool ignoreCase, bool wrap)
+        {
+            if (this.document == null)
+            {
+                return false;
+            }
+
+            query = FindRules.NormalizeQuery(query);
+            BufferPoint from;
+            if (this.SelectionEqualsQuery(query, ignoreCase))
+            {
+                BufferPoint a;
+                BufferPoint b;
+                this.document.GetSelection(out a, out b);
+                from = b;
+            }
+            else
+            {
+                from = new BufferPoint(this.document.CaretLine, this.document.CaretColumn);
+            }
+
+            FindMatch match;
+            if (!FindRules.TryFindNext(this.document.Buffer, query, ignoreCase, from, wrap, out match))
+            {
+                return false;
+            }
+
+            this.SelectRange(match.Start, match.End);
+            return true;
+        }
+
+        /// <summary>
+        /// 前のリテラルヒットを選ぶ。選択がクエリと一致していれば開始より前から探す。
+        /// </summary>
+        /// <param name="query">検索語。</param>
+        /// <param name="ignoreCase">true なら大小無視。</param>
+        /// <param name="wrap">先頭で無ければ末尾へ戻る。</param>
+        /// <returns>ヒットして選択したら true。</returns>
+        public bool FindPrevious(string query, bool ignoreCase, bool wrap)
+        {
+            if (this.document == null)
+            {
+                return false;
+            }
+
+            query = FindRules.NormalizeQuery(query);
+            BufferPoint from;
+            if (this.SelectionEqualsQuery(query, ignoreCase))
+            {
+                BufferPoint a;
+                BufferPoint b;
+                this.document.GetSelection(out a, out b);
+                from = a;
+            }
+            else
+            {
+                from = new BufferPoint(this.document.CaretLine, this.document.CaretColumn);
+            }
+
+            FindMatch match;
+            if (!FindRules.TryFindPrevious(this.document.Buffer, query, ignoreCase, from, wrap, out match))
+            {
+                return false;
+            }
+
+            this.SelectRange(match.Start, match.End);
+            return true;
+        }
+
+        /// <summary>
+        /// 重ならない前方スキャンですべて置換する。空クエリは 0 で Undo を積まない。空置換は削除。1 Undo 複合。
+        /// </summary>
+        /// <param name="query">検索語。</param>
+        /// <param name="replacement">置換文字列。null は空。</param>
+        /// <param name="ignoreCase">true なら大小無視。</param>
+        /// <returns>置換した件数。</returns>
+        public int ReplaceAll(string query, string replacement, bool ignoreCase)
+        {
+            if (this.document == null)
+            {
+                return 0;
+            }
+
+            query = FindRules.NormalizeQuery(query);
+            if (query.Length == 0)
+            {
+                return 0;
+            }
+
+            if (replacement == null)
+            {
+                replacement = "";
+            }
+
+            TextBuffer buffer = this.document.Buffer;
+            BufferPoint from = new BufferPoint(0, 0);
+            FindMatch first;
+            if (!FindRules.TryFindNext(buffer, query, ignoreCase, from, false, out first))
+            {
+                return 0;
+            }
+
+            int count = 0;
+            int editFirst = first.Start.Line;
+            int editLast = first.Start.Line;
+            BufferPoint caret = new BufferPoint(this.document.CaretLine, this.document.CaretColumn);
+            this.document.Undo.BeginCompound();
+            while (FindRules.TryFindNext(buffer, query, ignoreCase, from, false, out first))
+            {
+                string deleted = buffer.Delete(first.Start, first.End);
+                this.document.Undo.RecordDelete(first.Start.Line, first.Start.Column, deleted);
+                BufferPoint end = first.Start;
+                if (replacement.Length > 0)
+                {
+                    end = buffer.Insert(first.Start.Line, first.Start.Column, replacement);
+                    this.document.Undo.RecordInsert(first.Start.Line, first.Start.Column, replacement);
+                }
+
+                from = end;
+                caret = end;
+                editLast = end.Line;
+                count++;
+            }
+
+            this.document.Undo.EndCompound();
+            this.document.CaretLine = caret.Line;
+            this.document.CaretColumn = caret.Column;
+            this.document.CollapseSelection();
+            this.document.MarkDirty();
+            this.SyncHighlight(editFirst, editLast);
+            this.EnsureCaretVisible();
+            this.NotifyChanged();
+            return count;
+        }
+
+        private bool SelectionEqualsQuery(string query, bool ignoreCase)
+        {
+            if (this.document == null || !this.document.HasSelection() || query == null || query.Length == 0)
+            {
+                return false;
+            }
+
+            BufferPoint a;
+            BufferPoint b;
+            this.document.GetSelection(out a, out b);
+            string selected = this.document.Buffer.GetText(a, b);
+            StringComparison comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            return string.Equals(selected, query, comparison);
+        }
+
+        /// <summary>
         /// 現在位置を文書へ書き戻す（タブ切替用）。
         /// </summary>
         public void SaveViewState()

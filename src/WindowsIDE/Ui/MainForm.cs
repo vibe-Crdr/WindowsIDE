@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Text;
@@ -26,6 +27,7 @@ namespace WindowsIDE.Ui
         private SplitContainer split;
         private FileTreeControl tree;
         private TabStrip tabs;
+        private FindBar findBar;
         private TextView editor;
         private StatusStrip status;
         private ToolStripStatusLabel statusLang;
@@ -248,10 +250,62 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.Y)
                     || keyData == (Keys.Control | Keys.X)
                     || keyData == (Keys.Control | Keys.V)
+                    || keyData == (Keys.Control | Keys.A)
+                    || keyData == (Keys.Control | Keys.F)
+                    || keyData == (Keys.Control | Keys.H)
+                    || keyData == Keys.F3
+                    || keyData == (Keys.Shift | Keys.F3))
+                {
+                    return false;
+                }
+            }
+
+            if (this.findBar != null && this.findBar.ContainsFocus)
+            {
+                if (keyData == (Keys.Control | Keys.Z)
+                    || keyData == (Keys.Control | Keys.Y)
+                    || keyData == (Keys.Control | Keys.X)
+                    || keyData == (Keys.Control | Keys.C)
+                    || keyData == (Keys.Control | Keys.V)
                     || keyData == (Keys.Control | Keys.A))
                 {
                     return false;
                 }
+            }
+
+            if (keyData == (Keys.Control | Keys.F))
+            {
+                this.ExecuteFind();
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.H))
+            {
+                this.ExecuteReplace();
+                return true;
+            }
+
+            if (keyData == Keys.F3)
+            {
+                this.ExecuteFindNext();
+                return true;
+            }
+
+            if (keyData == (Keys.Shift | Keys.F3))
+            {
+                this.ExecuteFindPrevious();
+                return true;
+            }
+
+            if (keyData == Keys.Escape && this.findBar != null && this.findBar.Visible)
+            {
+                if (this.editor != null && this.editor.IsComposing)
+                {
+                    return false;
+                }
+
+                this.CloseFindBar();
+                return true;
             }
 
             if (keyData == (Keys.Control | Keys.Z))
@@ -322,6 +376,11 @@ namespace WindowsIDE.Ui
             edit.DropDownItems.Add(this.CreateItem("コピー(&C)", Keys.Control | Keys.C, this.OnCopy));
             edit.DropDownItems.Add(this.CreateItem("貼り付け(&P)", Keys.Control | Keys.V, this.OnPaste));
             edit.DropDownItems.Add(this.CreateItem("すべて選択(&A)", Keys.Control | Keys.A, this.OnSelectAll));
+            edit.DropDownItems.Add(new ToolStripSeparator());
+            edit.DropDownItems.Add(this.CreateItem("検索(&F)", Keys.Control | Keys.F, this.OnFind));
+            edit.DropDownItems.Add(this.CreateItem("置換(&H)", Keys.Control | Keys.H, this.OnReplace));
+            edit.DropDownItems.Add(this.CreateFindNavItem("次を検索(&N)", Keys.F3, "F3", this.OnFindNext));
+            edit.DropDownItems.Add(this.CreateFindNavItem("前を検索(&B)", Keys.Shift | Keys.F3, "Shift+F3", this.OnFindPrevious));
 
             ToolStripMenuItem help = this.CreateTop("ヘルプ(&H)");
             help.DropDownItems.Add(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout));
@@ -351,6 +410,29 @@ namespace WindowsIDE.Ui
             if (shortcut != Keys.None)
             {
                 item.ShortcutKeys = shortcut;
+            }
+
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateFindNavItem(string text, Keys shortcut, string display, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            try
+            {
+                item.ShortcutKeys = shortcut;
+            }
+            catch (InvalidEnumArgumentException)
+            {
+                item.ShortcutKeyDisplayString = display;
+            }
+
+            if (item.ShortcutKeys == Keys.None)
+            {
+                item.ShortcutKeyDisplayString = display;
             }
 
             item.Click += handler;
@@ -408,6 +490,10 @@ namespace WindowsIDE.Ui
             this.chromeRenderer.SetFonts(newHalf, newFull);
             this.menu.Font = newHalf;
             this.status.Font = newHalf;
+            if (this.findBar != null)
+            {
+                this.findBar.SetFonts(newHalf, newFull);
+            }
 
             int extraTop = 0;
             int extraBottom = 0;
@@ -440,6 +526,11 @@ namespace WindowsIDE.Ui
             this.status.Invalidate();
             this.menu.PerformLayout();
             this.status.PerformLayout();
+            if (this.findBar != null)
+            {
+                this.findBar.Invalidate();
+                this.findBar.PerformLayout();
+            }
         }
 
         private void OnChromeDpiChangedAfterParent(object sender, EventArgs e)
@@ -471,12 +562,28 @@ namespace WindowsIDE.Ui
             this.tabs.TabCloseRequested += this.OnTabClose;
             this.tabs.FocusEditorRequested += this.OnTabFocusEditor;
 
+            Panel editorColumn = new Panel();
+            editorColumn.Dock = DockStyle.Fill;
+            editorColumn.BackColor = Theme.EditorBackground;
+
+            this.findBar = new FindBar();
+            this.findBar.Dock = DockStyle.Top;
+            this.findBar.Visible = false;
+            this.findBar.QueryChanged += this.OnFindQueryChanged;
+            this.findBar.FindNextRequested += this.OnFindNextRequested;
+            this.findBar.FindPreviousRequested += this.OnFindPreviousRequested;
+            this.findBar.ReplaceRequested += this.OnReplaceRequested;
+            this.findBar.ReplaceAllRequested += this.OnReplaceAllRequested;
+            this.findBar.CloseRequested += this.OnFindCloseRequested;
+
             this.editor = new TextView();
             this.editor.Dock = DockStyle.Fill;
             this.editor.CaretMoved += this.OnEditorCaret;
             this.editor.DocumentChanged += this.OnEditorChanged;
 
-            right.Controls.Add(this.editor);
+            editorColumn.Controls.Add(this.editor);
+            editorColumn.Controls.Add(this.findBar);
+            right.Controls.Add(editorColumn);
             right.Controls.Add(this.tabs);
             this.split.Panel2.Controls.Add(right);
             this.Controls.Add(this.split);
@@ -607,6 +714,7 @@ namespace WindowsIDE.Ui
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             this.editor.Focus();
+            this.RefreshFindCount();
         }
 
         private void ApplyWorkspaceToDocument(Document doc)
@@ -1064,6 +1172,254 @@ namespace WindowsIDE.Ui
         private void OnCopy(object sender, EventArgs e) { this.editor.Copy(); }
         private void OnPaste(object sender, EventArgs e) { this.editor.Paste(); }
         private void OnSelectAll(object sender, EventArgs e) { this.editor.SelectAll(); }
+        private void OnFind(object sender, EventArgs e) { this.ExecuteFind(); }
+        private void OnReplace(object sender, EventArgs e) { this.ExecuteReplace(); }
+        private void OnFindNext(object sender, EventArgs e) { this.ExecuteFindNext(); }
+        private void OnFindPrevious(object sender, EventArgs e) { this.ExecuteFindPrevious(); }
+        private void OnFindQueryChanged(object sender, EventArgs e) { this.RefreshFindCount(); }
+        private void OnFindNextRequested(object sender, EventArgs e) { this.ExecuteFindNext(); }
+        private void OnFindPreviousRequested(object sender, EventArgs e) { this.ExecuteFindPrevious(); }
+        private void OnReplaceRequested(object sender, EventArgs e) { this.ExecuteReplaceOne(); }
+        private void OnReplaceAllRequested(object sender, EventArgs e) { this.ExecuteReplaceAll(); }
+        private void OnFindCloseRequested(object sender, EventArgs e) { this.CloseFindBar(); }
+
+        private void ExecuteFind()
+        {
+            if (this.findBar == null || this.editor == null)
+            {
+                return;
+            }
+
+            if (this.editor.IsComposing)
+            {
+                return;
+            }
+
+            if (this.findBar.Visible && this.findBar.FindBoxContainsFocus)
+            {
+                this.findBar.SelectFindBoxAll();
+                return;
+            }
+
+            string seed = this.TryGetFindSeed();
+            if (seed != null && seed.Length > 0)
+            {
+                this.findBar.Query = FindRules.NormalizeQuery(seed);
+            }
+
+            this.findBar.ShowFindRow();
+            this.findBar.FocusFindBox();
+            this.findBar.SelectFindBoxAll();
+            this.RefreshFindCount();
+        }
+
+        private void ExecuteReplace()
+        {
+            if (this.findBar == null || this.editor == null)
+            {
+                return;
+            }
+
+            if (this.editor.IsComposing)
+            {
+                return;
+            }
+
+            this.findBar.ShowReplaceRow();
+            this.findBar.FocusReplaceBox();
+            this.RefreshFindCount();
+        }
+
+        private void ExecuteFindNext()
+        {
+            if (this.findBar == null || this.editor == null)
+            {
+                return;
+            }
+
+            if (this.editor.IsComposing)
+            {
+                return;
+            }
+
+            string query = FindRules.NormalizeQuery(this.findBar.Query);
+            if (query.Length == 0)
+            {
+                this.ExecuteFind();
+                return;
+            }
+
+            bool keepEditorFocus = !this.findBar.ContainsFocus;
+            if (!this.findBar.Visible)
+            {
+                this.findBar.ShowPreservingReplaceRow();
+                keepEditorFocus = true;
+            }
+
+            this.editor.FindNext(query, this.findBar.IgnoreCase, true);
+            if (keepEditorFocus)
+            {
+                this.editor.Focus();
+            }
+
+            this.RefreshFindCount();
+        }
+
+        private void ExecuteFindPrevious()
+        {
+            if (this.findBar == null || this.editor == null)
+            {
+                return;
+            }
+
+            if (this.editor.IsComposing)
+            {
+                return;
+            }
+
+            string query = FindRules.NormalizeQuery(this.findBar.Query);
+            if (query.Length == 0)
+            {
+                this.ExecuteFind();
+                return;
+            }
+
+            bool keepEditorFocus = !this.findBar.ContainsFocus;
+            if (!this.findBar.Visible)
+            {
+                this.findBar.ShowPreservingReplaceRow();
+                keepEditorFocus = true;
+            }
+
+            this.editor.FindPrevious(query, this.findBar.IgnoreCase, true);
+            if (keepEditorFocus)
+            {
+                this.editor.Focus();
+            }
+
+            this.RefreshFindCount();
+        }
+
+        private void ExecuteReplaceOne()
+        {
+            if (this.findBar == null || this.editor == null || this.editor.Document == null)
+            {
+                return;
+            }
+
+            if (this.editor.IsComposing)
+            {
+                return;
+            }
+
+            string query = FindRules.NormalizeQuery(this.findBar.Query);
+            if (query.Length == 0)
+            {
+                return;
+            }
+
+            string replacement = this.findBar.Replacement;
+            if (replacement == null)
+            {
+                replacement = "";
+            }
+
+            if (this.SelectionMatchesQuery(query, this.findBar.IgnoreCase))
+            {
+                this.editor.ReplaceSelection(replacement);
+            }
+
+            this.editor.FindNext(query, this.findBar.IgnoreCase, true);
+            this.RefreshFindCount();
+        }
+
+        private void ExecuteReplaceAll()
+        {
+            if (this.findBar == null || this.editor == null)
+            {
+                return;
+            }
+
+            if (this.editor.IsComposing)
+            {
+                return;
+            }
+
+            string query = FindRules.NormalizeQuery(this.findBar.Query);
+            string replacement = this.findBar.Replacement;
+            this.editor.ReplaceAll(query, replacement, this.findBar.IgnoreCase);
+            this.RefreshFindCount();
+        }
+
+        private void CloseFindBar()
+        {
+            if (this.findBar != null)
+            {
+                this.findBar.HideBar();
+            }
+
+            if (this.editor != null)
+            {
+                this.editor.Focus();
+            }
+        }
+
+        private void RefreshFindCount()
+        {
+            if (this.findBar == null || !this.findBar.Visible)
+            {
+                return;
+            }
+
+            string query = FindRules.NormalizeQuery(this.findBar.Query);
+            if (query.Length == 0)
+            {
+                this.findBar.SetMatchCount(0, true);
+                return;
+            }
+
+            if (this.editor == null || this.editor.Document == null)
+            {
+                this.findBar.SetMatchCount(0, false);
+                return;
+            }
+
+            int n = FindRules.Count(this.editor.Document.Buffer, query, this.findBar.IgnoreCase);
+            this.findBar.SetMatchCount(n, false);
+        }
+
+        private string TryGetFindSeed()
+        {
+            if (this.editor == null || this.editor.Document == null || !this.editor.Document.HasSelection())
+            {
+                return null;
+            }
+
+            BufferPoint a;
+            BufferPoint b;
+            this.editor.Document.GetSelection(out a, out b);
+            if (a.Line != b.Line)
+            {
+                return null;
+            }
+
+            return this.editor.Document.Buffer.GetText(a, b);
+        }
+
+        private bool SelectionMatchesQuery(string query, bool ignoreCase)
+        {
+            if (this.editor == null || this.editor.Document == null || !this.editor.Document.HasSelection())
+            {
+                return false;
+            }
+
+            BufferPoint a;
+            BufferPoint b;
+            this.editor.Document.GetSelection(out a, out b);
+            string selected = this.editor.Document.Buffer.GetText(a, b);
+            StringComparison comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            return string.Equals(selected, query, comparison);
+        }
 
         private void OnAbout(object sender, EventArgs e)
         {
@@ -1082,6 +1438,7 @@ namespace WindowsIDE.Ui
         {
             this.tabs.RefreshTabs();
             this.UpdateStatus();
+            this.RefreshFindCount();
         }
 
         /// <summary>クロム用 Font を破棄する。Renderer は所有しない。</summary>

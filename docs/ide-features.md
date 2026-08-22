@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。F-SIND と混ぜない。
+凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。F-SIND / F-GSRCH と混ぜない。
 
 ## P0 スライス
 
@@ -40,9 +40,17 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 | --- | --- | --- |
 | F-IND | Enter で直前行の先頭空白（連続する `' '` と `'\t'`）をコピー。複数行選択の Tab/Shift+Tab。規則は `IndentRules`（`WindowsIDE.Editor`、WinForms 非依存） | F-SIND、F-FIND、下パネル、新色、新 XML |
 
+## P1 F-FIND スライス
+
+開いている文書のファイル内検索・置換。F-GSRCH と混ぜない。
+
+| ID | P1 F-FIND でやる | P1 F-FIND でやらない |
+| --- | --- | --- |
+| F-FIND | リテラル検索・置換、大小無視、タブ直下の薄い FindBar、Ctrl+F / Ctrl+H / F3 / Shift+F3 / Esc。規則は `FindRules`（`WindowsIDE.Editor`、WinForms 非依存）。走査は `IndexOf` / `LastIndexOf` + Ordinal / OrdinalIgnoreCase。現在ヒットは既存 Selection。クエリ・置換・ignoreCase・バー表示はセッション内 | Regex、ワイルドカード、単語単位、選択範囲内検索、複数行クエリ、全ヒット背景、下パネル、F-GSRCH、F-PAL、Ctrl+P、F-SIND、実行、VBA、新 Theme 色、新 XML、新 `/r`、FindDialog、RichTextBox |
+
 ## 残 P1
 
-字句ハイライトと P1 F-IND スライス以外の P1（F-FIND / F-CS-BLD / F-CS-RUN / F-PS-RUN / F-CMD-RUN / F-TERM / F-PROB）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
+字句ハイライトと P1 F-IND / P1 F-FIND スライス以外の P1（F-CS-BLD / F-CS-RUN / F-PS-RUN / F-CMD-RUN / F-TERM / F-PROB）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
 
 ## フェーズ P7（編集器インテリジェンス）— 今は実装しない
 

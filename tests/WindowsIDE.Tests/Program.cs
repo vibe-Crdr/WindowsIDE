@@ -30,6 +30,7 @@ namespace WindowsIDE.Tests
             failed = 0;
             RunTextBuffer();
             RunIndentRules();
+            RunFindRules();
             RunFileEncoding();
             RunDocumentOpen();
             RunGlyphClassifier();
@@ -148,6 +149,59 @@ namespace WindowsIDE.Tests
             Check("block indent text", buf.GetLine(0) == "    a" && buf.GetLine(1) == "    b" && buf.GetLine(2) == "    c");
             undo.Undo(buf);
             Check("block indent one undo", buf.GetLine(0) == "a" && buf.GetLine(1) == "b" && buf.GetLine(2) == "c" && !undo.CanUndo);
+        }
+
+        private static void RunFindRules()
+        {
+            FindMatch match;
+            TextBuffer emptyBuf = new TextBuffer();
+            emptyBuf.SetText("hello");
+            Check("empty query next", !FindRules.TryFindNext(emptyBuf, "", false, new BufferPoint(0, 0), true, out match));
+            Check("empty query prev", !FindRules.TryFindPrevious(emptyBuf, "", false, new BufferPoint(0, 0), true, out match));
+            Check("empty query count", FindRules.Count(emptyBuf, "", false) == 0);
+            Check("null query count", FindRules.Count(emptyBuf, null, true) == 0);
+
+            TextBuffer ab = new TextBuffer();
+            ab.SetText("Ab");
+            Check("ignore Ab vs ab", FindRules.TryFindNext(ab, "ab", true, new BufferPoint(0, 0), false, out match) && match.Start.Column == 0 && match.End.Column == 2);
+            Check("ordinal Ab vs ab miss", !FindRules.TryFindNext(ab, "ab", false, new BufferPoint(0, 0), false, out match));
+            Check("ordinal Ab vs Ab", FindRules.TryFindNext(ab, "Ab", false, new BufferPoint(0, 0), false, out match));
+
+            TextBuffer hello = new TextBuffer();
+            hello.SetText("hello");
+            Check("start h", FindRules.TryFindNext(hello, "h", false, new BufferPoint(0, 0), false, out match) && match.Start.Column == 0 && match.End.Column == 1);
+            Check("end lo", FindRules.TryFindNext(hello, "lo", false, new BufferPoint(0, 0), false, out match) && match.Start.Column == 3 && match.End.Column == 5);
+
+            TextBuffer twice = new TextBuffer();
+            twice.SetText("abcabc");
+            Check("next first", FindRules.TryFindNext(twice, "abc", false, new BufferPoint(0, 0), false, out match) && match.Start.Column == 0 && match.End.Column == 3);
+            Check("skip same hit", FindRules.TryFindNext(twice, "abc", false, match.End, false, out match) && match.Start.Column == 3 && match.End.Column == 6);
+            Check("no wrap after last", !FindRules.TryFindNext(twice, "abc", false, match.End, false, out match));
+            Check("wrap after last", FindRules.TryFindNext(twice, "abc", false, new BufferPoint(0, 6), true, out match) && match.Start.Column == 0);
+
+            Check("prev skip", FindRules.TryFindPrevious(twice, "abc", false, new BufferPoint(0, 3), false, out match) && match.Start.Column == 0);
+            Check("prev no wrap at start", !FindRules.TryFindPrevious(twice, "abc", false, new BufferPoint(0, 0), false, out match));
+            Check("prev wrap at start", FindRules.TryFindPrevious(twice, "abc", false, new BufferPoint(0, 0), true, out match) && match.Start.Column == 3);
+
+            TextBuffer lines = new TextBuffer();
+            lines.SetText("ab\ncd");
+            Check("no cross-line", FindRules.Count(lines, "bc", false) == 0);
+            Check("line-local ab", FindRules.Count(lines, "ab", false) == 1);
+            Check("line-local cd", FindRules.TryFindNext(lines, "cd", false, new BufferPoint(0, 0), false, out match) && match.Start.Line == 1 && match.Start.Column == 0);
+
+            TextBuffer twoAb = new TextBuffer();
+            twoAb.SetText("ab\nab");
+            Check("count two lines", FindRules.Count(twoAb, "ab", false) == 2);
+
+            Check("normalize drops line2", FindRules.NormalizeQuery("a\nb") == "a");
+            Check("normalize drops crlf", FindRules.NormalizeQuery("xy\r\nz") == "xy");
+            Check("normalize null", FindRules.NormalizeQuery(null) == "");
+            Check("normalize keeps spaces", FindRules.NormalizeQuery(" a ") == " a ");
+
+            TextBuffer aaa = new TextBuffer();
+            aaa.SetText("aaa");
+            Check("count non-overlap aa", FindRules.Count(aaa, "aa", false) == 1);
+            Check("count ignore Ab in abab", FindRules.Count(ab, "AB", true) == 1);
         }
 
         private static void RunFileEncoding()

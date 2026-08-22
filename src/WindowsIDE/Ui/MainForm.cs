@@ -25,7 +25,6 @@ namespace WindowsIDE.Ui
         private DarkMenuRenderer chromeRenderer;
         private Font chromeHalfFont;
         private Font chromeFullFont;
-        private Padding statusBasePadding;
         private MenuStrip menu;
         private SplitContainer bodySplit;
         private SplitContainer split;
@@ -476,9 +475,8 @@ namespace WindowsIDE.Ui
             this.status.Renderer = this.chromeRenderer;
             this.status.BackColor = Theme.StatusBar;
             this.status.SizingGrip = false;
-            this.statusBasePadding = this.status.Padding;
             this.status.DpiChangedAfterParent += this.OnChromeDpiChangedAfterParent;
-            this.statusLang = this.CreateStatusLabel("プレーン", Theme.Foreground);
+            this.statusLang = this.CreateStatusLabel(LanguageDetector.GetDisplayName(LanguageKind.Plain), Theme.Foreground);
             this.statusPos = this.CreateStatusLabel("1:1", Theme.Foreground);
             this.statusEnc = this.CreateStatusLabel("UTF-8 BOM", Theme.Foreground);
             this.statusFont = this.CreateStatusLabel("", Theme.Foreground);
@@ -503,6 +501,7 @@ namespace WindowsIDE.Ui
         /// <summary>
         /// メニューとステータス用の 12 DIP 双フォントを作り直す。本文 fontSize には連動しない。
         /// FindBar のラベル／ボタンも同じ 12 DIP。検索欄の本文サイズは ApplyEditorSettings。
+        /// タブ題名も同じ 12 DIP。本文 fontSize 非連動。
         /// </summary>
         private void RecreateChromeFonts()
         {
@@ -532,6 +531,11 @@ namespace WindowsIDE.Ui
                 this.problemList.SetFonts(newHalf, newFull);
             }
 
+            if (this.tabs != null)
+            {
+                this.tabs.SetFonts(newHalf, newFull);
+            }
+
             int extraTop = 0;
             int extraBottom = 0;
             if (newFull.Height > newHalf.Height)
@@ -542,8 +546,9 @@ namespace WindowsIDE.Ui
             }
 
             this.menu.Padding = new Padding(4, 2 + extraTop, 0, 2 + extraBottom);
-            Padding sp = this.statusBasePadding;
-            this.status.Padding = new Padding(sp.Left, sp.Top + extraTop, sp.Right, sp.Bottom + extraBottom);
+            int padX = DpiUtil.ToPixels(DpiUtil.StatusStripPadXDip, dpi);
+            int padY = DpiUtil.ToPixels(DpiUtil.StatusStripPadYDip, dpi);
+            this.status.Padding = new Padding(padX, padY + extraTop, padX, padY + extraBottom);
 
             if (oldHalf != null)
             {
@@ -572,6 +577,11 @@ namespace WindowsIDE.Ui
             if (this.problemList != null)
             {
                 this.problemList.Invalidate();
+            }
+
+            if (this.tabs != null)
+            {
+                this.tabs.Invalidate();
             }
         }
 
@@ -1835,6 +1845,11 @@ namespace WindowsIDE.Ui
                 if (this.chromeRenderer != null)
                 {
                     this.chromeRenderer.SetFonts(null, null);
+                }
+
+                if (this.tabs != null)
+                {
+                    this.tabs.SetFonts(null, null);
                 }
             }
 

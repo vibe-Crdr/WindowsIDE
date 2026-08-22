@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using WindowsIDE.Editor;
+using WindowsIDE.Ui.Fonts;
 
 namespace WindowsIDE.Ui
 {
@@ -30,14 +31,14 @@ namespace WindowsIDE.Ui
     /// </summary>
     public sealed class TabStrip : Control
     {
-        private const TextFormatFlags LabelTextFlags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping;
-
         private readonly List<Document> tabs;
         private int selectedIndex;
         private readonly List<Rectangle> tabBounds;
         private readonly List<Rectangle> closeBounds;
-        private Font uiFont;
-        private int lastDpi;
+        private Font borrowedHalf;
+        private Font borrowedFull;
+        private Font fallbackHalf;
+        private Font fallbackFull;
 
         /// <summary>
         /// 空のタブバーを作る。
@@ -51,30 +52,31 @@ namespace WindowsIDE.Ui
             this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
             this.SetStyle(ControlStyles.Selectable, false);
             this.TabStop = false;
-            this.RecreateUiFont();
+            this.EnsureFallbackFonts();
+            this.ApplyBarHeight();
             this.BackColor = Theme.Background;
             this.ForeColor = Theme.Foreground;
         }
 
-        /// <summary>ハンドル作成後に GetDpi で UI フォントと高さを合わせる。</summary>
+        /// <summary>ハンドル作成後に GetDpi で高さを合わせる。</summary>
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            this.RecreateUiFont();
+            this.ApplyBarHeight();
         }
 
-        /// <summary>フォント変更後に所有 UI フォント基準で高さを合わせる。</summary>
+        /// <summary>フォント変更後に描画フォント基準で高さを合わせる。</summary>
         protected override void OnFontChanged(EventArgs e)
         {
             base.OnFontChanged(e);
             this.ApplyBarHeight();
         }
 
-        /// <summary>親の DPI 変更後に 12 DIP Pixel フォントを作り直す。</summary>
+        /// <summary>親の DPI 変更後にバー高さを合わせる。フォント再生成は MainForm.RecreateChromeFonts。</summary>
         protected override void OnDpiChangedAfterParent(EventArgs e)
         {
             base.OnDpiChangedAfterParent(e);
-            this.RecreateUiFont();
+            this.ApplyBarHeight();
         }
 
         /// <summary>選択変更。</summary>
@@ -125,6 +127,20 @@ namespace WindowsIDE.Ui
 
                 return this.tabs[this.selectedIndex];
             }
+        }
+
+        /// <summary>
+        /// タブ題名用の 12 DIP 双フォントを使う。所有権は移さない。本文 fontSize には連動しない。
+        /// </summary>
+        /// <param name="half">半角。</param>
+        /// <param name="full">全角。</param>
+        public void SetFonts(Font half, Font full)
+        {
+            this.DisposeFallbackFonts();
+            this.borrowedHalf = half;
+            this.borrowedFull = full;
+            this.ApplyBarHeight();
+            this.Invalidate();
         }
 
         /// <summary>
@@ -250,11 +266,9 @@ namespace WindowsIDE.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            if (dpi != this.lastDpi || this.uiFont == null)
-            {
-                this.lastDpi = dpi;
-                this.RecreateUiFont();
-            }
+            Font half;
+            Font full;
+            this.GetPaintFonts(out half, out full);
 
             Graphics g = e.Graphics;
             g.Clear(Theme.Background);
@@ -265,11 +279,11 @@ namespace WindowsIDE.Ui
 
             this.tabBounds.Clear();
             this.closeBounds.Clear();
-            Font font = (this.uiFont != null) ? this.uiFont : this.Font;
             int pad = DpiUtil.ToPixels(8, dpi);
-            int closeSize = DpiUtil.ToPixels(12, dpi);
-            int closeInset = DpiUtil.ToPixels(2, dpi);
-            int closeSlot = closeSize + closeInset;
+            int closeGap = DpiUtil.ToPixels(6, dpi);
+            // 閉じる印の一辺は 8 DIP。線幅は 2。余白は題名側と右端が各 6 DIP。
+            int closeSize = DpiUtil.ToPixels(8, dpi);
+            int closeSlot = closeGap + closeSize + closeGap;
             int minW = DpiUtil.ToPixels(72, dpi);
             int x = 4;
             for (int i = 0; i < this.tabs.Count; i++)
@@ -281,8 +295,8 @@ namespace WindowsIDE.Ui
                     title = title + " *";
                 }
 
-                Size sz = TextRenderer.MeasureText(g, title, font, new Size(int.MaxValue, int.MaxValue), LabelTextFlags);
-                int w = sz.Width + pad + closeSlot;
+                int textW = (int)Math.Ceiling(DualFontPainter.Measure(g, title, half, full, null));
+                int w = textW + pad + closeSlot;
                 if (w < minW)
                 {
                     w = minW;
@@ -290,8 +304,8 @@ namespace WindowsIDE.Ui
 
                 Rectangle tab = new Rectangle(x, 0, w, this.Height - 1);
                 this.tabBounds.Add(tab);
-                int closeX = tab.Right - closeInset - closeSize;
-                int closeY = tab.Top + closeInset;
+                int closeX = tab.Right - closeGap - closeSize;
+                int closeY = tab.Top + ((tab.Height - closeSize) / 2);
                 if (closeX < tab.Left)
                 {
                     closeX = tab.Left;
@@ -326,8 +340,12 @@ namespace WindowsIDE.Ui
                 }
 
                 Rectangle titleRect = new Rectangle(tab.X + pad, tab.Y, Math.Max(0, tab.Width - pad - closeSlot), tab.Height);
-                TextRenderer.DrawText(g, title, font, titleRect, Theme.Foreground, LabelTextFlags);
-                using (Pen xp = new Pen(Theme.Comment))
+                using (SolidBrush fg = new SolidBrush(Theme.Foreground))
+                {
+                    DualFontPainter.DrawEllipsis(g, title, half, full, titleRect, fg, null);
+                }
+
+                using (Pen xp = new Pen(Theme.Foreground, 2f))
                 {
                     g.DrawLine(xp, close.Left, close.Top, close.Right - 1, close.Bottom - 1);
                     g.DrawLine(xp, close.Right - 1, close.Top, close.Left, close.Bottom - 1);
@@ -337,36 +355,110 @@ namespace WindowsIDE.Ui
             }
         }
 
-        private void RecreateUiFont()
+        /// <summary>
+        /// 借用が揃っていればそれを使う。どちらか欠けていれば所有の 12 DIP MessageBoxFont を半角・全角に使う。
+        /// </summary>
+        private void GetPaintFonts(out Font half, out Font full)
         {
-            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            this.lastDpi = dpi;
-            if (this.uiFont != null)
+            if (this.borrowedHalf != null && this.borrowedFull != null)
             {
-                this.uiFont.Dispose();
-                this.uiFont = null;
+                half = this.borrowedHalf;
+                full = this.borrowedFull;
+                return;
             }
 
+            this.EnsureFallbackFonts();
+            half = this.fallbackHalf;
+            full = this.fallbackFull;
+        }
+
+        /// <summary>
+        /// FileTree の fonts==null と同じ 12 DIP MessageBox 退避。半角・全角は別インスタンス。
+        /// </summary>
+        private void EnsureFallbackFonts()
+        {
+            if (this.fallbackHalf != null && this.fallbackFull != null)
+            {
+                return;
+            }
+
+            this.DisposeFallbackFonts();
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
             int px = DpiUtil.ToPixels(DpiUtil.UiFontDip, dpi);
             FontFamily family = SystemFonts.MessageBoxFont.FontFamily;
-            this.uiFont = new Font(family, px, FontStyle.Regular, GraphicsUnit.Pixel);
-            this.ApplyBarHeight();
+            this.fallbackHalf = new Font(family, px, FontStyle.Regular, GraphicsUnit.Pixel);
+            this.fallbackFull = new Font(family, px, FontStyle.Regular, GraphicsUnit.Pixel);
+        }
+
+        private void DisposeFallbackFonts()
+        {
+            if (this.fallbackHalf != null)
+            {
+                this.fallbackHalf.Dispose();
+                if (object.ReferenceEquals(this.fallbackFull, this.fallbackHalf))
+                {
+                    this.fallbackFull = null;
+                }
+
+                this.fallbackHalf = null;
+            }
+
+            if (this.fallbackFull != null)
+            {
+                this.fallbackFull.Dispose();
+                this.fallbackFull = null;
+            }
         }
 
         private void ApplyBarHeight()
         {
             int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            int fontHeight = (this.uiFont != null) ? this.uiFont.Height : this.Font.Height;
+            Font half = null;
+            Font full = null;
+            if (this.borrowedHalf != null && this.borrowedFull != null)
+            {
+                half = this.borrowedHalf;
+                full = this.borrowedFull;
+            }
+            else
+            {
+                half = this.fallbackHalf;
+                full = this.fallbackFull;
+            }
+
+            int fontHeight;
+            if (half != null && full != null)
+            {
+                fontHeight = half.Height;
+                if (full.Height > fontHeight)
+                {
+                    fontHeight = full.Height;
+                }
+            }
+            else if (half != null)
+            {
+                fontHeight = half.Height;
+            }
+            else if (full != null)
+            {
+                fontHeight = full.Height;
+            }
+            else
+            {
+                fontHeight = this.Font.Height;
+            }
+
             this.Height = DpiUtil.TabStripHeight(fontHeight, dpi);
         }
 
-        /// <summary>所有している 12 DIP Pixel フォントを破棄する。</summary>
+        /// <summary>借用フォントは破棄しない。所有している退避フォントだけ破棄する。</summary>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && this.uiFont != null)
+            if (disposing)
             {
-                this.uiFont.Dispose();
-                this.uiFont = null;
+                this.DisposeFallbackFonts();
+                this.borrowedHalf = null;
+                this.borrowedFull = null;
             }
 
             base.Dispose(disposing);

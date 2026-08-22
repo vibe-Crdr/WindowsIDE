@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
+using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Editor;
 using WindowsIDE.Languages;
@@ -42,6 +43,7 @@ namespace WindowsIDE.Tests
             RunDpiUtil();
             RunDualFontPainter();
             RunUiMnemonic();
+            RunDualFontMenuItemPreferredSize();
             RunNativeCaption();
             RunImeLayout();
             RunStartupArgs();
@@ -427,6 +429,9 @@ namespace WindowsIDE.Tests
             Check("WheelNotches -120 is -1", DpiUtil.WheelNotches(-120, ref leftover) == -1 && leftover == 0);
             Check("ToPixels 8@96", DpiUtil.ToPixels(8, 96) == 8);
             Check("ToPixels 8@120", DpiUtil.ToPixels(8, 120) == 10);
+            Check("StatusStripPadXDip", DpiUtil.StatusStripPadXDip == 8);
+            Check("StatusStripPadYDip", DpiUtil.StatusStripPadYDip == 4);
+            Check("ToPixels StatusStripPadY@120", DpiUtil.ToPixels(DpiUtil.StatusStripPadYDip, 120) == 5);
             Rectangle body = DpiUtil.TextBodyClip(48, new Rectangle(0, 0, 800, 400));
             Check("TextBodyClip X", body.X == 48);
             Check("TextBodyClip Width", body.Width == 752);
@@ -531,6 +536,75 @@ namespace WindowsIDE.Tests
                 string visible = UiMnemonic.Strip("ファイル(&F)", out mi);
                 float after = DualFontPainter.Measure(g, visible, half, full, null);
                 Check("Measure raw vs Strip differs", raw != after);
+            }
+        }
+
+        private static void RunDualFontMenuItemPreferredSize()
+        {
+            using (Font half = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font full = new Font("Yu Gothic", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                DarkMenuRenderer renderer = new DarkMenuRenderer();
+                renderer.SetFonts(half, full);
+
+                using (ToolStripDropDownMenu drop = new ToolStripDropDownMenu())
+                {
+                    drop.Renderer = renderer;
+                    DualFontMenuItem copy = new DualFontMenuItem("コピー(&C)");
+                    copy.ShortcutKeys = Keys.Control | Keys.C;
+                    DualFontMenuItem selectAll = new DualFontMenuItem("すべて選択(&A)");
+                    selectAll.ShortcutKeys = Keys.Control | Keys.A;
+                    DualFontMenuItem findNext = new DualFontMenuItem("次を検索");
+                    findNext.ShortcutKeys = Keys.F3;
+                    findNext.ShortcutKeyDisplayString = "F3";
+                    DualFontMenuItem findPrev = new DualFontMenuItem("前を検索");
+                    findPrev.ShortcutKeys = Keys.Shift | Keys.F3;
+                    findPrev.ShortcutKeyDisplayString = "Shift+F3";
+                    drop.Items.Add(copy);
+                    drop.Items.Add(selectAll);
+                    drop.Items.Add(findNext);
+                    drop.Items.Add(findPrev);
+
+                    int wCopy = copy.GetPreferredSize(Size.Empty).Width;
+                    int wAll = selectAll.GetPreferredSize(Size.Empty).Width;
+                    int wNext = findNext.GetPreferredSize(Size.Empty).Width;
+                    int wPrev = findPrev.GetPreferredSize(Size.Empty).Width;
+                    Check("dropdown DualFont widths equal", wCopy == wAll && wAll == wNext && wNext == wPrev);
+                    Check("dropdown copy is on drop-down", copy.IsOnDropDown);
+
+                    using (Bitmap bmp = new Bitmap(1, 1))
+                    using (Graphics g = Graphics.FromImage(bmp))
+                    {
+                        int dummy;
+                        string label = UiMnemonic.Strip("コピー(&C)", out dummy);
+                        int dpi = DpiUtil.GetDpi(IntPtr.Zero);
+                        float labelW = DualFontPainter.Measure(g, label, half, full, null);
+                        float shortcutW = DualFontPainter.Measure(g, "Ctrl+C", half, full, null);
+                        int left = DpiUtil.ToPixels(24, dpi);
+                        int gap = DpiUtil.ToPixels(16, dpi);
+                        int tabW = TextRenderer.MeasureText("\t", copy.Font).Width;
+                        if (tabW > gap)
+                        {
+                            gap = tabW;
+                        }
+
+                        int right = DpiUtil.ToPixels(10, dpi) + DpiUtil.ToPixels(8, dpi);
+                        int minW = left + (int)Math.Ceiling((double)labelW) + gap + (int)Math.Ceiling((double)shortcutW) + right;
+                        Check("dropdown width covers copy shortcut chrome", wCopy >= minW);
+                    }
+                }
+
+                using (MenuStrip menu = new MenuStrip())
+                {
+                    menu.Renderer = renderer;
+                    DualFontMenuItem shortItem = new DualFontMenuItem("編集(&E)");
+                    DualFontMenuItem longItem = new DualFontMenuItem("すべて選択(&A)");
+                    menu.Items.Add(shortItem);
+                    menu.Items.Add(longItem);
+                    int sw = shortItem.GetPreferredSize(Size.Empty).Width;
+                    int lw = longItem.GetPreferredSize(Size.Empty).Width;
+                    Check("top-level DualFont not sibling-max", sw < lw && !shortItem.IsOnDropDown && !longItem.IsOnDropDown);
+                }
             }
         }
 
@@ -656,7 +730,7 @@ namespace WindowsIDE.Tests
             Check("display VBA", LanguageDetector.GetDisplayName(LanguageKind.Vba) == "VBA");
             Check("display PowerShell", LanguageDetector.GetDisplayName(LanguageKind.PowerShell) == "PowerShell");
             Check("display cmd", LanguageDetector.GetDisplayName(LanguageKind.Cmd) == "cmd");
-            Check("display Plain", LanguageDetector.GetDisplayName(LanguageKind.Plain) == "プレーン");
+            Check("display Plain", LanguageDetector.GetDisplayName(LanguageKind.Plain) == "Plain");
 
             Document untitled = Document.CreateUntitled();
             Check("untitled Language Plain", untitled.Language == LanguageKind.Plain);

@@ -10,7 +10,7 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE.Workspace
 {
     /// <summary>
-    /// クリックでファイルを開くツリー。リネーム・削除メニューは持たない。子は展開時に読む。
+    /// クリックまたは Enter でファイルを開くツリー。リネーム・削除メニューは持たない。子は展開時に読む。
     /// </summary>
     public sealed class FileTreeControl : TreeView
     {
@@ -114,7 +114,7 @@ namespace WindowsIDE.Workspace
         /// <summary>ファイルを開く要求。SelectedPath が対象。</summary>
         public event EventHandler FileOpenRequested;
 
-        /// <summary>クリックされたファイルのフルパス。フォルダなら null。</summary>
+        /// <summary>最後に開く要求を出したファイル。フォルダなら null。</summary>
         public string SelectedFilePath { get; private set; }
 
         /// <summary>
@@ -422,10 +422,54 @@ namespace WindowsIDE.Workspace
                 return;
             }
 
-            if (string.IsNullOrEmpty(path) || !File.Exists(path) || !PathGuard.IsInsideWorkspace(this.rootPath, path))
+            this.TryRequestFileOpen(node);
+        }
+
+        /// <summary>
+        /// 選択中ファイルは Enter で開く。フォルダと修飾付き Enter は base に渡す。
+        /// </summary>
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (this.rebuildBusy)
+            {
+                base.OnKeyDown(e);
+                return;
+            }
+
+            if (e.KeyData == Keys.Enter)
+            {
+                if (this.TryRequestFileOpen(this.SelectedNode))
+                {
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
+                    return;
+                }
+            }
+
+            base.OnKeyDown(e);
+        }
+
+        /// <summary>
+        /// ファイルノードなら選択して開く要求を出す。フォルダ・lazy・ワークスペース外は false。
+        /// </summary>
+        /// <param name="node">対象ノード。null 可。</param>
+        /// <returns>開く要求を出したら true。</returns>
+        private bool TryRequestFileOpen(TreeNode node)
+        {
+            if (node == null || object.Equals(node.Tag, LazyTag))
             {
                 this.SelectedFilePath = null;
-                return;
+                return false;
+            }
+
+            string path = node.Tag as string;
+            if (string.IsNullOrEmpty(path)
+                || Directory.Exists(path)
+                || !File.Exists(path)
+                || !PathGuard.IsInsideWorkspace(this.rootPath, path))
+            {
+                this.SelectedFilePath = null;
+                return false;
             }
 
             this.SelectedNode = node;
@@ -435,6 +479,8 @@ namespace WindowsIDE.Workspace
             {
                 h(this, EventArgs.Empty);
             }
+
+            return true;
         }
 
         private TreeNode HitNode(int x, int y)

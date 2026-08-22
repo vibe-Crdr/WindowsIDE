@@ -82,6 +82,13 @@ namespace WindowsIDE.Ui
             }
 
             Rectangle rect = e.TextRectangle;
+            Rectangle clip = rect;
+            if (e.Item != null)
+            {
+                Rectangle itemClient = new Rectangle(0, 0, e.Item.Width, e.Item.Height);
+                clip = Rectangle.Intersect(rect, itemClient);
+            }
+
             float textWidth = DualFontPainter.Measure(e.Graphics, visible, this.halfFont, this.fullFont, null);
             float originX = rect.X;
             if ((flags & TextFormatFlags.Right) != 0)
@@ -95,10 +102,10 @@ namespace WindowsIDE.Ui
 
             using (SolidBrush brush = new SolidBrush(e.TextColor))
             {
-                DualFontPainter.Draw(e.Graphics, visible, this.halfFont, this.fullFont, rect, originX, brush, null);
+                DualFontPainter.Draw(e.Graphics, visible, this.halfFont, this.fullFont, clip, originX, brush, null);
                 if (mnemonicIndex >= 0 && visible != null && mnemonicIndex < visible.Length)
                 {
-                    DrawMnemonicUnderline(e.Graphics, visible, mnemonicIndex, rect, originX, brush);
+                    DrawMnemonicUnderline(e.Graphics, visible, mnemonicIndex, clip, originX, brush);
                 }
             }
         }
@@ -234,7 +241,7 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// DualFontPainter で測った幅を返す。フォントが無ければ既定。
+        /// DualFont の希望サイズ。トップはラベル幅。ドロップダウンは WinForms 希望幅と兄弟 DualFont 行の大きい方。
         /// </summary>
         /// <param name="constrainingSize">制約サイズ。</param>
         /// <returns>希望サイズ。</returns>
@@ -253,6 +260,107 @@ namespace WindowsIDE.Ui
                 return base.GetPreferredSize(constrainingSize);
             }
 
+            if (!this.IsOnDropDown)
+            {
+                return GetTopLevelPreferredSize(half, full);
+            }
+
+            Size native = base.GetPreferredSize(constrainingSize);
+            int cell = half.Height;
+            if (full.Height > cell)
+            {
+                cell = full.Height;
+            }
+
+            int height = native.Height;
+            int minHeight = cell + this.Padding.Vertical;
+            if (height < minHeight)
+            {
+                height = minHeight;
+            }
+
+            int width = native.Width;
+            Bitmap bmp = null;
+            Graphics g = DarkMenuRenderer.CreateMeasureGraphics(this.Owner, out bmp);
+            try
+            {
+                int dpi = DpiUtil.GetDpi(IntPtr.Zero);
+                if (this.Owner != null && this.Owner.IsHandleCreated)
+                {
+                    dpi = DpiUtil.GetDpi(this.Owner.Handle);
+                }
+
+                int gap = DpiUtil.ToPixels(16, dpi);
+                if (this.Font != null)
+                {
+                    int tabW = TextRenderer.MeasureText("\t", this.Font).Width;
+                    if (tabW > gap)
+                    {
+                        gap = tabW;
+                    }
+                }
+
+                if (this.Owner != null)
+                {
+                    foreach (ToolStripItem item in this.Owner.Items)
+                    {
+                        if (item is ToolStripSeparator)
+                        {
+                            continue;
+                        }
+
+                        DualFontMenuItem dual = item as DualFontMenuItem;
+                        if (dual == null)
+                        {
+                            continue;
+                        }
+
+                        int rowW = MeasureDropDownRowWidth(dual, g, half, full, dpi, gap);
+                        if (rowW > width)
+                        {
+                            width = rowW;
+                        }
+                    }
+                }
+                else
+                {
+                    int rowW = MeasureDropDownRowWidth(this, g, half, full, dpi, gap);
+                    if (rowW > width)
+                    {
+                        width = rowW;
+                    }
+                }
+            }
+            finally
+            {
+                g.Dispose();
+                if (bmp != null)
+                {
+                    bmp.Dispose();
+                }
+            }
+
+            if (width < 1)
+            {
+                width = 1;
+            }
+
+            if (height < 1)
+            {
+                height = 1;
+            }
+
+            return new Size(width, height);
+        }
+
+        /// <summary>
+        /// トップレベル項目の DualFont ラベル幅（兄弟 max しない）。
+        /// </summary>
+        /// <param name="half">半角フォント。</param>
+        /// <param name="full">全角フォント。</param>
+        /// <returns>希望サイズ。</returns>
+        private Size GetTopLevelPreferredSize(Font half, Font full)
+        {
             int dummy;
             string visible = UiMnemonic.Strip(this.Text, out dummy);
             Bitmap bmp = null;
@@ -260,30 +368,14 @@ namespace WindowsIDE.Ui
             try
             {
                 float textW = DualFontPainter.Measure(g, visible, half, full, null);
-                int dpi = DpiUtil.GetDpi((this.Owner != null && this.Owner.IsHandleCreated) ? this.Owner.Handle : IntPtr.Zero);
                 int cell = half.Height;
                 if (full.Height > cell)
                 {
                     cell = full.Height;
                 }
 
-                int width;
+                int width = (int)Math.Ceiling((double)textW) + this.Padding.Horizontal;
                 int height = cell + this.Padding.Vertical;
-                if (this.IsOnDropDown)
-                {
-                    width = DpiUtil.ToPixels(24, dpi) + (int)Math.Ceiling((double)textW);
-                    string shortcut = DarkMenuRenderer.GetShortcutDisplayText(this);
-                    if (shortcut != null && shortcut.Length > 0)
-                    {
-                        float shortcutW = DualFontPainter.Measure(g, shortcut, half, full, null);
-                        width += DpiUtil.ToPixels(16, dpi) + (int)Math.Ceiling((double)shortcutW);
-                    }
-                }
-                else
-                {
-                    width = (int)Math.Ceiling((double)textW) + this.Padding.Horizontal;
-                }
-
                 if (width < 1)
                 {
                     width = 1;
@@ -305,6 +397,38 @@ namespace WindowsIDE.Ui
                 }
             }
         }
+
+        /// <summary>
+        /// ドロップダウン1行の DualFont+chrome 幅。GetPreferredSize は呼ばない（兄弟走査の再帰禁止）。
+        /// </summary>
+        /// <param name="item">測る DualFont 項目。</param>
+        /// <param name="g">計測 Graphics。</param>
+        /// <param name="half">半角フォント。</param>
+        /// <param name="full">全角フォント。</param>
+        /// <param name="dpi">物理換算 DPI。</param>
+        /// <param name="gap">ラベルとショートカットの隙間（px）。</param>
+        /// <returns>その行の幅（px）。</returns>
+        private static int MeasureDropDownRowWidth(DualFontMenuItem item, Graphics g, Font half, Font full, int dpi, int gap)
+        {
+            if (item == null || g == null)
+            {
+                return 0;
+            }
+
+            int dummy;
+            string visible = UiMnemonic.Strip(item.Text, out dummy);
+            float labelW = DualFontPainter.Measure(g, visible, half, full, null);
+            int width = DpiUtil.ToPixels(24, dpi) + (int)Math.Ceiling((double)labelW) + gap;
+            string shortcut = DarkMenuRenderer.GetShortcutDisplayText(item);
+            if (shortcut != null && shortcut.Length > 0)
+            {
+                float shortcutW = DualFontPainter.Measure(g, shortcut, half, full, null);
+                width += (int)Math.Ceiling((double)shortcutW);
+            }
+
+            width += DpiUtil.ToPixels(10, dpi) + DpiUtil.ToPixels(8, dpi);
+            return width;
+        }
     }
 
     /// <summary>
@@ -319,6 +443,14 @@ namespace WindowsIDE.Ui
         public DualFontStatusLabel(string text)
             : base(text)
         {
+        }
+
+        /// <summary>
+        /// 項目の既定 Margin は空。余白は StatusStrip の Padding。
+        /// </summary>
+        protected override Padding DefaultMargin
+        {
+            get { return Padding.Empty; }
         }
 
         /// <summary>

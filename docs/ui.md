@@ -37,7 +37,9 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 
 ### P1 ハイライト
 
-P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。Ctrl+F は P1 F-FIND。
+P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。
+言語名は英語（C# / VBA / PowerShell / cmd / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP（全角セルが高ければ extra を足す）。SizingGrip は出さない。
+Ctrl+F は P1 F-FIND。
 
 ### P1 F-CS-BLD / F-PROB（問題一覧）
 
@@ -92,11 +94,13 @@ Markdown プレビューは新しいテーマ色を足さない。見出しは K
 
 既定サイズは **14**（96dpi の DIP、CSS px 相当、VS Code 14 相当）。設定で変更可。物理ピクセルは `ToPixels(dip, GetDpi(hwnd))`（`round(dip * dpi / 96)`）。`Control.DeviceDpi` は使わない。本文フォントは `GraphicsUnit.Pixel`。行高は `Font.Height` と DIP 余白から計算し、半角・全角でベースラインを揃える。
 
-タブ・About はシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` で持つ。高さだけスケールして題名が 96dpi のまま、にはしない。
+タブはツリー／メニュー／ステータスと同じ **12 DIP** の `GraphicsUnit.Pixel` DualFont（本文 `fontSize` 非連動）。About だけシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` で持つ。高さだけスケールして題名が 96dpi のまま、にはしない。
 
 ツリーは **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。
 
-メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブ・About はシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。
+メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブも同じ **12 DIP** DualFont（本文 `fontSize` 非連動）。About だけシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。
+
+ドロップダウン項目の幅は DualFont（ニーモニック除去後のラベルと `GetShortcutDisplayText`）に左 24 DIP・タブギャップ・右矢印列（論理 10+8 DIP）を足した行幅と、WinForms の `MaxItemSize`（`base.GetPreferredSize`）の大きい方。兄弟 DualFont 行は同幅にし、ショートカットは共有右端に揃える。本文 `fontSize` 非連動は上記のまま。
 
 同梱の読み込みに失敗したときだけ Consolas / Yu Gothic / MS Gothic に退避し、ステータスへエラーを出す。
 
@@ -107,7 +111,7 @@ Markdown プレビューは新しいテーマ色を足さない。見出しは K
 - ブロックカーソルではなく細いバー（neovim の insert に近い）。日本語 IME の未確定は自前描画（Selection 背景 + 下線）。システム変換窓は出さない。小さい既定箱が残る場合は隠す（START を DefWndProc に渡さない。保険の CompositionFont は IME 可視のシステム顔）。候補リストはシステム。変換中のバーキャレットは未確定内のカーソル位置に追従する
 - スクロールバーは自前 **10 DIP**（編集器・ツリー・About のライセンス欄）。矢印無し。内容がビューポートに収まるときは非表示（オートハイド）。横の必要判定は半角幅×文字数ではなく、描画と同じ双フォント計測（編集器は `MeasureRun`、ツリーは `DualFontPainter.Measure`）。ツリーの横位置は自前オフセットで、SysTreeView32 の横スクロールは使わない。トラックはホスト背景（編集器 `EditorBackground`、ツリー `Background`）。つまみ LineNumber、つまみホバー Comment、押下 Selection
 - ミニマップは初期対象外
-- タブはファイル名のみ。不要なアイコンを並べない。閉じる印はタブ矩形内に収める
+- タブはファイル名のみ。不要なアイコンを並べない。閉じる印はタブ矩形内に収め、題名との間と右端に各 6 DIP、色は Foreground、幾何 2 本線（幅 2、SmoothingMode は足さない）、一辺は 8 DIP、垂直中央、ヒットは描画と同じ矩形とする。
 
 ## タイトルバー
 

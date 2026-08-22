@@ -71,7 +71,7 @@ namespace WindowsIDE.Languages
                 case LanguageKind.Cmd:
                     return "cmd";
                 default:
-                    return "プレーン";
+                    return "Plain";
             }
         }
     }

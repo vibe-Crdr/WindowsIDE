@@ -9,7 +9,7 @@ namespace WindowsIDE.Ui
     /// </summary>
     public static class DpiUtil
     {
-        /// <summary>サイズは 12 DIP。ファミリは対象による（ツリー／メニュー／ステータスは双フォント、タブ／About はシステム UI）。</summary>
+        /// <summary>サイズは 12 DIP。ファミリは対象による（ツリー／メニュー／ステータス／タブは双フォント、About はシステム UI）。</summary>
         public const int UiFontDip = 12;
 
         /// <summary>自前スクロールバーの太さ（96dpi DIP）。</summary>
@@ -26,6 +26,12 @@ namespace WindowsIDE.Ui
 
         /// <summary>スクロールつまみの最短（96dpi DIP）。</summary>
         public const int MinScrollThumbDip = 16;
+
+        /// <summary>StatusStrip の左右余白（96dpi DIP）。</summary>
+        public const int StatusStripPadXDip = 8;
+
+        /// <summary>StatusStrip の上下余白（96dpi DIP）。</summary>
+        public const int StatusStripPadYDip = 4;
 
         /// <summary>
         /// ウィンドウの実 DPI。ハンドルが無ければシステムの DPI。どちらも 0 なら 96。

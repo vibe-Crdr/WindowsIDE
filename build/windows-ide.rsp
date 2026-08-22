@@ -29,6 +29,8 @@ src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
 src\WindowsIDE\Ui\ProblemListControl.cs
+src\WindowsIDE\Ui\OutputPanelControl.cs
+src\WindowsIDE\Ui\BottomPane.cs
 src\WindowsIDE\Ui\DualFontField.cs
 src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
@@ -84,3 +86,4 @@ src\WindowsIDE\Build\DiagnosticParser.cs
 src\WindowsIDE\Build\CompileUnit.cs
 src\WindowsIDE\Build\CscArgumentBuilder.cs
 src\WindowsIDE\Build\CscRunner.cs
+src\WindowsIDE\Host\Csharp\CsharpProcessHost.cs

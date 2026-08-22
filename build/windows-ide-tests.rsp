@@ -61,6 +61,7 @@ src\WindowsIDE\Build\DiagnosticParser.cs
 src\WindowsIDE\Build\CompileUnit.cs
 src\WindowsIDE\Build\CscArgumentBuilder.cs
 src\WindowsIDE\Build\CscRunner.cs
+src\WindowsIDE\Host\Csharp\CsharpProcessHost.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\PathGuard.cs

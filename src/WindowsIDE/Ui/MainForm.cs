@@ -8,6 +8,7 @@ using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Editor;
+using WindowsIDE.Host.Csharp;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Ui.Fonts;
@@ -16,7 +17,7 @@ using WindowsIDE.Workspace;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// メイン枠。メニュー、ツリー、タブ、編集器、問題一覧、ステータス。起動時は下パネルを畳む。
+    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力）、ステータス。起動時は下パネルを畳む。
     /// </summary>
     public sealed class MainForm : Form
     {
@@ -32,10 +33,13 @@ namespace WindowsIDE.Ui
         private TabStrip tabs;
         private FindBar findBar;
         private TextView editor;
-        private ProblemListControl problemList;
+        private BottomPane bottomPane;
         private CscRunner cscRunner;
+        private CsharpProcessHost csharpHost;
         private int buildGeneration;
+        private int runGeneration;
         private string lastManualOutputExe;
+        private bool pendingLaunchAfterBuild;
         private bool bottomSplitterInitialized;
         private StatusStrip status;
         private ToolStripStatusLabel statusLang;
@@ -66,6 +70,10 @@ namespace WindowsIDE.Ui
             this.AutoScaleMode = AutoScaleMode.None;
 
             this.cscRunner = new CscRunner();
+            this.csharpHost = new CsharpProcessHost();
+            this.csharpHost.LineReceived += this.OnCsharpLineReceived;
+            this.csharpHost.Exited += this.OnCsharpExited;
+            this.csharpHost.StartFailed += this.OnCsharpStartFailed;
             this.BuildMenu();
             this.BuildStatus();
             this.BuildBody();
@@ -264,7 +272,8 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.H)
                     || keyData == Keys.F3
                     || keyData == (Keys.Shift | Keys.F3)
-                    || keyData == (Keys.Control | Keys.Shift | Keys.B))
+                    || keyData == (Keys.Control | Keys.Shift | Keys.B)
+                    || keyData == (Keys.Control | Keys.F5))
                 {
                     return false;
                 }
@@ -320,7 +329,13 @@ namespace WindowsIDE.Ui
 
             if (keyData == (Keys.Control | Keys.Shift | Keys.B))
             {
-                this.StartManualBuild();
+                this.OnBuild(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.F5))
+            {
+                this.OnRun(this, EventArgs.Empty);
                 return true;
             }
 
@@ -401,12 +416,16 @@ namespace WindowsIDE.Ui
             ToolStripMenuItem build = this.CreateTop("ビルド(&B)");
             build.DropDownItems.Add(this.CreateBuildItem("ビルド(&B)", this.OnBuild));
 
+            ToolStripMenuItem run = this.CreateTop("実行(&R)");
+            run.DropDownItems.Add(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun));
+
             ToolStripMenuItem help = this.CreateTop("ヘルプ(&H)");
             help.DropDownItems.Add(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout));
 
             this.menu.Items.Add(file);
             this.menu.Items.Add(edit);
             this.menu.Items.Add(build);
+            this.menu.Items.Add(run);
             this.menu.Items.Add(help);
             this.Controls.Add(this.menu);
         }
@@ -469,6 +488,16 @@ namespace WindowsIDE.Ui
             return item;
         }
 
+        private ToolStripMenuItem CreateRunItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = "Ctrl+F5";
+            item.Click += handler;
+            return item;
+        }
+
         private void BuildStatus()
         {
             this.status = new StatusStrip();
@@ -526,9 +555,9 @@ namespace WindowsIDE.Ui
                 this.findBar.SetFonts(newHalf, newFull);
             }
 
-            if (this.problemList != null)
+            if (this.bottomPane != null)
             {
-                this.problemList.SetFonts(newHalf, newFull);
+                this.bottomPane.SetFonts(newHalf, newFull);
             }
 
             if (this.tabs != null)
@@ -574,9 +603,9 @@ namespace WindowsIDE.Ui
                 this.findBar.PerformLayout();
             }
 
-            if (this.problemList != null)
+            if (this.bottomPane != null)
             {
-                this.problemList.Invalidate();
+                this.bottomPane.Invalidate();
             }
 
             if (this.tabs != null)
@@ -648,13 +677,13 @@ namespace WindowsIDE.Ui
             right.Controls.Add(this.tabs);
             this.split.Panel2.Controls.Add(right);
 
-            this.problemList = new ProblemListControl();
-            this.problemList.Dock = DockStyle.Fill;
-            this.problemList.CloseRequested += this.OnProblemListClose;
-            this.problemList.ItemActivated += this.OnProblemActivated;
+            this.bottomPane = new BottomPane();
+            this.bottomPane.Dock = DockStyle.Fill;
+            this.bottomPane.CloseRequested += this.OnBottomPaneClose;
+            this.bottomPane.ItemActivated += this.OnProblemActivated;
 
             this.bodySplit.Panel1.Controls.Add(this.split);
-            this.bodySplit.Panel2.Controls.Add(this.problemList);
+            this.bodySplit.Panel2.Controls.Add(this.bottomPane);
             this.Controls.Add(this.bodySplit);
             this.bodySplit.BringToFront();
         }
@@ -1274,10 +1303,41 @@ namespace WindowsIDE.Ui
         private void OnReplaceRequested(object sender, EventArgs e) { this.ExecuteReplaceOne(); }
         private void OnReplaceAllRequested(object sender, EventArgs e) { this.ExecuteReplaceAll(); }
         private void OnFindCloseRequested(object sender, EventArgs e) { this.CloseFindBar(); }
-        private void OnBuild(object sender, EventArgs e) { this.StartManualBuild(); }
+        private void OnBuild(object sender, EventArgs e)
+        {
+            this.pendingLaunchAfterBuild = false;
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            this.StartManualBuild();
+        }
+
+        private void OnRun(object sender, EventArgs e)
+        {
+            this.pendingLaunchAfterBuild = true;
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            this.StartManualBuild();
+        }
 
         private void StartManualBuild()
         {
+            this.buildGeneration++;
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            if (this.cscRunner != null)
+            {
+                this.cscRunner.Kill();
+            }
+
             string workspaceRoot = (this.workspace == null) ? null : this.workspace.RootPath;
             string focused = null;
             if (this.editor != null && this.editor.Document != null)
@@ -1325,17 +1385,12 @@ namespace WindowsIDE.Ui
                 return;
             }
 
-            this.buildGeneration++;
             int gen = this.buildGeneration;
-            if (this.cscRunner != null)
-            {
-                this.cscRunner.Kill();
-            }
-
             ManualBuildRequest req = new ManualBuildRequest();
             req.Generation = gen;
             req.RspPath = rspPath;
             req.OutputExe = outputExe;
+            req.WorkingDirectory = ResolveWorkingDirectory(workspaceRoot, sources, outputExe);
             Thread thread = new Thread(this.BuildWorkerProc);
             thread.IsBackground = true;
             thread.Start(req);
@@ -1347,6 +1402,12 @@ namespace WindowsIDE.Ui
             if (req == null || this.cscRunner == null)
             {
                 return;
+            }
+
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+                this.csharpHost.WaitUntilExited(5000);
             }
 
             CscRunResult result = this.cscRunner.Run(req.RspPath, req.Generation);
@@ -1387,6 +1448,76 @@ namespace WindowsIDE.Ui
             }
 
             this.ShowBuildDiagnostics(parsed);
+            if (!this.pendingLaunchAfterBuild || result.ExitCode != 0)
+            {
+                return;
+            }
+
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.Clear();
+            this.bottomPane.ShowOutput();
+            if (string.IsNullOrEmpty(req.OutputExe) || !File.Exists(req.OutputExe))
+            {
+                this.bottomPane.Output.AppendStatus("実行ファイルがありません。");
+                return;
+            }
+
+            this.runGeneration = req.Generation;
+            if (this.csharpHost == null)
+            {
+                return;
+            }
+
+            this.csharpHost.Start(req.OutputExe, req.WorkingDirectory, req.Generation);
+            if (string.IsNullOrEmpty(this.csharpHost.StartError))
+            {
+                this.bottomPane.Output.AppendStatus("起動: " + req.OutputExe);
+            }
+        }
+
+        private static string ResolveWorkingDirectory(string workspaceRoot, string[] sources, string outputExe)
+        {
+            if (!string.IsNullOrEmpty(workspaceRoot))
+            {
+                return workspaceRoot;
+            }
+
+            if (sources != null && sources.Length > 0 && !string.IsNullOrEmpty(sources[0]))
+            {
+                try
+                {
+                    string dir = Path.GetDirectoryName(Path.GetFullPath(sources[0]));
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        return dir;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            if (!string.IsNullOrEmpty(outputExe))
+            {
+                try
+                {
+                    string dir = Path.GetDirectoryName(outputExe);
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        return dir;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return Environment.CurrentDirectory;
         }
 
         private bool TrySaveDirtySources(string[] sources, out string error)
@@ -1475,14 +1606,14 @@ namespace WindowsIDE.Ui
 
         private void ShowBuildDiagnostics(Diagnostic[] list)
         {
-            this.ShowProblemPanel();
-            if (this.problemList != null)
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane != null)
             {
-                this.problemList.SetItems(list);
+                this.bottomPane.SetProblemItems(list);
             }
         }
 
-        private void ShowProblemPanel()
+        private void EnsureBottomPaneVisible()
         {
             if (this.bodySplit == null)
             {
@@ -1514,7 +1645,7 @@ namespace WindowsIDE.Ui
             this.bottomSplitterInitialized = true;
         }
 
-        private void OnProblemListClose(object sender, EventArgs e)
+        private void OnBottomPaneClose(object sender, EventArgs e)
         {
             if (this.bodySplit != null)
             {
@@ -1810,6 +1941,80 @@ namespace WindowsIDE.Ui
             }
         }
 
+        private void OnCsharpLineReceived(object sender, CsharpLineReceivedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MethodInvoker(delegate
+                {
+                    this.OnCsharpLineReceived(sender, e);
+                }));
+                return;
+            }
+
+            if (this.IsDisposed || e.Generation != this.runGeneration || this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.Append(e.Text, e.IsStderr);
+        }
+
+        private void OnCsharpExited(object sender, CsharpProcessExitedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MethodInvoker(delegate
+                {
+                    this.OnCsharpExited(sender, e);
+                }));
+                return;
+            }
+
+            if (this.IsDisposed || e.Generation != this.runGeneration || this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.AppendStatus("終了コード: " + e.ExitCode.ToString());
+        }
+
+        private void OnCsharpStartFailed(object sender, CsharpStartFailedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MethodInvoker(delegate
+                {
+                    this.OnCsharpStartFailed(sender, e);
+                }));
+                return;
+            }
+
+            if (this.IsDisposed || e.Generation != this.runGeneration || this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.EnsureBottomPaneVisible();
+            this.bottomPane.ShowOutput();
+            this.bottomPane.Output.Append(e.Message, true);
+        }
+
         private void OnEditorCaret(object sender, EventArgs e)
         {
             this.UpdateStatus();
@@ -1830,6 +2035,14 @@ namespace WindowsIDE.Ui
                 if (this.cscRunner != null)
                 {
                     this.cscRunner.Kill();
+                }
+
+                if (this.csharpHost != null)
+                {
+                    this.csharpHost.LineReceived -= this.OnCsharpLineReceived;
+                    this.csharpHost.Exited -= this.OnCsharpExited;
+                    this.csharpHost.StartFailed -= this.OnCsharpStartFailed;
+                    this.csharpHost.Kill();
                 }
 
                 if (this.menu != null)
@@ -1897,6 +2110,7 @@ namespace WindowsIDE.Ui
             public int Generation;
             public string RspPath;
             public string OutputExe;
+            public string WorkingDirectory;
         }
     }
 }

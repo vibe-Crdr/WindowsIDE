@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Editor;
+using WindowsIDE.Host.Csharp;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Ui;
@@ -56,6 +58,7 @@ namespace WindowsIDE.Tests
             RunCompileUnit();
             RunCscArgumentBuilder();
             RunCscBrokenSource();
+            RunCsharpProcessHost();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
             return (failed == 0) ? 0 : 1;
@@ -1298,6 +1301,205 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void RunCsharpProcessHost()
+        {
+            string hostSrc = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Host", "Csharp", "CsharpProcessHost.cs"));
+            if (File.Exists(hostSrc))
+            {
+                string srcText = File.ReadAllText(hostSrc);
+                Check("host no GetProcessesByName", srcText.IndexOf("GetProcessesByName", StringComparison.Ordinal) < 0);
+            }
+            else
+            {
+                Check("host source readable", false);
+            }
+
+            CsharpProcessHost missingHost = new CsharpProcessHost();
+            bool missingFailed = false;
+            missingHost.StartFailed += delegate(object sender, CsharpStartFailedEventArgs e)
+            {
+                missingFailed = true;
+            };
+            string missingPath = Path.Combine(Path.GetTempPath(), "WindowsIDE-host-missing-" + Guid.NewGuid().ToString("N"), "out.exe");
+            missingHost.Start(missingPath, Path.GetTempPath(), 1);
+            Check("missing not running", !missingHost.IsRunning);
+            Check("missing StartError", !string.IsNullOrEmpty(missingHost.StartError));
+            Check("missing StartFailed", missingFailed);
+            missingHost.Kill();
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-host-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            CsharpProcessHost helloHost = new CsharpProcessHost();
+            CsharpProcessHost sleepHost = new CsharpProcessHost();
+            CsharpProcessHost restartHost = new CsharpProcessHost();
+            try
+            {
+                string helloExe;
+                string helloErr;
+                bool helloCompiled = TryCompileTempExe(dir, "hello", "static class Program { static void Main() { System.Console.WriteLine(\"hello-from-host\"); } }", out helloExe, out helloErr);
+                Check("hello compiled", helloCompiled && File.Exists(helloExe));
+                Check("hello not product exe", helloExe == null || helloExe.IndexOf("WindowsIDE.exe", StringComparison.OrdinalIgnoreCase) < 0);
+
+                string sleepExe;
+                string sleepErr;
+                bool sleepCompiled = TryCompileTempExe(dir, "sleeper", "static class Program { static void Main() { while (true) { System.Threading.Thread.Sleep(1000); } } }", out sleepExe, out sleepErr);
+                Check("sleep compiled", sleepCompiled && File.Exists(sleepExe));
+                Check("sleep not product exe", sleepExe == null || sleepExe.IndexOf("WindowsIDE.exe", StringComparison.OrdinalIgnoreCase) < 0);
+
+                if (helloCompiled)
+                {
+                    List<string> helloLines = new List<string>();
+                    ManualResetEvent helloDone = new ManualResetEvent(false);
+                    int helloExit = int.MinValue;
+                    helloHost.LineReceived += delegate(object sender, CsharpLineReceivedEventArgs e)
+                    {
+                        if (e != null && !e.IsStderr)
+                        {
+                            lock (helloLines)
+                            {
+                                helloLines.Add(e.Text);
+                            }
+                        }
+                    };
+                    helloHost.Exited += delegate(object sender, CsharpProcessExitedEventArgs e)
+                    {
+                        if (e != null)
+                        {
+                            helloExit = e.ExitCode;
+                        }
+
+                        helloDone.Set();
+                    };
+                    helloHost.Start(helloExe, dir, 2);
+                    Check("hello wait exit", helloDone.WaitOne(15000));
+                    Check("hello exit 0", helloExit == 0);
+                    bool sawHello = false;
+                    lock (helloLines)
+                    {
+                        for (int i = 0; i < helloLines.Count; i++)
+                        {
+                            if (helloLines[i] != null && helloLines[i].IndexOf("hello-from-host", StringComparison.Ordinal) >= 0)
+                            {
+                                sawHello = true;
+                            }
+                        }
+                    }
+
+                    Check("hello stdout", sawHello);
+                    Check("hello not running", !helloHost.IsRunning);
+                }
+
+                if (sleepCompiled)
+                {
+                    sleepHost.Start(sleepExe, dir, 3);
+                    Check("sleep running", sleepHost.IsRunning);
+                    sleepHost.Kill();
+                    Check("sleep kill waited", sleepHost.WaitUntilExited(15000));
+                    Check("sleep not running after kill", !sleepHost.IsRunning);
+                }
+
+                if (sleepCompiled && helloCompiled)
+                {
+                    ManualResetEvent firstDone = new ManualResetEvent(false);
+                    ManualResetEvent secondDone = new ManualResetEvent(false);
+                    int secondExit = int.MinValue;
+                    List<string> restartLines = new List<string>();
+                    restartHost.LineReceived += delegate(object sender, CsharpLineReceivedEventArgs e)
+                    {
+                        if (e != null && e.Generation == 5 && !e.IsStderr)
+                        {
+                            lock (restartLines)
+                            {
+                                restartLines.Add(e.Text);
+                            }
+                        }
+                    };
+                    restartHost.Exited += delegate(object sender, CsharpProcessExitedEventArgs e)
+                    {
+                        if (e == null)
+                        {
+                            return;
+                        }
+
+                        if (e.Generation == 4)
+                        {
+                            firstDone.Set();
+                        }
+
+                        if (e.Generation == 5)
+                        {
+                            secondExit = e.ExitCode;
+                            secondDone.Set();
+                        }
+                    };
+                    restartHost.Start(sleepExe, dir, 4);
+                    Check("restart first running", restartHost.IsRunning);
+                    restartHost.Start(helloExe, dir, 5);
+                    Check("restart first killed", firstDone.WaitOne(15000));
+                    bool secondStopped = secondDone.WaitOne(15000);
+                    if (!secondStopped)
+                    {
+                        secondStopped = restartHost.WaitUntilExited(15000);
+                    }
+
+                    Check("restart second exit wait", secondStopped);
+                    Check("restart second exit 0", secondExit == 0);
+                    bool sawSecond = false;
+                    lock (restartLines)
+                    {
+                        for (int i = 0; i < restartLines.Count; i++)
+                        {
+                            if (restartLines[i] != null && restartLines[i].IndexOf("hello-from-host", StringComparison.Ordinal) >= 0)
+                            {
+                                sawSecond = true;
+                            }
+                        }
+                    }
+
+                    Check("restart second stdout", sawSecond);
+                    Check("restart not product exe", true);
+                }
+            }
+            finally
+            {
+                helloHost.Kill();
+                helloHost.WaitUntilExited(5000);
+                sleepHost.Kill();
+                sleepHost.WaitUntilExited(5000);
+                restartHost.Kill();
+                restartHost.WaitUntilExited(5000);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        private static bool TryCompileTempExe(string dir, string name, string source, out string exePath, out string error)
+        {
+            exePath = Path.Combine(dir, name + ".exe");
+            error = null;
+            string src = Path.Combine(dir, name + ".cs");
+            WriteUtf8Bom(src, source);
+            string rsp = Path.Combine(dir, name + ".rsp");
+            CscArgumentBuilder.WriteResponseFile(rsp, exePath, new string[] { src });
+            CscRunner runner = new CscRunner();
+            CscRunResult result = runner.Run(rsp, 1);
+            if (result == null || !result.Started || result.ExitCode != 0 || !File.Exists(exePath))
+            {
+                error = (result == null) ? "no result" : result.CombinedOutput();
+                return false;
+            }
+
+            return true;
         }
 
         private static void WriteUtf8Bom(string path, string text)

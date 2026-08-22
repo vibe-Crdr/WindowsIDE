@@ -62,7 +62,8 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 - コマンドライン先頭は必ず `/noconfig`。rsp には `/noconfig` を書かない（rsp 内は無視され CS2023）
 - rsp（UTF-8 BOM、TEMP）: `/nostdlib /platform:x64 /target:exe /debug+ /utf8output`
 - `/r:` は Framework64 の 6 DLL のみ（mscorlib, System, System.Core, System.Drawing, System.Windows.Forms, System.Xml）。SMA / Microsoft.CSharp / Office は足さない。製品 `/r` は増やさない
-- `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。**`Process.Start` しない**
+- `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。手動 csc は **`Process.Start` しない**
+- ユーザー EXE の起動と、そのプロセス参照だけの Kill は `WindowsIDE.Host.Csharp`。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - 無題は対象外。csproj は作らない
 
 ## レスポンスファイル

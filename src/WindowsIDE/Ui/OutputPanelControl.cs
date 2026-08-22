@@ -2,63 +2,35 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
-using WindowsIDE.Build;
 using WindowsIDE.Ui.Fonts;
 
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// 問題一覧の行が選ばれたとき。
+    /// 下パネルの出力。オーナー描画 + ThemedScrollBar。RichTextBox は使わない。
     /// </summary>
-    public sealed class ProblemActivatedEventArgs : EventArgs
-    {
-        private Diagnostic diagnostic;
-
-        /// <summary>
-        /// 対象診断を渡す。
-        /// </summary>
-        /// <param name="diagnostic">クリックされた診断。</param>
-        public ProblemActivatedEventArgs(Diagnostic diagnostic)
-        {
-            this.diagnostic = diagnostic;
-        }
-
-        /// <summary>対象。</summary>
-        public Diagnostic Diagnostic
-        {
-            get { return this.diagnostic; }
-        }
-    }
-
-    /// <summary>
-    /// 下パネルの問題一覧。ヘッダは BottomPane。オーナー描画 + ThemedScrollBar。ListView は使わない。
-    /// </summary>
-    public sealed class ProblemListControl : Control
+    public sealed class OutputPanelControl : Control
     {
         private const int WM_MOUSEHWHEEL = 0x020E;
+        private const int MaxLines = 4000;
+        private const int MaxMeasureChars = 4096;
 
-        private readonly List<Diagnostic> items;
-        private readonly List<string> displayTexts;
+        private readonly List<OutputLine> lines;
         private readonly ThemedScrollBar vScroll;
         private readonly ThemedScrollBar hScroll;
         private Font halfFont;
         private Font fullFont;
         private StringFormat typographic;
-        private int selectedIndex;
-        private int errorCount;
-        private int warningCount;
         private int contentWidth;
         private int wheelLeftover;
         private bool ignoreScroll;
 
         /// <summary>
-        /// 空の一覧を組む。
+        /// 空の出力を組む。
         /// </summary>
-        public ProblemListControl()
+        public OutputPanelControl()
         {
-            this.items = new List<Diagnostic>();
-            this.displayTexts = new List<string>();
-            this.selectedIndex = -1;
+            this.lines = new List<OutputLine>();
             this.typographic = (StringFormat)StringFormat.GenericTypographic.Clone();
             this.typographic.FormatFlags = this.typographic.FormatFlags | StringFormatFlags.MeasureTrailingSpaces | StringFormatFlags.NoWrap | StringFormatFlags.FitBlackBox;
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
@@ -78,21 +50,6 @@ namespace WindowsIDE.Ui
             this.Controls.Add(this.hScroll);
         }
 
-        /// <summary>行クリック。ファイルが無い行でも発火する。</summary>
-        public event EventHandler<ProblemActivatedEventArgs> ItemActivated;
-
-        /// <summary>error / 合成の件数。</summary>
-        public int ErrorCount
-        {
-            get { return this.errorCount; }
-        }
-
-        /// <summary>warning の件数。</summary>
-        public int WarningCount
-        {
-            get { return this.warningCount; }
-        }
-
         /// <summary>
         /// ツリーと同じ 12 DIP 双フォントを使う。所有権は移さない。
         /// </summary>
@@ -107,39 +64,11 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// 一覧を置き換える。フォーカスは奪わない。
+        /// 行を捨てる。フォーカスは奪わない。
         /// </summary>
-        /// <param name="diagnostics">csc または合成。null は空。</param>
-        public void SetItems(IList<Diagnostic> diagnostics)
+        public void Clear()
         {
-            this.items.Clear();
-            this.displayTexts.Clear();
-            this.errorCount = 0;
-            this.warningCount = 0;
-            this.selectedIndex = -1;
-            if (diagnostics != null)
-            {
-                for (int i = 0; i < diagnostics.Count; i++)
-                {
-                    Diagnostic d = diagnostics[i];
-                    if (d == null)
-                    {
-                        continue;
-                    }
-
-                    this.items.Add(d);
-                    this.displayTexts.Add(FormatItem(d));
-                    if (d.IsError)
-                    {
-                        this.errorCount++;
-                    }
-                    else
-                    {
-                        this.warningCount++;
-                    }
-                }
-            }
-
+            this.lines.Clear();
             this.ignoreScroll = true;
             try
             {
@@ -153,6 +82,25 @@ namespace WindowsIDE.Ui
 
             this.RefreshChrome();
             this.Invalidate();
+        }
+
+        /// <summary>
+        /// stdout または stderr の 1 行を末尾へ。4000 行を超えたら先頭を捨てる。
+        /// </summary>
+        /// <param name="text">1 行。null は空。</param>
+        /// <param name="isStderr">stderr なら true。</param>
+        public void Append(string text, bool isStderr)
+        {
+            this.AddLine((text == null) ? "" : text, isStderr ? 1 : 0);
+        }
+
+        /// <summary>
+        /// 起動／終了などの 1 行を末尾へ（Comment 色）。
+        /// </summary>
+        /// <param name="text">1 行。null は空。</param>
+        public void AppendStatus(string text)
+        {
+            this.AddLine((text == null) ? "" : text, 2);
         }
 
         /// <summary>親の DPI 変更後にバー位置を合わせる。</summary>
@@ -177,7 +125,7 @@ namespace WindowsIDE.Ui
             this.RefreshChrome();
         }
 
-        /// <summary>行・枠を描く。ヘッダは BottomPane。</summary>
+        /// <summary>行と枠を描く。</summary>
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -188,41 +136,10 @@ namespace WindowsIDE.Ui
                 g.FillRectangle(bg, this.ClientRectangle);
             }
 
-            this.DrawRows(g, dpi, 0);
+            this.DrawRows(g, dpi);
             using (Pen border = new Pen(Theme.Border))
             {
                 g.DrawRectangle(border, 0, 0, this.ClientSize.Width - 1, this.ClientSize.Height - 1);
-            }
-        }
-
-        /// <summary>行クリック。</summary>
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            base.OnMouseDown(e);
-            if (e.Button != MouseButtons.Left)
-            {
-                return;
-            }
-
-            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            int rowH = this.RowHeight(dpi);
-            if (rowH < 1)
-            {
-                return;
-            }
-
-            int index = this.vScroll.Value + (e.Y / rowH);
-            if (index < 0 || index >= this.items.Count)
-            {
-                return;
-            }
-
-            this.selectedIndex = index;
-            this.Invalidate();
-            EventHandler<ProblemActivatedEventArgs> h = this.ItemActivated;
-            if (h != null)
-            {
-                h(this, new ProblemActivatedEventArgs(this.items[index]));
             }
         }
 
@@ -303,6 +220,38 @@ namespace WindowsIDE.Ui
             base.Dispose(disposing);
         }
 
+        private void AddLine(string text, int kind)
+        {
+            OutputLine line = new OutputLine();
+            line.Text = text;
+            line.Kind = kind;
+            this.lines.Add(line);
+            while (this.lines.Count > MaxLines)
+            {
+                this.lines.RemoveAt(0);
+            }
+
+            this.RefreshChrome();
+            this.ScrollToEnd();
+            this.Invalidate();
+        }
+
+        private void ScrollToEnd()
+        {
+            if (!this.vScroll.Visible)
+            {
+                return;
+            }
+
+            int max = this.vScroll.Maximum - this.vScroll.LargeChange + 1;
+            if (max < this.vScroll.Minimum)
+            {
+                max = this.vScroll.Minimum;
+            }
+
+            this.vScroll.Value = max;
+        }
+
         private void OnScrollChanged(object sender, EventArgs e)
         {
             if (this.ignoreScroll)
@@ -313,7 +262,7 @@ namespace WindowsIDE.Ui
             this.Invalidate();
         }
 
-        private void DrawRows(Graphics g, int dpi, int headerH)
+        private void DrawRows(Graphics g, int dpi)
         {
             if (this.halfFont == null || this.fullFont == null)
             {
@@ -327,11 +276,10 @@ namespace WindowsIDE.Ui
             }
 
             int pad = DpiUtil.ToPixels(8, dpi);
-            int kindW = this.MeasureKindColumn(g, dpi);
             int bar = DpiUtil.ToPixels(DpiUtil.ScrollBarThicknessDip, dpi);
             int vW = this.vScroll.Visible ? bar : 0;
             int hH = this.hScroll.Visible ? bar : 0;
-            Rectangle list = new Rectangle(0, headerH, Math.Max(0, this.ClientSize.Width - vW), Math.Max(0, this.ClientSize.Height - headerH - hH));
+            Rectangle list = new Rectangle(0, 0, Math.Max(0, this.ClientSize.Width - vW), Math.Max(0, this.ClientSize.Height - hH));
             if (list.Width <= 0 || list.Height <= 0)
             {
                 return;
@@ -346,52 +294,31 @@ namespace WindowsIDE.Ui
             }
 
             int last = first + visible;
-            if (last > this.items.Count)
+            if (last > this.lines.Count)
             {
-                last = this.items.Count;
+                last = this.lines.Count;
             }
 
             for (int i = first; i < last; i++)
             {
                 int y = list.Y + ((i - first) * rowH);
-                Rectangle row = new Rectangle(list.X, y, list.Width, rowH);
-                if (i == this.selectedIndex)
+                OutputLine line = this.lines[i];
+                Color color = Theme.Foreground;
+                if (line.Kind == 1)
                 {
-                    using (SolidBrush cur = new SolidBrush(Theme.CurrentLine))
-                    {
-                        g.FillRectangle(cur, row);
-                    }
+                    color = Theme.Error;
+                }
+                else if (line.Kind == 2)
+                {
+                    color = Theme.Comment;
                 }
 
-                Diagnostic d = this.items[i];
-                string kind = d.IsError ? "error" : "warning";
-                Rectangle kindClip = new Rectangle(originX, y, kindW, rowH);
-                using (SolidBrush kindBrush = new SolidBrush(d.IsError ? Theme.Error : Theme.Comment))
+                Rectangle clip = new Rectangle(list.X, y, list.Width, rowH);
+                using (SolidBrush brush = new SolidBrush(color))
                 {
-                    DualFontPainter.Draw(g, kind, this.halfFont, this.fullFont, Rectangle.Intersect(kindClip, list), originX, kindBrush, this.typographic);
-                }
-
-                string rest = this.displayTexts[i];
-                int restX = originX + kindW + DpiUtil.ToPixels(8, dpi);
-                Rectangle restClip = new Rectangle(restX, y, Math.Max(0, list.Right - restX), rowH);
-                using (SolidBrush fg = new SolidBrush(Theme.Foreground))
-                {
-                    DualFontPainter.Draw(g, rest, this.halfFont, this.fullFont, Rectangle.Intersect(restClip, list), restX, fg, this.typographic);
+                    DualFontPainter.Draw(g, line.Text, this.halfFont, this.fullFont, Rectangle.Intersect(clip, list), originX, brush, this.typographic);
                 }
             }
-        }
-
-        private int MeasureKindColumn(Graphics g, int dpi)
-        {
-            float w = DualFontPainter.Measure(g, "warning", this.halfFont, this.fullFont, this.typographic);
-            int min = DpiUtil.ToPixels(48, dpi);
-            int n = (int)Math.Ceiling(w);
-            if (n < min)
-            {
-                return min;
-            }
-
-            return n;
         }
 
         private void RefreshChrome()
@@ -402,7 +329,6 @@ namespace WindowsIDE.Ui
             }
 
             int dpi = DpiUtil.GetDpi(this.Handle);
-            int headerH = this.HeaderHeight(dpi);
             int rowH = this.RowHeight(dpi);
             if (rowH < 1)
             {
@@ -412,21 +338,21 @@ namespace WindowsIDE.Ui
             int bar = DpiUtil.ToPixels(DpiUtil.ScrollBarThicknessDip, dpi);
             int clientW = this.ClientSize.Width;
             int clientH = this.ClientSize.Height;
-            int listH = Math.Max(0, clientH - headerH);
+            int listH = Math.Max(0, clientH);
             int visibleRows = listH / rowH;
             if (visibleRows < 1)
             {
                 visibleRows = 1;
             }
 
-            int itemCount = this.items.Count;
+            int itemCount = this.lines.Count;
             bool needV = DpiUtil.ScrollBarNeeded(0, Math.Max(0, itemCount - 1), visibleRows) && itemCount > visibleRows;
             int listW = clientW - (needV ? bar : 0);
             this.contentWidth = this.MeasureContentWidth(dpi);
             bool needH = this.contentWidth > listW;
             if (needH)
             {
-                listH = Math.Max(0, clientH - headerH - bar);
+                listH = Math.Max(0, clientH - bar);
                 visibleRows = listH / rowH;
                 if (visibleRows < 1)
                 {
@@ -466,7 +392,7 @@ namespace WindowsIDE.Ui
 
             int vW = needV ? bar : 0;
             int hHBar = needH ? bar : 0;
-            this.vScroll.Bounds = new Rectangle(this.ClientSize.Width - vW, headerH, vW, Math.Max(0, this.ClientSize.Height - headerH - hHBar));
+            this.vScroll.Bounds = new Rectangle(this.ClientSize.Width - vW, 0, vW, Math.Max(0, this.ClientSize.Height - hHBar));
             this.hScroll.Bounds = new Rectangle(0, this.ClientSize.Height - hHBar, Math.Max(0, this.ClientSize.Width - vW), hHBar);
             this.vScroll.BringToFront();
             this.hScroll.BringToFront();
@@ -482,12 +408,21 @@ namespace WindowsIDE.Ui
             int pad = DpiUtil.ToPixels(8, dpi);
             using (Graphics g = this.CreateGraphics())
             {
-                int kindW = this.MeasureKindColumn(g, dpi);
-                int gap = DpiUtil.ToPixels(8, dpi);
                 int max = 0;
-                for (int i = 0; i < this.displayTexts.Count; i++)
+                for (int i = 0; i < this.lines.Count; i++)
                 {
-                    int w = pad + kindW + gap + (int)Math.Ceiling(DualFontPainter.Measure(g, this.displayTexts[i], this.halfFont, this.fullFont, this.typographic)) + pad;
+                    string text = this.lines[i].Text;
+                    if (text == null)
+                    {
+                        text = "";
+                    }
+
+                    if (text.Length > MaxMeasureChars)
+                    {
+                        text = text.Substring(0, MaxMeasureChars);
+                    }
+
+                    int w = pad + (int)Math.Ceiling(DualFontPainter.Measure(g, text, this.halfFont, this.fullFont, this.typographic)) + pad;
                     if (w > max)
                     {
                         max = w;
@@ -496,11 +431,6 @@ namespace WindowsIDE.Ui
 
                 return max;
             }
-        }
-
-        private int HeaderHeight(int dpi)
-        {
-            return 0;
         }
 
         private int RowHeight(int dpi)
@@ -519,59 +449,10 @@ namespace WindowsIDE.Ui
             return DpiUtil.TreeItemHeight(fontH, dpi);
         }
 
-        private static string FormatItem(Diagnostic d)
+        private sealed class OutputLine
         {
-            string code = d.Code;
-            string message = d.Message;
-            string loc = FormatLocation(d);
-            string mid;
-            if (!string.IsNullOrEmpty(code))
-            {
-                if (!string.IsNullOrEmpty(message))
-                {
-                    mid = code + ": " + message;
-                }
-                else
-                {
-                    mid = code;
-                }
-            }
-            else
-            {
-                mid = (message == null) ? "" : message;
-            }
-
-            if (string.IsNullOrEmpty(loc))
-            {
-                return mid;
-            }
-
-            if (string.IsNullOrEmpty(mid))
-            {
-                return loc;
-            }
-
-            return mid + "  " + loc;
-        }
-
-        private static string FormatLocation(Diagnostic d)
-        {
-            if (d == null || string.IsNullOrEmpty(d.FilePath))
-            {
-                return "";
-            }
-
-            if (d.Line < 1)
-            {
-                return d.FilePath;
-            }
-
-            if (d.Column < 1)
-            {
-                return string.Format("{0}({1})", d.FilePath, d.Line);
-            }
-
-            return string.Format("{0}({1},{2})", d.FilePath, d.Line, d.Column);
+            public string Text;
+            public int Kind;
         }
     }
 }

@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。F-SIND / F-GSRCH と混ぜない。F-CS-RUN と混ぜない。
+凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。F-SIND / F-GSRCH / F-PS-RUN / F-TERM と混ぜない。
 
 ## P0 スライス
 
@@ -50,16 +50,24 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 
 ## P1 F-CS-BLD / F-PROB スライス
 
-指定 Framework `csc.exe` の手動ビルドと、下パネルの問題一覧。F-CS-RUN（ユーザー EXE 起動）と混ぜない。生成物は TEMP に残すが `Process.Start` しない。
+指定 Framework `csc.exe` の手動ビルドと、下パネルの問題一覧。F-CS-RUN（ユーザー EXE 起動）と混ぜない。生成物は TEMP に残す。ビルドコマンドからは起動しない。
 
 | ID | P1 F-CS-BLD / F-PROB でやる | P1 F-CS-BLD / F-PROB でやらない |
 | --- | --- | --- |
-| F-CS-BLD | メニュー「ビルド」と Ctrl+Shift+B。指定パスの Framework `csc.exe`（`/noconfig` はコマンドライン）。ワークスペースがあれば根の全 `.cs`（`bin` / `obj` / `.git` 除外）、無ければフォーカス中のディスク上 `.cs` 1 本。パス付き dirty は `Document.Save()` してから csc。診断を問題一覧へ。`/target:exe` の出力は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`。PDB 可 | F-CS-RUN、ユーザー EXE の `Process.Start`、出力パネル、F-LIVE、F-TERM、F-PS-RUN、F-CMD-RUN、csproj、無題の一時ファイル、SMA / Microsoft.CSharp をユーザー csc へ、新製品 `/r`、Host.Csharp |
-| F-PROB | 左右 split の外側に問題一覧のみ。起動時は畳み、初回ビルド（合成診断を含む）で 180 DIP。error / warning / ファイル無し fatal と IDE 合成 1 件。クリックで `TryOpenFile` + `SelectRange`（csc 1 始まり → BufferPoint 0 始まり）。12 DIP DualFont、ThemedScrollBar 10 DIP、既存 Theme 色のみ | 出力 / ターミナルの空タブ、ListView / DataGrid / RichTextBox、波線、F-LIVE / F-SQU / VBA Compile、新 Theme 色、新 XML、Esc で畳むこと（Esc は FindBar） |
+| F-CS-BLD | メニュー「ビルド」と Ctrl+Shift+B。指定パスの Framework `csc.exe`（`/noconfig` はコマンドライン）。ワークスペースがあれば根の全 `.cs`（`bin` / `obj` / `.git` 除外）、無ければフォーカス中のディスク上 `.cs` 1 本。パス付き dirty は `Document.Save()` してから csc。診断を問題一覧へ。`/target:exe` の出力は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`。PDB 可 | ビルドコマンドからのユーザー EXE 起動／出力パネル、F-LIVE、F-TERM、F-PS-RUN、F-CMD-RUN、csproj、無題の一時ファイル、SMA / Microsoft.CSharp をユーザー csc へ、新製品 `/r` |
+| F-PROB | 左右 split の外側に問題一覧。起動時は畳み、初回ビルド（合成診断を含む）で 180 DIP。error / warning / ファイル無し fatal と IDE 合成 1 件。クリックで `TryOpenFile` + `SelectRange`（csc 1 始まり → BufferPoint 0 始まり）。12 DIP DualFont、ThemedScrollBar 10 DIP、既存 Theme 色のみ | デバッグ / ターミナルの空タブ、ListView / DataGrid / RichTextBox、波線、F-LIVE / F-SQU / VBA Compile、新 Theme 色、新 XML、Esc で畳むこと（Esc は FindBar） |
+
+## P1 F-CS-RUN スライス
+
+手動ビルド成功後に TEMP の `out.exe` を別プロセス起動し、stdout/stderr を下パネルの出力へ出す。常時コンパイル生成物は起動しない（F-LIVE は作らない）。
+
+| ID | P1 F-CS-RUN でやる | P1 F-CS-RUN でやらない |
+| --- | --- | --- |
+| F-CS-RUN | トップ「実行」の「デバッグなしで実行」（表示 Ctrl+F5。ShortcutKeys は付けず ProcessCmdKey。IME 変換中は奪わない）。毎回手動 csc と同じ経路。成功（ExitCode==0 かつ StartError 空）のときだけその回の `OutputExe` を `Host.Csharp` が起動。警告付き exit 0 は起動する。下パネルは問題と出力のみ。ビルド完了と csc 失敗は問題タブ、csc 成功して起動するときは出力を空にして出力タブ。stdout/stderr は出力パネル（4000 行キャップ） | F-PS-RUN / F-CMD-RUN / F-TERM、P7/P8、F5 デバッグ、ビルド成功時の自動起動、引数 UI、対話 stdin、新しい `/r`・Theme 色・XML、ListView / DataGrid / RichTextBox、空のデバッグ/ターミナルタブ、`.windows-ide/`、Excel COM、Host.PowerShell/Cmd、F-LIVE、`lastManualOutputExe` だけの起動近道、Build への起動、CscRunner 契約変更 |
 
 ## 残 P1
 
-字句ハイライトと P1 F-IND / P1 F-FIND / P1 F-CS-BLD / F-PROB スライス以外の P1（F-CS-RUN / F-PS-RUN / F-CMD-RUN / F-TERM）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
+字句ハイライトと P1 F-IND / P1 F-FIND / P1 F-CS-BLD / F-PROB / P1 F-CS-RUN スライス以外の P1（F-PS-RUN / F-CMD-RUN / F-TERM）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
 
 ## フェーズ P7（編集器インテリジェンス）— 今は実装しない
 

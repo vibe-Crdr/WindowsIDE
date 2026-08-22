@@ -27,6 +27,7 @@ src\WindowsIDE\Editor\TextBuffer.cs
 src\WindowsIDE\Editor\UndoStack.cs
 src\WindowsIDE\Editor\FileEncoding.cs
 src\WindowsIDE\Editor\Document.cs
+src\WindowsIDE\Editor\IndentRules.cs
 src\WindowsIDE\Languages\LanguageKind.cs
 src\WindowsIDE\Languages\TokenKind.cs
 src\WindowsIDE\Languages\Token.cs

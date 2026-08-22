@@ -29,6 +29,7 @@ namespace WindowsIDE.Tests
             passed = 0;
             failed = 0;
             RunTextBuffer();
+            RunIndentRules();
             RunFileEncoding();
             RunDocumentOpen();
             RunGlyphClassifier();
@@ -94,6 +95,59 @@ namespace WindowsIDE.Tests
             undo.Undo(buf);
             undo.Undo(buf);
             Check("undo insert nl", buf.GetText().Replace("\r\n", "\n") == "aXb");
+        }
+
+        private static void RunIndentRules()
+        {
+            Check("lead spaces", IndentRules.LeadingWhitespace("    foo") == "    ");
+            Check("lead tab no expand", IndentRules.LeadingWhitespace("\tfoo") == "\t");
+            Check("lead empty", IndentRules.LeadingWhitespace("") == "");
+            Check("lead null", IndentRules.LeadingWhitespace(null) == "");
+            Check("lead spaces only", IndentRules.LeadingWhitespace("   ") == "   ");
+            Check("lead skip ideographic", IndentRules.LeadingWhitespace("\u3000foo") == "");
+
+            Check("indent line", IndentRules.IndentLine("foo", 4) == "    foo");
+            Check("indent empty", IndentRules.IndentLine("", 4) == "    ");
+
+            int removed;
+            Check("unindent 4 spaces", IndentRules.UnindentLine("    foo", 4, out removed) == "foo" && removed == 4);
+            Check("unindent 2 of 4", IndentRules.UnindentLine("  foo", 4, out removed) == "foo" && removed == 2);
+            Check("unindent tab", IndentRules.UnindentLine("\tfoo", 4, out removed) == "foo" && removed == 1);
+            Check("unindent none", IndentRules.UnindentLine("foo", 4, out removed) == "foo" && removed == 0);
+
+            BufferPoint sameA = new BufferPoint(1, 0);
+            BufferPoint sameB = new BufferPoint(1, 4);
+            Check("block same line", !IndentRules.IsBlockIndentSelection(sameA, sameB));
+            BufferPoint twoA = new BufferPoint(0, 0);
+            BufferPoint twoB = new BufferPoint(1, 0);
+            Check("block two lines", IndentRules.IsBlockIndentSelection(twoA, twoB));
+
+            BufferPoint blockStart = new BufferPoint(0, 2);
+            BufferPoint blockEndCol0 = new BufferPoint(2, 0);
+            Check("block last excludes col0", IndentRules.BlockLastLine(blockStart, blockEndCol0) == 1);
+            BufferPoint blockEndMid = new BufferPoint(2, 3);
+            Check("block last includes mid", IndentRules.BlockLastLine(blockStart, blockEndMid) == 2);
+
+            Check("col indent 0", IndentRules.AdjustColumnAfterIndent(0, 4) == 0);
+            Check("col indent 3", IndentRules.AdjustColumnAfterIndent(3, 4) == 7);
+            Check("col unindent clamp", IndentRules.AdjustColumnAfterUnindent(2, 4) == 0);
+
+            TextBuffer buf = new TextBuffer();
+            UndoStack undo = new UndoStack();
+            buf.SetText("a\nb\nc");
+            int tabSize = 4;
+            string spaces = new string(' ', tabSize);
+            undo.BeginCompound();
+            for (int i = 0; i < 3; i++)
+            {
+                buf.Insert(i, 0, spaces);
+                undo.RecordInsert(i, 0, spaces);
+            }
+
+            undo.EndCompound();
+            Check("block indent text", buf.GetLine(0) == "    a" && buf.GetLine(1) == "    b" && buf.GetLine(2) == "    c");
+            undo.Undo(buf);
+            Check("block indent one undo", buf.GetLine(0) == "a" && buf.GetLine(1) == "b" && buf.GetLine(2) == "c" && !undo.CanUndo);
         }
 
         private static void RunFileEncoding()

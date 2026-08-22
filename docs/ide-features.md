@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。残 P1 に残す M のインデントは F-IND の前行先頭空白コピーだけ。
+凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。F-SIND と混ぜない。
 
 ## P0 スライス
 
@@ -30,11 +30,19 @@ P1 最初のスライスは字句ハイライト 4 言語（R3 / F-HL）。`Wind
 
 C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、ユーザーコードの C# 6 以降、読み込んでいないアセンブリ、Excel 未起動の COM 型。cmd にクラスはない。VBA は文頭の識別子で次が文字列／識別子なら Method。
 
-括弧強調（F-BR）は本スライスでも残 P1 でもやらず、フェーズ P7-A へ送る。Enter 後の自動インデントは残 P1 の **F-IND**（直前行の先頭空白コピー、言語非依存）に残す。言語対応スマートインデントは **F-SIND**（P7-A）であり F-IND と同居しない。
+括弧強調（F-BR）は本スライスでも残 P1 でもやらず、フェーズ P7-A へ送る。Enter 後の自動インデントは **P1 F-IND スライスで入れる**（直前行の先頭空白コピー、言語非依存）。言語対応スマートインデントは **F-SIND**（P7-A）であり F-IND と同居しない。
+
+## P1 F-IND スライス
+
+言語非依存のインデント残り。F-SIND と混ぜない。
+
+| ID | P1 F-IND でやる | P1 F-IND でやらない |
+| --- | --- | --- |
+| F-IND | Enter で直前行の先頭空白（連続する `' '` と `'\t'`）をコピー。複数行選択の Tab/Shift+Tab。規則は `IndentRules`（`WindowsIDE.Editor`、WinForms 非依存） | F-SIND、F-FIND、下パネル、新色、新 XML |
 
 ## 残 P1
 
-字句ハイライト以外の P1（検索、手動 `csc`、問題一覧、PS/cmd 実行、統合ターミナル）は既存の M のまま。Enter 後インデントは F-IND の前行コピーのみ。複数行の Tab/Shift+Tab も残 P1 の F-IND（スマートインデントと混ぜない）。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
+字句ハイライトと P1 F-IND スライス以外の P1（F-FIND / F-CS-BLD / F-CS-RUN / F-PS-RUN / F-CMD-RUN / F-TERM / F-PROB）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
 
 ## フェーズ P7（編集器インテリジェンス）— 今は実装しない
 
@@ -60,7 +68,7 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 | F-LIVE | デバウンスした Framework `csc.exe` の診断のみ。生成物は起動しない | EXE 自動起動、キー入力ごとの同期 csc、C# 以外への csc |
 | F-SQU | C# は csc、PS は `ParseInput`、VBA は F-VBA-BLD の位置 | 自前パーサをコンパイラ診断と偽る。cmd 波線 |
 | F-VBA-BLD | プッシュ後の Excel Compile 失敗を問題一覧と波線へ。Run しない | `Application.Run`、MakeCompiledFile、ダミー Run、キーごとの Compile、Excel 未起動のライブ自動起動、バックグラウンドスレッドの COM |
-| F-IND | （P7 の対象外）残 P1 の前行コピー | スマートインデントを F-IND に足すこと |
+| F-IND | （P7 の対象外）P1 F-IND スライス | スマートインデントを F-IND に足すこと |
 | F-LSP | 変えない（W） | 外部 LSP / Roslyn を上げること |
 | F-CS-BLD | 手動ビルドのまま | 常時コンパイルと同一コマンドにすること |
 
@@ -209,7 +217,7 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | F-ED | M | 挿入、選択、コピー、切取、貼付、Undo/Redo | 1 万行クラスの C# ファイルで入力が実用。未確定は自前、システム変換窓なし、候補はシステム、変換中キャレット追従 |
 | F-LN | M | 行番号、現在行 | 行番号はガター内右寄せ、左右 8 DIP。内容が収まるときは編集器バー非表示。全角の長い行でも横バーが出て末尾までスクロールできる。横スクロール時も本文・選択はガターへ描かない |
 | F-FIND | M | ファイル内検索・置換 | 大小無視オプション |
-| F-IND | M | Tab/Shift+Tab、Enter で直前行の先頭空白をコピー | Enter で新行が直前行の先頭空白をコピーする。言語非依存。タブ幅は既存 `tabSize`。複数行の Tab/Shift+Tab も残 P1。スマートインデントは F-SIND |
+| F-IND | M | Tab/Shift+Tab、Enter で直前行の先頭空白をコピー | Enter で新行が直前行の先頭空白をコピーする（変換しない。空行の上は見ない）。言語非依存。タブ幅は既存 `tabSize`。複数行選択の Tab は対象行頭へ `tabSize` 個のスペース、Shift+Tab は行頭のタブ 1 個または最大 `tabSize` 個のスペースを削る。スマートインデントは F-SIND |
 | F-HL | M | 字句ハイライト 4 言語 | キーワード・文字列・コメントに加え、ローカル / メンバー / メソッド / 型が区別できる。名前空間色はしない。C# は自前束縛。Roslyn は使わない |
 | F-BR | S | 対応括弧の強調 | キャレット隣接の括弧と対が、文字列・コメント外で強調される。フェーズ P7-A |
 | F-SIND | S | 言語対応スマートインデント | 言語規則で 1 段増減する（C# `{}`、VBA ブロック、PS は C# に準じる）。順は C# → VBA → PS。cmd 対象外。フェーズ P7-A |

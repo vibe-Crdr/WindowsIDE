@@ -38,6 +38,7 @@ src\WindowsIDE\Ui\Fonts\UiMnemonic.cs
 src\WindowsIDE\Editor\TextBuffer.cs
 src\WindowsIDE\Editor\UndoStack.cs
 src\WindowsIDE\Editor\Document.cs
+src\WindowsIDE\Editor\IndentRules.cs
 src\WindowsIDE\Editor\FileEncoding.cs
 src\WindowsIDE\Editor\ImeLayout.cs
 src\WindowsIDE\Editor\TextView.cs

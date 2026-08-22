@@ -316,7 +316,7 @@ namespace WindowsIDE.Editor
             if (e.KeyChar == '\r' || e.KeyChar == '\n')
             {
                 e.Handled = true;
-                this.InsertText("\n");
+                this.InsertNewlineWithIndent();
                 return;
             }
 
@@ -352,9 +352,16 @@ namespace WindowsIDE.Editor
             {
                 e.Handled = true;
                 e.SuppressKeyPress = true;
-                if (e.Shift)
+                BufferPoint selStart;
+                BufferPoint selEnd;
+                this.document.GetSelection(out selStart, out selEnd);
+                if (this.document.HasSelection() && IndentRules.IsBlockIndentSelection(selStart, selEnd))
                 {
-                    this.UnindentLine();
+                    this.IndentOrUnindentBlock(e.Shift);
+                }
+                else if (e.Shift)
+                {
+                    this.UnindentCurrentLine();
                 }
                 else
                 {
@@ -740,29 +747,139 @@ namespace WindowsIDE.Editor
             this.InsertText(new string(' ', n));
         }
 
-        private void UnindentLine()
+        private int EffectiveTabSize()
+        {
+            if (this.tabSize < 1)
+            {
+                return 1;
+            }
+
+            return this.tabSize;
+        }
+
+        private void InsertNewlineWithIndent()
+        {
+            bool hadSelection = this.document.HasSelection();
+            if (hadSelection)
+            {
+                this.document.Undo.BeginCompound();
+                this.DeleteSelectionCore();
+            }
+
+            string line = this.document.Buffer.GetLine(this.document.CaretLine);
+            string prefix = IndentRules.LeadingWhitespace(line);
+            this.InsertText("\n" + prefix);
+            if (hadSelection)
+            {
+                this.document.Undo.EndCompound();
+            }
+        }
+
+        private void UnindentCurrentLine()
         {
             int line = this.document.CaretLine;
             string text = this.document.Buffer.GetLine(line);
-            int remove = 0;
-            while (remove < this.tabSize && remove < text.Length && text[remove] == ' ')
-            {
-                remove++;
-            }
-
-            if (remove == 0)
+            int removed;
+            IndentRules.UnindentLine(text, this.EffectiveTabSize(), out removed);
+            if (removed == 0)
             {
                 return;
             }
 
             BufferPoint start = new BufferPoint(line, 0);
-            BufferPoint end = new BufferPoint(line, remove);
+            BufferPoint end = new BufferPoint(line, removed);
             string deleted = this.document.Buffer.Delete(start, end);
             this.document.Undo.RecordDelete(line, 0, deleted);
-            this.document.CaretColumn = Math.Max(0, this.document.CaretColumn - remove);
+            this.document.CaretColumn = IndentRules.AdjustColumnAfterUnindent(this.document.CaretColumn, removed);
             this.document.CollapseSelection();
             this.document.MarkDirty();
             this.SyncHighlight(line);
+            this.NotifyChanged();
+        }
+
+        private void IndentOrUnindentBlock(bool unindent)
+        {
+            BufferPoint start;
+            BufferPoint end;
+            this.document.GetSelection(out start, out end);
+            int first = start.Line;
+            int last = IndentRules.BlockLastLine(start, end);
+            int tab = this.EffectiveTabSize();
+            bool any = !unindent;
+            if (unindent)
+            {
+                for (int i = first; i <= last; i++)
+                {
+                    int probe;
+                    IndentRules.UnindentLine(this.document.Buffer.GetLine(i), tab, out probe);
+                    if (probe > 0)
+                    {
+                        any = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!any)
+            {
+                return;
+            }
+
+            int caretLine = this.document.CaretLine;
+            int caretCol = this.document.CaretColumn;
+            int anchorLine = this.document.AnchorLine;
+            int anchorCol = this.document.AnchorColumn;
+            string spaces = new string(' ', tab);
+            this.document.Undo.BeginCompound();
+            for (int i = first; i <= last; i++)
+            {
+                if (!unindent)
+                {
+                    this.document.Buffer.Insert(i, 0, spaces);
+                    this.document.Undo.RecordInsert(i, 0, spaces);
+                    if (caretLine == i)
+                    {
+                        caretCol = IndentRules.AdjustColumnAfterIndent(caretCol, tab);
+                    }
+
+                    if (anchorLine == i)
+                    {
+                        anchorCol = IndentRules.AdjustColumnAfterIndent(anchorCol, tab);
+                    }
+                }
+                else
+                {
+                    int removed;
+                    IndentRules.UnindentLine(this.document.Buffer.GetLine(i), tab, out removed);
+                    if (removed == 0)
+                    {
+                        continue;
+                    }
+
+                    BufferPoint a = new BufferPoint(i, 0);
+                    BufferPoint b = new BufferPoint(i, removed);
+                    string deleted = this.document.Buffer.Delete(a, b);
+                    this.document.Undo.RecordDelete(i, 0, deleted);
+                    if (caretLine == i)
+                    {
+                        caretCol = IndentRules.AdjustColumnAfterUnindent(caretCol, removed);
+                    }
+
+                    if (anchorLine == i)
+                    {
+                        anchorCol = IndentRules.AdjustColumnAfterUnindent(anchorCol, removed);
+                    }
+                }
+            }
+
+            this.document.Undo.EndCompound();
+            this.document.CaretLine = caretLine;
+            this.document.CaretColumn = caretCol;
+            this.document.AnchorLine = anchorLine;
+            this.document.AnchorColumn = anchorCol;
+            this.document.MarkDirty();
+            this.SyncHighlight(first, last);
+            this.EnsureCaretVisible();
             this.NotifyChanged();
         }
 

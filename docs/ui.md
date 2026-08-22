@@ -39,7 +39,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 
 P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。下パネルはまだ無い。Ctrl+F は P1 F-FIND。
 
-P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`TabStrip` は `Dock.Top`、その下の `editorColumn` が `Dock.Fill`。列内は FindBar `Dock.Top`、`TextView` `Dock.Fill`）。`Visible=false` のとき占有しない。ラベル・件数・ボタン・「Aa」はメニュー／ステータスと同じ 12 DIP 双フォント（本文 `fontSize` 非連動）。検索・置換の入力だけはシステム `TextBox`（IME は OS。`BackColor=EditorBackground`、`ForeColor=Foreground`、`BorderStyle.FixedSingle`。半角は Cascadia Mono 12 DIP Pixel）。この TextBox の全角は源ノ角ゴシックを保証しない（クロム例外）。新しい Theme 色は足さない。0 件かつクエリ非空の件数と検索欄は既存 Error。現在ヒットは既存 Selection。
+P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`TabStrip` は `Dock.Top`、その下の `editorColumn` が `Dock.Fill`。列内は FindBar `Dock.Top`、`TextView` `Dock.Fill`）。`Visible=false` のとき占有しない。検索行 40 DIP、置換時 78 DIP。ラベル・件数・ボタン・「Aa」はメニュー／ステータスと同じ 12 DIP 双フォント（本文 `fontSize` 非連動）。ボタン内の文字は DualFontPainter で矩形の中央。検索・置換の入力だけはシステム `TextBox`（IME は OS。`AutoSize=false`。`BackColor=EditorBackground`、`ForeColor=Foreground`、`BorderStyle.FixedSingle`）。半角は本文と同じ Cascadia Mono と `editor/@fontSize` DIP（`CreateHalfWidth` + `GetDpi` の物理 px。12 DIP クロムではない）。この TextBox の全角は源ノ角ゴシックを保証しない（クロム例外）。新しい Theme 色は足さない。0 件かつクエリ非空の件数と検索欄は既存 Error。現在ヒットは既存 Selection。
 
 ### フェーズ P7（今は実装しない）
 

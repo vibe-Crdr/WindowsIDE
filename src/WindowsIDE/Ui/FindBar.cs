@@ -2,6 +2,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 using WindowsIDE.Ui.Fonts;
+using WindowsIDE.Workspace;
 
 namespace WindowsIDE.Ui
 {
@@ -10,8 +11,8 @@ namespace WindowsIDE.Ui
     /// </summary>
     public sealed class FindBar : Control
     {
-        private const int FindRowHeightDip = 32;
-        private const int ReplaceBarHeightDip = 60;
+        private const int FindRowHeightDip = 40;
+        private const int ReplaceBarHeightDip = 78;
 
         private readonly TextBox findBox;
         private readonly TextBox replaceBox;
@@ -26,6 +27,9 @@ namespace WindowsIDE.Ui
         private readonly ChromeMark closeButton;
         private Font halfFont;
         private Font fullFont;
+        private FontLoadResult fontSource;
+        private Font inputFont;
+        private int editorFontDip;
         private bool replaceRowVisible;
         private bool suppressQueryEvent;
 
@@ -131,19 +135,14 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// 12 DIP 双フォントを受け取る。所有権は移さない。
+        /// ラベル・件数・ボタン用の 12 DIP 双フォントを受け取る。所有権は移さない。検索欄の本文サイズには使わない。
         /// </summary>
-        /// <param name="half">半角。TextBox にも使う。</param>
+        /// <param name="half">半角。</param>
         /// <param name="full">全角。</param>
         public void SetFonts(Font half, Font full)
         {
             this.halfFont = half;
             this.fullFont = full;
-            if (half != null)
-            {
-                this.findBox.Font = half;
-                this.replaceBox.Font = half;
-            }
 
             this.searchLabel.SetFonts(half, full);
             this.replaceLabel.SetFonts(half, full);
@@ -156,6 +155,31 @@ namespace WindowsIDE.Ui
             this.closeButton.SetFonts(half, full);
             this.PerformLayout();
             this.Invalidate();
+        }
+
+        /// <summary>
+        /// 検索・置換欄を本文と同じ半角ファミリ・fontSize DIP にする。フォントは FindBar が所有する。
+        /// </summary>
+        /// <param name="fonts">同梱フォント。null なら何もしない。</param>
+        /// <param name="dipSize">本文と同じ 96dpi DIP。0 以下なら DefaultFontSize。</param>
+        public void SetEditorInputFont(FontLoadResult fonts, int dipSize)
+        {
+            if (fonts == null)
+            {
+                return;
+            }
+
+            this.fontSource = fonts;
+            if (dipSize > 0)
+            {
+                this.editorFontDip = dipSize;
+            }
+            else
+            {
+                this.editorFontDip = WorkspaceSettings.DefaultFontSize;
+            }
+
+            this.RecreateInputFont();
         }
 
         /// <summary>
@@ -252,10 +276,22 @@ namespace WindowsIDE.Ui
             this.findBox.SelectAll();
         }
 
-        /// <summary>DPI に合わせてバー高さを付け直す。</summary>
+        /// <summary>ハンドル作成後に本文 DIP を物理 px へ換算し直す。</summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            this.RecreateInputFont();
+            if (this.Visible)
+            {
+                this.ApplyBarHeight();
+            }
+        }
+
+        /// <summary>DPI に合わせて入力フォントとバー高さを付け直す。</summary>
         protected override void OnDpiChangedAfterParent(EventArgs e)
         {
             base.OnDpiChangedAfterParent(e);
+            this.RecreateInputFont();
             if (this.Visible)
             {
                 this.ApplyBarHeight();
@@ -390,6 +426,26 @@ namespace WindowsIDE.Ui
             this.replaceAllButton.Visible = visible;
         }
 
+        private void RecreateInputFont()
+        {
+            if (this.fontSource == null || this.editorFontDip <= 0)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int px = DpiUtil.ToPixels(this.editorFontDip, dpi);
+            Font created = this.fontSource.CreateHalfWidth(px);
+            Font old = this.inputFont;
+            this.inputFont = created;
+            this.findBox.Font = created;
+            this.replaceBox.Font = created;
+            if (old != null)
+            {
+                old.Dispose();
+            }
+        }
+
         private TextBox CreateBox()
         {
             TextBox box = new TextBox();
@@ -398,6 +454,7 @@ namespace WindowsIDE.Ui
             box.ForeColor = Theme.Foreground;
             box.AcceptsReturn = false;
             box.AcceptsTab = false;
+            box.AutoSize = false;
             return box;
         }
 
@@ -521,6 +578,21 @@ namespace WindowsIDE.Ui
             }
         }
 
+        /// <summary>入力フォントを破棄する。</summary>
+        /// <param name="disposing">マネージドも捨てるなら true。</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && this.inputFont != null)
+            {
+                this.findBox.Font = this.Font;
+                this.replaceBox.Font = this.Font;
+                this.inputFont.Dispose();
+                this.inputFont = null;
+            }
+
+            base.Dispose(disposing);
+        }
+
         private sealed class ChromeMark : Control
         {
             private readonly bool clickable;
@@ -638,8 +710,22 @@ namespace WindowsIDE.Ui
                 using (SolidBrush fg = new SolidBrush(this.ForeColor))
                 {
                     Rectangle clip = this.ClientRectangle;
-                    clip.Inflate(-2, 0);
-                    DualFontPainter.DrawEllipsis(e.Graphics, this.caption, this.halfFont, this.fullFont, clip, fg, null);
+                    clip.Inflate(-2, -1);
+                    string text = this.caption;
+                    if (text == null)
+                    {
+                        text = "";
+                    }
+
+                    float width = DualFontPainter.Measure(e.Graphics, text, this.halfFont, this.fullFont, null);
+                    if (width > clip.Width && clip.Width > 0)
+                    {
+                        text = DualFontPainter.FitEllipsis(e.Graphics, text, this.halfFont, this.fullFont, clip.Width, null);
+                        width = DualFontPainter.Measure(e.Graphics, text, this.halfFont, this.fullFont, null);
+                    }
+
+                    float originX = clip.X + (clip.Width - width) / 2f;
+                    DualFontPainter.Draw(e.Graphics, text, this.halfFont, this.fullFont, clip, originX, fg, null);
                 }
             }
         }

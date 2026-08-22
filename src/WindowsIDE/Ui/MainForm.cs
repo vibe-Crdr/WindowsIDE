@@ -471,6 +471,7 @@ namespace WindowsIDE.Ui
 
         /// <summary>
         /// メニューとステータス用の 12 DIP 双フォントを作り直す。本文 fontSize には連動しない。
+        /// FindBar のラベル／ボタンも同じ 12 DIP。検索欄の本文サイズは ApplyEditorSettings。
         /// </summary>
         private void RecreateChromeFonts()
         {
@@ -686,6 +687,10 @@ namespace WindowsIDE.Ui
         private void ApplyEditorSettings(int fontSize, int tabSize)
         {
             this.editor.ApplyFonts(this.fonts, fontSize, tabSize);
+            if (this.findBar != null)
+            {
+                this.findBar.SetEditorInputFont(this.fonts, fontSize);
+            }
             if (this.fonts != null && this.fonts.UsedFallback)
             {
                 this.statusFont.ForeColor = Theme.Error;

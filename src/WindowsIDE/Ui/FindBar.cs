@@ -11,9 +11,6 @@ namespace WindowsIDE.Ui
     /// </summary>
     public sealed class FindBar : Control
     {
-        private const int FindRowHeightDip = 40;
-        private const int ReplaceBarHeightDip = 78;
-
         private readonly TextBox findBox;
         private readonly TextBox replaceBox;
         private readonly ChromeMark searchLabel;
@@ -316,27 +313,27 @@ namespace WindowsIDE.Ui
             }
         }
 
-        /// <summary>検索行と置換行を DIP 定数で並べる。</summary>
+        /// <summary>検索行と置換行を、入力欄の PreferredHeight に合わせて並べる。</summary>
         protected override void OnLayout(LayoutEventArgs levent)
         {
             base.OnLayout(levent);
             int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
             int pad = DpiUtil.ToPixels(6, dpi);
             int gap = DpiUtil.ToPixels(4, dpi);
-            int findH = DpiUtil.ToPixels(FindRowHeightDip, dpi);
-            int inner = findH - DpiUtil.ToPixels(8, dpi);
-            if (inner < 16)
+            int findH = this.RowHeightPx(dpi);
+            int boxH = this.InputBoxHeight();
+            int y0 = (findH - boxH) / 2;
+            if (y0 < 0)
             {
-                inner = 16;
+                y0 = 0;
             }
 
             Graphics g = this.CreateGraphics();
             try
             {
-                int y0 = (findH - inner) / 2;
                 int x = pad;
                 int labelW = this.MeasureMark(g, this.searchLabel, 36);
-                this.searchLabel.Bounds = new Rectangle(x, y0, labelW, inner);
+                this.searchLabel.Bounds = new Rectangle(x, y0, labelW, boxH);
                 x += labelW + gap;
 
                 int countW = this.MeasureMark(g, this.countLabel, 28);
@@ -357,33 +354,24 @@ namespace WindowsIDE.Ui
                     boxW = minBox;
                 }
 
-                this.findBox.Bounds = new Rectangle(x, y0, boxW, inner);
+                this.findBox.Bounds = new Rectangle(x, y0, boxW, boxH);
                 x += boxW + gap;
-                this.countLabel.Bounds = new Rectangle(x, y0, countW, inner);
+                this.countLabel.Bounds = new Rectangle(x, y0, countW, boxH);
                 x += countW + gap;
-                this.caseButton.Bounds = new Rectangle(x, y0, caseW, inner);
+                this.caseButton.Bounds = new Rectangle(x, y0, caseW, boxH);
                 x += caseW + gap;
-                this.nextButton.Bounds = new Rectangle(x, y0, nextW, inner);
+                this.nextButton.Bounds = new Rectangle(x, y0, nextW, boxH);
                 x += nextW + gap;
-                this.prevButton.Bounds = new Rectangle(x, y0, prevW, inner);
+                this.prevButton.Bounds = new Rectangle(x, y0, prevW, boxH);
                 x += prevW + gap;
-                this.closeButton.Bounds = new Rectangle(x, y0, closeW, inner);
+                this.closeButton.Bounds = new Rectangle(x, y0, closeW, boxH);
 
                 if (this.replaceRowVisible)
                 {
-                    int y1 = findH + (findH - inner) / 2;
-                    if (y1 + inner > this.ClientSize.Height)
-                    {
-                        y1 = this.ClientSize.Height - inner;
-                        if (y1 < findH)
-                        {
-                            y1 = findH;
-                        }
-                    }
-
+                    int y1 = findH + y0;
                     int rx = pad;
                     int rLabelW = this.MeasureMark(g, this.replaceLabel, 36);
-                    this.replaceLabel.Bounds = new Rectangle(rx, y1, rLabelW, inner);
+                    this.replaceLabel.Bounds = new Rectangle(rx, y1, rLabelW, boxH);
                     rx += rLabelW + gap;
                     int replW = this.MeasureMark(g, this.replaceButton, 36);
                     int allW = this.MeasureMark(g, this.replaceAllButton, 44);
@@ -394,11 +382,11 @@ namespace WindowsIDE.Ui
                         rBoxW = minBox;
                     }
 
-                    this.replaceBox.Bounds = new Rectangle(rx, y1, rBoxW, inner);
+                    this.replaceBox.Bounds = new Rectangle(rx, y1, rBoxW, boxH);
                     rx += rBoxW + gap;
-                    this.replaceButton.Bounds = new Rectangle(rx, y1, replW, inner);
+                    this.replaceButton.Bounds = new Rectangle(rx, y1, replW, boxH);
                     rx += replW + gap;
-                    this.replaceAllButton.Bounds = new Rectangle(rx, y1, allW, inner);
+                    this.replaceAllButton.Bounds = new Rectangle(rx, y1, allW, boxH);
                 }
             }
             finally
@@ -407,11 +395,34 @@ namespace WindowsIDE.Ui
             }
         }
 
+        private int InputBoxHeight()
+        {
+            int h = this.findBox.PreferredHeight;
+            int rh = this.replaceBox.PreferredHeight;
+            if (rh > h)
+            {
+                h = rh;
+            }
+
+            if (h < 8)
+            {
+                return 8;
+            }
+
+            return h;
+        }
+
+        private int RowHeightPx(int dpi)
+        {
+            int vpad = DpiUtil.ToPixels(4, dpi);
+            return this.InputBoxHeight() + vpad * 2;
+        }
+
         private void ApplyBarHeight()
         {
             int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            int dip = this.replaceRowVisible ? ReplaceBarHeightDip : FindRowHeightDip;
-            this.Height = DpiUtil.ToPixels(dip, dpi);
+            int findH = this.RowHeightPx(dpi);
+            this.Height = this.replaceRowVisible ? (findH * 2) : findH;
             if (this.Parent != null)
             {
                 this.Parent.PerformLayout();
@@ -444,6 +455,9 @@ namespace WindowsIDE.Ui
             {
                 old.Dispose();
             }
+
+            this.ApplyBarHeight();
+            this.PerformLayout();
         }
 
         private TextBox CreateBox()

@@ -52,6 +52,13 @@ src\WindowsIDE\Languages\PowerShellSemantic.cs
 src\WindowsIDE\Languages\VbaSemantic.cs
 src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
 src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
+src\WindowsIDE\Workspace\CsFileEnumerator.cs
+src\WindowsIDE\Build\FrameworkCsc.cs
+src\WindowsIDE\Build\Diagnostic.cs
+src\WindowsIDE\Build\DiagnosticParser.cs
+src\WindowsIDE\Build\CompileUnit.cs
+src\WindowsIDE\Build\CscArgumentBuilder.cs
+src\WindowsIDE\Build\CscRunner.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\PathGuard.cs

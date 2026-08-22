@@ -71,7 +71,7 @@
 
 [requirements.md](requirements.md) の **フェーズ P8**（Markdown／VBAProject 参照／マクロ）と、下表の **提案 P8**（F-CMP の P5 必須範囲）も別物である。混同しない。
 
-P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。
+P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。
 
 | ID | 提案 | 理由 | 代替 |
 | --- | --- | --- | --- |
@@ -79,7 +79,7 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 | P8 | P5 の F-CMP はキーワードとオープン中ファイル（ファイル内）の識別子に限る。ワークスペースのシンボル名まで広げることは P5 実装時の必須にはしない（提案として広げてよい）。完全な型システム（オーバーロード解決、変換、definite assignment）は作らない。P12 の自前束縛に **定義位置** と **XML / 直前コメント** を足すことは、ハイライト・F-GD・F-HOV のための拡張であり、Roslyn 相当ではない。F-LSP は W のまま。 | Roslyn は外部かつ C# 6 世界。P12 はハイライト用束縛でありコンパイラではない | 外部 LSP（F-LSP は W のため不採用） |
 | P9 | cmd の「デバッグ」は **エコー付き実行と失敗行の表示** | cmd に CLR デバッガが無い | 自前 `.bat` インタープリタ |
 | P10 | `namingMode` の既定は `filename`。document モジュール（ThisWorkbook / シート）は常に Excel の名前を使う | 既存ブックとの衝突を減らす | 既定を `folder_prefix` |
-| P15 | ユーザー csc の `/r` は当面、製品と同じ Framework セット（mscorlib, System, System.Core, System.Drawing, System.Windows.Forms, System.Xml）。`Microsoft.CSharp` は足さない。追加 `/r` は後で XML | 製品 `/r` をフェーズ P7 で増やさない | ユーザー XML で任意 `/r`（今は作らない） |
+| P15 | ユーザー csc の `/r` は当面、製品と同じ Framework セット（mscorlib, System, System.Core, System.Drawing, System.Windows.Forms, System.Xml）。`Microsoft.CSharp` は足さない。追加 `/r` は後で XML。P1 F-CS-BLD は実装既定としてこの 6 DLL を使う。確定にはしない | 製品 `/r` をフェーズ P7 で増やさない | ユーザー XML で任意 `/r`（今は作らない） |
 | P18 | 常時 csc の `/target` は library。`/target:exe` でも `Process.Start` しない | 診断専用であり起動しないことを明示する | `/target:exe` でも起動しない（保安は同じ） |
 | P20 | F-DOC のショートカットは Ctrl+Alt+D（パレットからも同コマンド）。Ctrl+K Ctrl+I はホバー、Ctrl+K Ctrl+D は将来の Format と衝突しやすい | D12（VS Code 風）の近傍で 1 キー | 別ショートカット（未決） |
 | P23 | P8 実装時、開いている VBProject 参照の GUID を `vba-map.xml` に残す。**今は XML 要素を足さない** | ディスク `.bas` には参照を書けない | マップに残さず Excel 側だけ |

@@ -28,6 +28,7 @@ src\WindowsIDE\Ui\ThemedScrollBar.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
+src\WindowsIDE\Ui\ProblemListControl.cs
 src\WindowsIDE\Ui\DualFontField.cs
 src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
@@ -71,8 +72,15 @@ src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
 src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
+src\WindowsIDE\Workspace\CsFileEnumerator.cs
 src\WindowsIDE\Workspace\WorkspaceFolder.cs
 src\WindowsIDE\Workspace\PathGuard.cs
 src\WindowsIDE\Workspace\WorkspaceSettings.cs
 src\WindowsIDE\Workspace\FileTreeControl.cs
 src\WindowsIDE\Workspace\FileKind.cs
+src\WindowsIDE\Build\FrameworkCsc.cs
+src\WindowsIDE\Build\Diagnostic.cs
+src\WindowsIDE\Build\DiagnosticParser.cs
+src\WindowsIDE\Build\CompileUnit.cs
+src\WindowsIDE\Build\CscArgumentBuilder.cs
+src\WindowsIDE\Build\CscRunner.cs

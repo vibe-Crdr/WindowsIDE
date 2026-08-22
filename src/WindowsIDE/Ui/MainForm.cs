@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
+using WindowsIDE.Build;
 using WindowsIDE.Editor;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
@@ -13,7 +16,7 @@ using WindowsIDE.Workspace;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// P0 メイン枠。メニュー、ツリー、タブ、編集器、ステータス。下パネルは無い。
+    /// メイン枠。メニュー、ツリー、タブ、編集器、問題一覧、ステータス。起動時は下パネルを畳む。
     /// </summary>
     public sealed class MainForm : Form
     {
@@ -24,11 +27,17 @@ namespace WindowsIDE.Ui
         private Font chromeFullFont;
         private Padding statusBasePadding;
         private MenuStrip menu;
+        private SplitContainer bodySplit;
         private SplitContainer split;
         private FileTreeControl tree;
         private TabStrip tabs;
         private FindBar findBar;
         private TextView editor;
+        private ProblemListControl problemList;
+        private CscRunner cscRunner;
+        private int buildGeneration;
+        private string lastManualOutputExe;
+        private bool bottomSplitterInitialized;
         private StatusStrip status;
         private ToolStripStatusLabel statusLang;
         private ToolStripStatusLabel statusPos;
@@ -57,6 +66,7 @@ namespace WindowsIDE.Ui
             this.KeyPreview = true;
             this.AutoScaleMode = AutoScaleMode.None;
 
+            this.cscRunner = new CscRunner();
             this.BuildMenu();
             this.BuildStatus();
             this.BuildBody();
@@ -254,7 +264,8 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.F)
                     || keyData == (Keys.Control | Keys.H)
                     || keyData == Keys.F3
-                    || keyData == (Keys.Shift | Keys.F3))
+                    || keyData == (Keys.Shift | Keys.F3)
+                    || keyData == (Keys.Control | Keys.Shift | Keys.B))
                 {
                     return false;
                 }
@@ -305,6 +316,12 @@ namespace WindowsIDE.Ui
                 }
 
                 this.CloseFindBar();
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Shift | Keys.B))
+            {
+                this.StartManualBuild();
                 return true;
             }
 
@@ -382,11 +399,15 @@ namespace WindowsIDE.Ui
             edit.DropDownItems.Add(this.CreateFindNavItem("次を検索(&N)", Keys.F3, "F3", this.OnFindNext));
             edit.DropDownItems.Add(this.CreateFindNavItem("前を検索(&B)", Keys.Shift | Keys.F3, "Shift+F3", this.OnFindPrevious));
 
+            ToolStripMenuItem build = this.CreateTop("ビルド(&B)");
+            build.DropDownItems.Add(this.CreateBuildItem("ビルド(&B)", this.OnBuild));
+
             ToolStripMenuItem help = this.CreateTop("ヘルプ(&H)");
             help.DropDownItems.Add(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout));
 
             this.menu.Items.Add(file);
             this.menu.Items.Add(edit);
+            this.menu.Items.Add(build);
             this.menu.Items.Add(help);
             this.Controls.Add(this.menu);
         }
@@ -435,6 +456,16 @@ namespace WindowsIDE.Ui
                 item.ShortcutKeyDisplayString = display;
             }
 
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateBuildItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = "Ctrl+Shift+B";
             item.Click += handler;
             return item;
         }
@@ -496,6 +527,11 @@ namespace WindowsIDE.Ui
                 this.findBar.SetFonts(newHalf, newFull);
             }
 
+            if (this.problemList != null)
+            {
+                this.problemList.SetFonts(newHalf, newFull);
+            }
+
             int extraTop = 0;
             int extraBottom = 0;
             if (newFull.Height > newHalf.Height)
@@ -532,6 +568,11 @@ namespace WindowsIDE.Ui
                 this.findBar.Invalidate();
                 this.findBar.PerformLayout();
             }
+
+            if (this.problemList != null)
+            {
+                this.problemList.Invalidate();
+            }
         }
 
         private void OnChromeDpiChangedAfterParent(object sender, EventArgs e)
@@ -541,6 +582,15 @@ namespace WindowsIDE.Ui
 
         private void BuildBody()
         {
+            this.bodySplit = new SplitContainer();
+            this.bodySplit.Dock = DockStyle.Fill;
+            this.bodySplit.Orientation = Orientation.Horizontal;
+            this.bodySplit.BackColor = Theme.LineNumber;
+            this.bodySplit.Panel1.BackColor = Theme.Background;
+            this.bodySplit.Panel2.BackColor = Theme.Background;
+            this.bodySplit.Panel2Collapsed = true;
+            this.bodySplit.FixedPanel = FixedPanel.Panel2;
+
             this.split = new SplitContainer();
             this.split.Dock = DockStyle.Fill;
             this.split.BackColor = Theme.LineNumber;
@@ -587,8 +637,16 @@ namespace WindowsIDE.Ui
             right.Controls.Add(editorColumn);
             right.Controls.Add(this.tabs);
             this.split.Panel2.Controls.Add(right);
-            this.Controls.Add(this.split);
-            this.split.BringToFront();
+
+            this.problemList = new ProblemListControl();
+            this.problemList.Dock = DockStyle.Fill;
+            this.problemList.CloseRequested += this.OnProblemListClose;
+            this.problemList.ItemActivated += this.OnProblemActivated;
+
+            this.bodySplit.Panel1.Controls.Add(this.split);
+            this.bodySplit.Panel2.Controls.Add(this.problemList);
+            this.Controls.Add(this.bodySplit);
+            this.bodySplit.BringToFront();
         }
 
         /// <summary>
@@ -661,6 +719,25 @@ namespace WindowsIDE.Ui
                 {
                     this.split.Panel1MinSize = panel1Min;
                     this.split.Panel2MinSize = panel2Min;
+                }
+            }
+
+            if (this.bodySplit != null)
+            {
+                int splitterH = DpiUtil.ToPixels(DpiUtil.SplitterWidthDip, dpi);
+                if (splitterH < 1)
+                {
+                    splitterH = 1;
+                }
+
+                this.bodySplit.SplitterWidth = splitterH;
+                int topMin = DpiUtil.ToPixels(240, dpi);
+                int botMin = DpiUtil.ToPixels(80, dpi);
+                int needH = topMin + botMin + this.bodySplit.SplitterWidth;
+                if (this.bodySplit.Height == 0 || this.bodySplit.Height >= needH)
+                {
+                    this.bodySplit.Panel1MinSize = topMin;
+                    this.bodySplit.Panel2MinSize = botMin;
                 }
             }
 
@@ -1187,6 +1264,295 @@ namespace WindowsIDE.Ui
         private void OnReplaceRequested(object sender, EventArgs e) { this.ExecuteReplaceOne(); }
         private void OnReplaceAllRequested(object sender, EventArgs e) { this.ExecuteReplaceAll(); }
         private void OnFindCloseRequested(object sender, EventArgs e) { this.CloseFindBar(); }
+        private void OnBuild(object sender, EventArgs e) { this.StartManualBuild(); }
+
+        private void StartManualBuild()
+        {
+            string workspaceRoot = (this.workspace == null) ? null : this.workspace.RootPath;
+            string focused = null;
+            if (this.editor != null && this.editor.Document != null)
+            {
+                focused = this.editor.Document.FilePath;
+            }
+
+            string[] sources = CompileUnit.Resolve(workspaceRoot, focused);
+            if (sources == null || sources.Length == 0)
+            {
+                this.ShowSynthetic("C# ソースがありません。");
+                return;
+            }
+
+            string saveError;
+            if (!this.TrySaveDirtySources(sources, out saveError))
+            {
+                this.ShowSynthetic(saveError);
+                return;
+            }
+
+            if (!FrameworkCsc.CompilerExists())
+            {
+                this.ShowSynthetic("csc.exe が見つかりません。");
+                return;
+            }
+
+            string keyPath = workspaceRoot;
+            if (string.IsNullOrEmpty(keyPath))
+            {
+                keyPath = sources[0];
+            }
+
+            string outputExe;
+            string rspPath;
+            try
+            {
+                outputExe = CscArgumentBuilder.GetOutputExePath(keyPath);
+                rspPath = Path.Combine(Path.GetDirectoryName(outputExe), "csc.rsp");
+                CscArgumentBuilder.WriteResponseFile(rspPath, outputExe, sources);
+            }
+            catch (Exception ex)
+            {
+                this.ShowSynthetic("応答ファイルの作成に失敗した: " + ex.Message);
+                return;
+            }
+
+            this.buildGeneration++;
+            int gen = this.buildGeneration;
+            if (this.cscRunner != null)
+            {
+                this.cscRunner.Kill();
+            }
+
+            ManualBuildRequest req = new ManualBuildRequest();
+            req.Generation = gen;
+            req.RspPath = rspPath;
+            req.OutputExe = outputExe;
+            Thread thread = new Thread(this.BuildWorkerProc);
+            thread.IsBackground = true;
+            thread.Start(req);
+        }
+
+        private void BuildWorkerProc(object state)
+        {
+            ManualBuildRequest req = state as ManualBuildRequest;
+            if (req == null || this.cscRunner == null)
+            {
+                return;
+            }
+
+            CscRunResult result = this.cscRunner.Run(req.RspPath, req.Generation);
+            if (this.IsDisposed || !this.IsHandleCreated)
+            {
+                return;
+            }
+
+            this.BeginInvoke(new MethodInvoker(delegate
+            {
+                this.OnBuildFinished(req, result);
+            }));
+        }
+
+        private void OnBuildFinished(ManualBuildRequest req, CscRunResult result)
+        {
+            if (this.IsDisposed || req == null || result == null)
+            {
+                return;
+            }
+
+            if (req.Generation != this.buildGeneration || result.Generation != this.buildGeneration)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(result.StartError))
+            {
+                this.ShowSynthetic(result.StartError);
+                return;
+            }
+
+            string combined = result.CombinedOutput();
+            Diagnostic[] parsed = DiagnosticParser.ApplyExitCode(DiagnosticParser.Parse(combined), result.ExitCode, combined);
+            if (result.ExitCode == 0)
+            {
+                this.lastManualOutputExe = req.OutputExe;
+            }
+
+            this.ShowBuildDiagnostics(parsed);
+        }
+
+        private bool TrySaveDirtySources(string[] sources, out string error)
+        {
+            error = null;
+            if (sources == null || this.tabs == null)
+            {
+                return true;
+            }
+
+            HashSet<string> set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < sources.Length; i++)
+            {
+                if (string.IsNullOrEmpty(sources[i]))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    set.Add(Path.GetFullPath(sources[i]));
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            bool savedCs = false;
+            for (int i = 0; i < this.tabs.Tabs.Count; i++)
+            {
+                Document doc = this.tabs.Tabs[i];
+                if (doc == null || string.IsNullOrEmpty(doc.FilePath) || !doc.IsDirty)
+                {
+                    continue;
+                }
+
+                string full;
+                try
+                {
+                    full = Path.GetFullPath(doc.FilePath);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (!set.Contains(full))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (!doc.Save())
+                    {
+                        error = "保存に失敗した: " + doc.FilePath;
+                        return false;
+                    }
+
+                    if (string.Equals(Path.GetExtension(doc.FilePath), ".cs", StringComparison.OrdinalIgnoreCase))
+                    {
+                        savedCs = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    error = "保存に失敗した: " + ex.Message;
+                    return false;
+                }
+            }
+
+            if (savedCs)
+            {
+                this.RefreshWorkspaceTypes();
+            }
+
+            this.tabs.RefreshTabs();
+            this.UpdateStatus();
+            return true;
+        }
+
+        private void ShowSynthetic(string message)
+        {
+            this.ShowBuildDiagnostics(new Diagnostic[] { Diagnostic.CreateSynthetic(message) });
+        }
+
+        private void ShowBuildDiagnostics(Diagnostic[] list)
+        {
+            this.ShowProblemPanel();
+            if (this.problemList != null)
+            {
+                this.problemList.SetItems(list);
+            }
+        }
+
+        private void ShowProblemPanel()
+        {
+            if (this.bodySplit == null)
+            {
+                return;
+            }
+
+            this.bodySplit.Panel2Collapsed = false;
+            if (this.bottomSplitterInitialized)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int bottom = DpiUtil.ToPixels(180, dpi);
+            int splitter = this.bodySplit.SplitterWidth;
+            int min1 = this.bodySplit.Panel1MinSize;
+            int avail = this.bodySplit.Height;
+            int distance = avail - bottom - splitter;
+            if (distance < min1)
+            {
+                distance = min1;
+            }
+
+            if (distance > 0 && avail > distance + splitter)
+            {
+                this.bodySplit.SplitterDistance = distance;
+            }
+
+            this.bottomSplitterInitialized = true;
+        }
+
+        private void OnProblemListClose(object sender, EventArgs e)
+        {
+            if (this.bodySplit != null)
+            {
+                this.bodySplit.Panel2Collapsed = true;
+            }
+        }
+
+        private void OnProblemActivated(object sender, ProblemActivatedEventArgs e)
+        {
+            if (e == null || e.Diagnostic == null || string.IsNullOrEmpty(e.Diagnostic.FilePath))
+            {
+                return;
+            }
+
+            if (!File.Exists(e.Diagnostic.FilePath))
+            {
+                return;
+            }
+
+            string openError;
+            if (!this.TryOpenFile(e.Diagnostic.FilePath, false, out openError))
+            {
+                return;
+            }
+
+            if (this.editor == null || this.editor.Document == null || this.editor.Document.Buffer == null)
+            {
+                return;
+            }
+
+            if (e.Diagnostic.Line < 1)
+            {
+                this.editor.Focus();
+                return;
+            }
+
+            int line0 = e.Diagnostic.Line - 1;
+            int col0 = 0;
+            if (e.Diagnostic.Column >= 1)
+            {
+                col0 = e.Diagnostic.Column - 1;
+            }
+
+            BufferPoint start = this.editor.Document.Buffer.Clamp(new BufferPoint(line0, col0));
+            int endCol = this.editor.Document.Buffer.GetLineLength(start.Line);
+            this.editor.SelectRange(start, new BufferPoint(start.Line, endCol));
+            this.editor.Focus();
+        }
 
         private void ExecuteFind()
         {
@@ -1451,6 +1817,11 @@ namespace WindowsIDE.Ui
         {
             if (disposing)
             {
+                if (this.cscRunner != null)
+                {
+                    this.cscRunner.Kill();
+                }
+
                 if (this.menu != null)
                 {
                     this.menu.DpiChangedAfterParent -= this.OnChromeDpiChangedAfterParent;
@@ -1504,6 +1875,13 @@ namespace WindowsIDE.Ui
                     return;
                 }
             }
+        }
+
+        private sealed class ManualBuildRequest
+        {
+            public int Generation;
+            public string RspPath;
+            public string OutputExe;
         }
     }
 }

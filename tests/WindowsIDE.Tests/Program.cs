@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
+using WindowsIDE.Build;
 using WindowsIDE.Editor;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
@@ -48,6 +49,11 @@ namespace WindowsIDE.Tests
             RunLexers();
             RunCSharpBind();
             RunHighlightSession();
+            RunDiagnosticParser();
+            RunCsFileEnumerator();
+            RunCompileUnit();
+            RunCscArgumentBuilder();
+            RunCscBrokenSource();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
             return (failed == 0) ? 0 : 1;
@@ -983,6 +989,266 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void RunDiagnosticParser()
+        {
+            Diagnostic[] none = DiagnosticParser.Parse(null);
+            Check("parse null empty", none != null && none.Length == 0);
+            Check("parse empty", DiagnosticParser.Parse("").Length == 0);
+
+            string banner = "Microsoft (R) Visual C# Compiler version 4.8.9221.0\r\nfor C# 5\r\nCopyright (C) Microsoft Corporation. All rights reserved.\r\n\r\n";
+            Check("parse banner ignored", DiagnosticParser.Parse(banner).Length == 0);
+
+            Diagnostic[] err = DiagnosticParser.Parse("C:\\tmp\\Foo.cs(3,9): error CS1002: ; expected");
+            Check("parse loc error count", err.Length == 1);
+            Check("parse loc error path", err.Length == 1 && err[0].FilePath == "C:\\tmp\\Foo.cs");
+            Check("parse loc error line col", err.Length == 1 && err[0].Line == 3 && err[0].Column == 9);
+            Check("parse loc error code", err.Length == 1 && err[0].IsError && err[0].Code == "CS1002");
+            Check("parse loc error msg", err.Length == 1 && err[0].Message == "; expected");
+
+            Diagnostic[] warn = DiagnosticParser.Parse("C:\\tmp\\Foo.cs(5,1): warning CS0162: Unreachable code detected");
+            Check("parse loc warning", warn.Length == 1 && !warn[0].IsError && warn[0].Code == "CS0162" && warn[0].Line == 5 && warn[0].Column == 1);
+
+            Diagnostic[] noCol = DiagnosticParser.Parse("C:\\tmp\\Foo.cs(12): error CS0116: A namespace cannot directly contain members");
+            Check("parse no column", noCol.Length == 1 && noCol[0].Line == 12 && noCol[0].Column == 0 && noCol[0].Code == "CS0116");
+
+            Diagnostic[] fatal = DiagnosticParser.Parse("fatal error CS0006: Metadata file 'x' could not be found");
+            Check("parse fatal no file", fatal.Length == 1 && fatal[0].IsError && fatal[0].FilePath == null && fatal[0].Line == 0 && fatal[0].Code == "CS0006");
+
+            Diagnostic[] cscErr = DiagnosticParser.Parse("CSC : error CS2001: Source file 'x' could not be found.");
+            Check("parse CSC error", cscErr.Length == 1 && cscErr[0].FilePath == null && cscErr[0].Code == "CS2001");
+
+            Diagnostic[] filelessErr = DiagnosticParser.Parse("error CS5001: Program does not contain a static 'Main' method suitable for an entry point");
+            Check("parse fileless error", filelessErr.Length == 1 && filelessErr[0].IsError && filelessErr[0].Code == "CS5001");
+
+            Diagnostic[] filelessWarn = DiagnosticParser.Parse("warning CS2008: No source files specified");
+            Check("parse fileless warning", filelessWarn.Length == 1 && !filelessWarn[0].IsError && filelessWarn[0].Code == "CS2008");
+
+            Diagnostic[] jp = DiagnosticParser.Parse("C:\\tmp\\Foo.cs(3,9): error CS1002: ; が必要です");
+            Check("parse japanese message", jp.Length == 1 && jp[0].Code == "CS1002" && jp[0].Message == "; が必要です");
+
+            Diagnostic[] spaced = DiagnosticParser.Parse("C:\\Users\\User Name\\Foo.cs(1,1): error CS0101: The namespace already contains");
+            Check("parse path with space", spaced.Length == 1 && spaced[0].FilePath == "C:\\Users\\User Name\\Foo.cs" && spaced[0].Line == 1);
+
+            Diagnostic syn = Diagnostic.CreateSynthetic("C# ソースがありません。");
+            Check("synthetic not CSxxxx", syn.Code == null && syn.IsError && syn.FilePath == null);
+            Check("synthetic message", syn.Message == "C# ソースがありません。");
+
+            Diagnostic[] exit0Empty = DiagnosticParser.ApplyExitCode(new Diagnostic[0], 0, "");
+            Check("exit 0 empty stays empty", exit0Empty != null && exit0Empty.Length == 0);
+            Diagnostic[] exit1Empty = DiagnosticParser.ApplyExitCode(null, 1, "");
+            Check("exit 1 empty synthetic", exit1Empty != null && exit1Empty.Length == 1 && exit1Empty[0].Code == null && exit1Empty[0].IsError);
+            Diagnostic[] exit1Kept = DiagnosticParser.ApplyExitCode(err, 1, "C:\\tmp\\Foo.cs(3,9): error CS1002: ; expected");
+            Check("exit 1 keeps parsed", exit1Kept != null && exit1Kept.Length == 1 && exit1Kept[0].Code == "CS1002" && object.ReferenceEquals(exit1Kept, err));
+        }
+
+        private static void RunCsFileEnumerator()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-csenum-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                WriteUtf8Bom(Path.Combine(dir, "a.cs"), "class A {}");
+                Directory.CreateDirectory(Path.Combine(dir, "sub"));
+                WriteUtf8Bom(Path.Combine(dir, "sub", "b.cs"), "class B {}");
+                Directory.CreateDirectory(Path.Combine(dir, "bin"));
+                WriteUtf8Bom(Path.Combine(dir, "bin", "skip.cs"), "class SkipBin {}");
+                Directory.CreateDirectory(Path.Combine(dir, "obj"));
+                WriteUtf8Bom(Path.Combine(dir, "obj", "skip.cs"), "class SkipObj {}");
+                Directory.CreateDirectory(Path.Combine(dir, ".git"));
+                WriteUtf8Bom(Path.Combine(dir, ".git", "skip.cs"), "class SkipGit {}");
+
+                string[] listed = CsFileEnumerator.List(dir);
+                Check("enum count 2", listed != null && listed.Length == 2);
+                Check("enum keeps a.cs", ContainsPath(listed, Path.Combine(dir, "a.cs")));
+                Check("enum keeps sub b.cs", ContainsPath(listed, Path.Combine(dir, "sub", "b.cs")));
+                Check("enum drops bin", !ContainsPath(listed, Path.Combine(dir, "bin", "skip.cs")));
+                Check("enum drops obj", !ContainsPath(listed, Path.Combine(dir, "obj", "skip.cs")));
+                Check("enum drops git", !ContainsPath(listed, Path.Combine(dir, ".git", "skip.cs")));
+                Check("enum missing root", CsFileEnumerator.List(Path.Combine(dir, "missing")).Length == 0);
+                Check("enum null root", CsFileEnumerator.List(null).Length == 0);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunCompileUnit()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-cunit-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string outside = Path.Combine(Path.GetTempPath(), "WindowsIDE-cunit-out-" + Guid.NewGuid().ToString("N") + ".cs");
+            try
+            {
+                WriteUtf8Bom(Path.Combine(dir, "In.cs"), "class In {}");
+                WriteUtf8Bom(outside, "class Out {}");
+                string ps1 = Path.Combine(dir, "run.ps1");
+                File.WriteAllText(ps1, "# no", Encoding.UTF8);
+
+                string[] withWs = CompileUnit.Resolve(dir, outside);
+                Check("unit workspace ignores outside tab", withWs.Length == 1 && ContainsPath(withWs, Path.Combine(dir, "In.cs")));
+
+                string[] single = CompileUnit.Resolve(null, outside);
+                Check("unit no ws one disk cs", single.Length == 1 && ContainsPath(single, outside));
+
+                Check("unit untitled 0", CompileUnit.Resolve(null, null).Length == 0);
+                Check("unit ps1 0", CompileUnit.Resolve(null, ps1).Length == 0);
+                Check("unit missing file 0", CompileUnit.Resolve(null, Path.Combine(dir, "no.cs")).Length == 0);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+
+                try
+                {
+                    if (File.Exists(outside))
+                    {
+                        File.Delete(outside);
+                    }
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunCscArgumentBuilder()
+        {
+            Check("csc path frozen", FrameworkCsc.CompilerPath == @"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe");
+            string[] refs = FrameworkCsc.GetReferencePaths();
+            Check("six references", refs != null && refs.Length == 6);
+            bool sma = false;
+            bool csharp = false;
+            for (int i = 0; i < refs.Length; i++)
+            {
+                string name = Path.GetFileName(refs[i]);
+                if (string.Equals(name, "System.Management.Automation.dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    sma = true;
+                }
+
+                if (string.Equals(name, "Microsoft.CSharp.dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    csharp = true;
+                }
+            }
+
+            Check("user csc no SMA", !sma);
+            Check("user csc no Microsoft.CSharp", !csharp);
+
+            string a = CscArgumentBuilder.ShortHash(@"C:\Work\App");
+            string b = CscArgumentBuilder.ShortHash(@"c:\work\app");
+            Check("hash ordinal ignore case", a == b && a.Length == 16);
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-rsp-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string rsp = Path.Combine(dir, "csc.rsp");
+            string output = Path.Combine(dir, "out.exe");
+            string src = Path.Combine(dir, "A.cs");
+            try
+            {
+                CscArgumentBuilder.WriteResponseFile(rsp, output, new string[] { src });
+                byte[] bytes = File.ReadAllBytes(rsp);
+                Check("rsp utf8 bom", bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+                string text = Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+                Check("rsp no noconfig", text.IndexOf("/noconfig", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("rsp nostdlib", text.IndexOf("/nostdlib", StringComparison.Ordinal) >= 0);
+                Check("rsp target exe", text.IndexOf("/target:exe", StringComparison.Ordinal) >= 0);
+                Check("rsp no winexe", text.IndexOf("/target:winexe", StringComparison.Ordinal) < 0);
+                Check("rsp out", text.IndexOf("/out:", StringComparison.Ordinal) >= 0);
+                Check("rsp no SMA", text.IndexOf("System.Management.Automation", StringComparison.OrdinalIgnoreCase) < 0);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunCscBrokenSource()
+        {
+            Check("compiler exists", FrameworkCsc.CompilerExists());
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-csctest-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string src = Path.Combine(dir, "broken.cs");
+            try
+            {
+                WriteUtf8Bom(src, "class Broken { int x = ");
+                string output = CscArgumentBuilder.GetOutputExePath(src);
+                Check("out under temp WindowsIDE", output.IndexOf(Path.Combine(Path.GetTempPath(), "WindowsIDE"), StringComparison.OrdinalIgnoreCase) >= 0);
+                Check("out not product exe", output.IndexOf("WindowsIDE.exe", StringComparison.OrdinalIgnoreCase) < 0);
+                string rsp = Path.Combine(Path.GetDirectoryName(output), "csc.rsp");
+                CscArgumentBuilder.WriteResponseFile(rsp, output, new string[] { src });
+                CscRunner runner = new CscRunner();
+                CscRunResult result = runner.Run(rsp, 1);
+                Check("csc started", result != null && result.Started && string.IsNullOrEmpty(result.StartError));
+                Diagnostic[] parsed = DiagnosticParser.Parse(result.CombinedOutput());
+                bool hasCs = false;
+                for (int i = 0; i < parsed.Length; i++)
+                {
+                    if (parsed[i] != null && parsed[i].Code != null && parsed[i].Code.Length >= 3 && parsed[i].Code[0] == 'C' && parsed[i].Code[1] == 'S')
+                    {
+                        hasCs = true;
+                    }
+                }
+
+                Check("csc broken has CS", hasCs);
+                Check("csc exit not zero", result.ExitCode != 0);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void WriteUtf8Bom(string path, string text)
+        {
+            Encoding utf8 = new UTF8Encoding(true);
+            File.WriteAllText(path, text, utf8);
+        }
+
+        private static bool ContainsPath(string[] paths, string expected)
+        {
+            if (paths == null || string.IsNullOrEmpty(expected))
+            {
+                return false;
+            }
+
+            string full = Path.GetFullPath(expected);
+            for (int i = 0; i < paths.Length; i++)
+            {
+                if (paths[i] != null && string.Equals(Path.GetFullPath(paths[i]), full, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static int IndexOfIdent(string text, string name, int nth)

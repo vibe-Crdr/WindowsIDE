@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using WindowsIDE.Editor;
+using WindowsIDE.Workspace;
 
 namespace WindowsIDE.Languages.CSharp
 {
@@ -31,7 +32,7 @@ namespace WindowsIDE.Languages.CSharp
             string full = Path.GetFullPath(root);
             int count;
             long stamp;
-            string[] files = ListCsFiles(full, out count, out stamp);
+            string[] files = CsFileEnumerator.List(full, out count, out stamp);
             lock (Gate)
             {
                 if (cachedNames != null &&
@@ -64,49 +65,6 @@ namespace WindowsIDE.Languages.CSharp
                 cachedFileCount = -1;
                 cachedStamp = 0;
             }
-        }
-
-        private static string[] ListCsFiles(string root, out int count, out long stamp)
-        {
-            count = 0;
-            stamp = 0;
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories);
-            }
-            catch (Exception)
-            {
-                return new string[0];
-            }
-
-            List<string> kept = new List<string>();
-            for (int i = 0; i < files.Length; i++)
-            {
-                string path = files[i];
-                if (path.IndexOf("\\obj\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    path.IndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    path.IndexOf("\\.git\\", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    continue;
-                }
-
-                kept.Add(path);
-                count++;
-                try
-                {
-                    long ticks = File.GetLastWriteTimeUtc(path).Ticks;
-                    if (ticks > stamp)
-                    {
-                        stamp = ticks;
-                    }
-                }
-                catch (Exception)
-                {
-                }
-            }
-
-            return kept.ToArray();
         }
 
         private static void Collect(string[] files, HashSet<string> set)

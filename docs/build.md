@@ -55,6 +55,16 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 
 ユーザーコードの常時コンパイル（F-LIVE、フェーズ P7。今は実装しない）も同じ Framework `csc.exe` を使う。製品の `/r` は増やさない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。
 
+## ユーザー手動 csc（F-CS-BLD）
+
+製品の `compile.ps1`（`/target:winexe`、SMA、フォント `/resource`）と混同しない。IDE がユーザー `.cs` を手動ビルドするときだけ、同じ指定 `csc.exe` を別プロセスで呼ぶ。
+
+- コマンドライン先頭は必ず `/noconfig`。rsp には `/noconfig` を書かない（rsp 内は無視され CS2023）
+- rsp（UTF-8 BOM、TEMP）: `/nostdlib /platform:x64 /target:exe /debug+ /utf8output`
+- `/r:` は Framework64 の 6 DLL のみ（mscorlib, System, System.Core, System.Drawing, System.Windows.Forms, System.Xml）。SMA / Microsoft.CSharp / Office は足さない。製品 `/r` は増やさない
+- `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。**`Process.Start` しない**
+- 無題は対象外。csproj は作らない
+
 ## レスポンスファイル
 
 `build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。

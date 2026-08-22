@@ -28,6 +28,8 @@ src\WindowsIDE\Ui\ThemedScrollBar.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
+src\WindowsIDE\Ui\DualFontField.cs
+src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
 src\WindowsIDE\Ui\TabStrip.cs
 src\WindowsIDE\Ui\AboutForm.cs

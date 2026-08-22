@@ -244,7 +244,7 @@ namespace WindowsIDE.Ui
                 return true;
             }
 
-            if (this.editor != null && this.editor.IsComposing)
+            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing))
             {
                 if (keyData == (Keys.Control | Keys.Z)
                     || keyData == (Keys.Control | Keys.Y)
@@ -299,7 +299,7 @@ namespace WindowsIDE.Ui
 
             if (keyData == Keys.Escape && this.findBar != null && this.findBar.Visible)
             {
-                if (this.editor != null && this.editor.IsComposing)
+                if ((this.editor != null && this.editor.IsComposing) || this.findBar.IsComposing)
                 {
                     return false;
                 }

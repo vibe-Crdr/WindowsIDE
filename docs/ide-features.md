@@ -46,7 +46,7 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 
 | ID | P1 F-FIND でやる | P1 F-FIND でやらない |
 | --- | --- | --- |
-| F-FIND | リテラル検索・置換、大小無視、タブ直下の薄い FindBar、Ctrl+F / Ctrl+H / F3 / Shift+F3 / Esc。規則は `FindRules`（`WindowsIDE.Editor`、WinForms 非依存）。走査は `IndexOf` / `LastIndexOf` + Ordinal / OrdinalIgnoreCase。現在ヒットは既存 Selection。クエリ・置換・ignoreCase・バー表示はセッション内 | Regex、ワイルドカード、単語単位、選択範囲内検索、複数行クエリ、全ヒット背景、下パネル、F-GSRCH、F-PAL、Ctrl+P、F-SIND、実行、VBA、新 Theme 色、新 XML、新 `/r`、FindDialog、RichTextBox |
+| F-FIND | リテラル検索・置換、大小無視、タブ直下の薄い FindBar（検索・置換欄は DualFont オーナー描画、本文と同じ IME）、Ctrl+F / Ctrl+H / F3 / Shift+F3 / Esc。規則は `FindRules`（`WindowsIDE.Editor`、WinForms 非依存）。走査は `IndexOf` / `LastIndexOf` + Ordinal / OrdinalIgnoreCase。現在ヒットは既存 Selection。クエリ・置換・ignoreCase・バー表示はセッション内 | Regex、ワイルドカード、単語単位、選択範囲内検索、複数行クエリ、全ヒット背景、下パネル、F-GSRCH、F-PAL、Ctrl+P、F-SIND、実行、VBA、新 Theme 色、新 XML、新 `/r`、FindDialog、RichTextBox |
 
 ## 残 P1
 

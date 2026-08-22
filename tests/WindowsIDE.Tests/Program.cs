@@ -548,6 +548,10 @@ namespace WindowsIDE.Tests
             Check("CompositionFontHeight 1", ImeLayout.CompositionFontHeight(1) == -1);
             Check("CompositionFontHeight 0", ImeLayout.CompositionFontHeight(0) == -1);
             Check("CompositionFontHeight negative", ImeLayout.CompositionFontHeight(-4) == -1);
+            Check("FieldClientX", ImeLayout.FieldClientX(8, 10, 4f) == 8 + (int)(0f - 10 + 4));
+            Check("FieldOuterHeight 16+1", ImeLayout.FieldOuterHeight(16, 1) == 18);
+            Check("FieldOuterHeight 0+1", ImeLayout.FieldOuterHeight(0, 1) == 3);
+            Check("FieldOuterHeight 10+0", ImeLayout.FieldOuterHeight(10, 0) == 10);
             Check("Theme.Selection is #3d59a1", Theme.Selection.ToArgb() == Color.FromArgb(0x3d, 0x59, 0xa1).ToArgb());
         }
 

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Forms;
 using WindowsIDE.Languages;
 using WindowsIDE.Ui;
@@ -16,7 +14,7 @@ namespace WindowsIDE.Editor
     /// <summary>
     /// Control 継承の行単位編集器。折り返し無し。RichTextBox は使わない。
     /// </summary>
-    public sealed class TextView : Control
+    public sealed class TextView : Control, IImeClient
     {
         private Document document;
         private Font halfFont;
@@ -146,6 +144,43 @@ namespace WindowsIDE.Editor
         public bool IsComposing
         {
             get { return !string.IsNullOrEmpty(this.imeComposition); }
+        }
+
+        IntPtr IImeClient.WindowHandle
+        {
+            get { return this.Handle; }
+        }
+
+        void IImeClient.SetCompositionString(string text)
+        {
+            this.imeComposition = (text == null) ? "" : text;
+        }
+
+        void IImeClient.SetCompositionCursor(int rawCursor)
+        {
+            int length = (this.imeComposition == null) ? 0 : this.imeComposition.Length;
+            this.imeCursor = ImeLayout.ClampCursor(rawCursor, length);
+        }
+
+        void IImeClient.ClearComposition()
+        {
+            this.imeComposition = "";
+            this.imeCursor = 0;
+        }
+
+        void IImeClient.UpdateImeWindow()
+        {
+            this.UpdateImeWindow();
+        }
+
+        void IImeClient.FillQueryCharPosition(IntPtr lParam)
+        {
+            this.FillImeCharPosition(lParam);
+        }
+
+        void IImeClient.RequestInvalidate()
+        {
+            this.Invalidate();
         }
 
         /// <summary>
@@ -823,7 +858,7 @@ namespace WindowsIDE.Editor
             this.Invalidate();
         }
 
-        /// <summary>IME の未確定文字列。HWHEEL は横スクロール。</summary>
+        /// <summary>IME の未確定文字列。HWHEEL は横スクロール（Dispatch より前）。</summary>
         protected override void WndProc(ref Message m)
         {
             const int WM_MOUSEHWHEEL = 0x020E;
@@ -839,73 +874,14 @@ namespace WindowsIDE.Editor
                 return;
             }
 
-            const int WM_IME_STARTCOMPOSITION = 0x010D;
-            if (m.Msg == WM_IME_STARTCOMPOSITION)
+            ImeDispatchKind kind = NativeIme.Dispatch(ref m, this);
+            if (kind == ImeDispatchKind.Consumed)
             {
-                this.UpdateImeWindow();
-                m.Result = IntPtr.Zero;
                 return;
-            }
-
-            const int WM_IME_REQUEST = 0x0288;
-            const int IMR_QUERYCHARPOSITION = 6;
-            if (m.Msg == WM_IME_REQUEST && m.WParam.ToInt32() == IMR_QUERYCHARPOSITION)
-            {
-                if (m.LParam != IntPtr.Zero)
-                {
-                    this.FillImeCharPosition(m.LParam);
-                }
-
-                m.Result = (IntPtr)1;
-                return;
-            }
-
-            const int WM_IME_SETCONTEXT = 0x0281;
-            if (m.Msg == WM_IME_SETCONTEXT)
-            {
-                long lp = m.LParam.ToInt64();
-                lp = lp & ~0x80000000L;
-                m.LParam = (IntPtr)lp;
-            }
-
-            const int WM_IME_COMPOSITION = 0x010F;
-            const int GCS_COMPSTR = 0x0008;
-            const int GCS_CURSORPOS = 0x0080;
-            const int GCS_RESULTSTR = 0x0800;
-            if (m.Msg == WM_IME_COMPOSITION)
-            {
-                int flag = m.LParam.ToInt32();
-                if ((flag & GCS_COMPSTR) != 0)
-                {
-                    this.imeComposition = NativeIme.GetCompositionString(this.Handle, GCS_COMPSTR);
-                }
-
-                if ((flag & GCS_CURSORPOS) != 0)
-                {
-                    int length = (this.imeComposition == null) ? 0 : this.imeComposition.Length;
-                    this.imeCursor = ImeLayout.ClampCursor(NativeIme.GetCursorPos(this.Handle), length);
-                }
-
-                if ((flag & GCS_RESULTSTR) != 0)
-                {
-                    this.imeComposition = "";
-                }
-
-                this.UpdateImeWindow();
-                this.Invalidate();
-            }
-
-            const int WM_IME_ENDCOMPOSITION = 0x010E;
-            if (m.Msg == WM_IME_ENDCOMPOSITION)
-            {
-                this.imeComposition = "";
-                this.imeCursor = 0;
-                this.Invalidate();
             }
 
             base.WndProc(ref m);
-
-            if (m.Msg == WM_IME_SETCONTEXT)
+            if (kind == ImeDispatchKind.ContinueBaseThenUpdate)
             {
                 this.UpdateImeWindow();
             }
@@ -2179,302 +2155,6 @@ namespace WindowsIDE.Editor
             Point docTl = this.PointToScreen(new Point(this.gutterWidth, 0));
             Point docBr = this.PointToScreen(new Point(textArea.Right, textArea.Bottom));
             NativeIme.WriteCharPosition(lParam, charPos, screen, this.lineHeight, docTl.X, docTl.Y, docBr.X, docBr.Y);
-        }
-
-        private static class NativeIme
-        {
-            private const int GCS_CURSORPOS = 0x0080;
-            private const int CFS_POINT = 2;
-            private const int CFS_EXCLUDE = 0x0080;
-
-            private static string compositionFace;
-            private static bool compositionFaceResolved;
-
-            [DllImport("imm32.dll")]
-            private static extern IntPtr ImmGetContext(IntPtr hWnd);
-
-            [DllImport("imm32.dll")]
-            private static extern bool ImmReleaseContext(IntPtr hWnd, IntPtr hIMC);
-
-            [DllImport("imm32.dll", CharSet = CharSet.Unicode)]
-            private static extern int ImmGetCompositionStringW(IntPtr hIMC, int dwIndex, byte[] lpBuf, int dwBufLen);
-
-            [DllImport("imm32.dll")]
-            private static extern bool ImmSetCompositionWindow(IntPtr hIMC, ref COMPOSITIONFORM lpCompForm);
-
-            [DllImport("imm32.dll")]
-            private static extern bool ImmSetCandidateWindow(IntPtr hIMC, ref CANDIDATEFORM lpCandidate);
-
-            [DllImport("imm32.dll", CharSet = CharSet.Unicode)]
-            private static extern bool ImmSetCompositionFontW(IntPtr hIMC, ref LOGFONT lplf);
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct POINT
-            {
-                public int x;
-                public int y;
-            }
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct RECT
-            {
-                public int left;
-                public int top;
-                public int right;
-                public int bottom;
-            }
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct COMPOSITIONFORM
-            {
-                public int dwStyle;
-                public POINT ptCurrentPos;
-                public RECT rcArea;
-            }
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct CANDIDATEFORM
-            {
-                public int dwIndex;
-                public int dwStyle;
-                public POINT ptCurrentPos;
-                public RECT rcArea;
-            }
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct IMECHARPOSITION
-            {
-                public int dwSize;
-                public int dwCharPos;
-                public POINT pt;
-                public int cLineHeight;
-                public RECT rcDocument;
-            }
-
-            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-            private struct LOGFONT
-            {
-                public int lfHeight;
-                public int lfWidth;
-                public int lfEscapement;
-                public int lfOrientation;
-                public int lfWeight;
-                public byte lfItalic;
-                public byte lfUnderline;
-                public byte lfStrikeOut;
-                public byte lfCharSet;
-                public byte lfOutPrecision;
-                public byte lfClipPrecision;
-                public byte lfQuality;
-                public byte lfPitchAndFamily;
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-                public string lfFaceName;
-            }
-
-            /// <summary>
-            /// 変換フォントを本文の物理サイズと IME 可視のシステム顔にする。失敗は無視する。
-            /// </summary>
-            /// <param name="hwnd">編集器 HWND。</param>
-            /// <param name="physicalPx">本文サイズの物理ピクセル。</param>
-            public static void ApplyCompositionFont(IntPtr hwnd, int physicalPx)
-            {
-                IntPtr himc = ImmGetContext(hwnd);
-                if (himc == IntPtr.Zero)
-                {
-                    return;
-                }
-
-                try
-                {
-                    LOGFONT lf = new LOGFONT();
-                    lf.lfHeight = ImeLayout.CompositionFontHeight(physicalPx);
-                    lf.lfWeight = 400;
-                    lf.lfCharSet = 128;
-                    lf.lfFaceName = ResolveCompositionFace();
-                    ImmSetCompositionFontW(himc, ref lf);
-                }
-                catch
-                {
-                }
-                finally
-                {
-                    ImmReleaseContext(hwnd, himc);
-                }
-            }
-
-            public static string GetCompositionString(IntPtr hwnd, int flag)
-            {
-                IntPtr himc = ImmGetContext(hwnd);
-                if (himc == IntPtr.Zero)
-                {
-                    return "";
-                }
-
-                try
-                {
-                    int len = ImmGetCompositionStringW(himc, flag, null, 0);
-                    if (len <= 0)
-                    {
-                        return "";
-                    }
-
-                    byte[] buf = new byte[len];
-                    ImmGetCompositionStringW(himc, flag, buf, len);
-                    return Encoding.Unicode.GetString(buf).TrimEnd('\0');
-                }
-                finally
-                {
-                    ImmReleaseContext(hwnd, himc);
-                }
-            }
-
-            public static int GetCursorPos(IntPtr hwnd)
-            {
-                IntPtr himc = ImmGetContext(hwnd);
-                if (himc == IntPtr.Zero)
-                {
-                    return 0;
-                }
-
-                try
-                {
-                    int index = ImmGetCompositionStringW(himc, GCS_CURSORPOS, null, 0);
-                    if (index < 0)
-                    {
-                        return 0;
-                    }
-
-                    return index;
-                }
-                finally
-                {
-                    ImmReleaseContext(hwnd, himc);
-                }
-            }
-
-            public static void MoveCompositionWindow(IntPtr hwnd, int x, int y)
-            {
-                IntPtr himc = ImmGetContext(hwnd);
-                if (himc == IntPtr.Zero)
-                {
-                    return;
-                }
-
-                try
-                {
-                    COMPOSITIONFORM form = new COMPOSITIONFORM();
-                    form.dwStyle = CFS_POINT;
-                    form.ptCurrentPos.x = x;
-                    form.ptCurrentPos.y = y;
-                    ImmSetCompositionWindow(himc, ref form);
-                }
-                finally
-                {
-                    ImmReleaseContext(hwnd, himc);
-                }
-            }
-
-            public static void SetCandidateExclude(IntPtr hwnd, Rectangle clientExclude)
-            {
-                IntPtr himc = ImmGetContext(hwnd);
-                if (himc == IntPtr.Zero)
-                {
-                    return;
-                }
-
-                try
-                {
-                    CANDIDATEFORM form = new CANDIDATEFORM();
-                    form.dwIndex = 0;
-                    form.dwStyle = CFS_EXCLUDE;
-                    form.ptCurrentPos.x = clientExclude.Left;
-                    form.ptCurrentPos.y = clientExclude.Top;
-                    form.rcArea.left = clientExclude.Left;
-                    form.rcArea.top = clientExclude.Top;
-                    form.rcArea.right = clientExclude.Right;
-                    form.rcArea.bottom = clientExclude.Bottom;
-                    ImmSetCandidateWindow(himc, ref form);
-                }
-                finally
-                {
-                    ImmReleaseContext(hwnd, himc);
-                }
-            }
-
-            public static int ReadCharPos(IntPtr lParam)
-            {
-                IMECHARPOSITION pos = (IMECHARPOSITION)Marshal.PtrToStructure(lParam, typeof(IMECHARPOSITION));
-                return pos.dwCharPos;
-            }
-
-            public static void WriteCharPosition(IntPtr lParam, int charPos, Point screenPt, int lineHeight, int docLeft, int docTop, int docRight, int docBottom)
-            {
-                IMECHARPOSITION pos = (IMECHARPOSITION)Marshal.PtrToStructure(lParam, typeof(IMECHARPOSITION));
-                pos.dwCharPos = charPos;
-                pos.pt.x = screenPt.X;
-                pos.pt.y = screenPt.Y;
-                pos.cLineHeight = lineHeight;
-                pos.rcDocument.left = docLeft;
-                pos.rcDocument.top = docTop;
-                pos.rcDocument.right = docRight;
-                pos.rcDocument.bottom = docBottom;
-                Marshal.StructureToPtr(pos, lParam, false);
-            }
-
-            private static string ResolveCompositionFace()
-            {
-                if (compositionFaceResolved)
-                {
-                    return compositionFace;
-                }
-
-                compositionFaceResolved = true;
-                compositionFace = "MS Gothic";
-                try
-                {
-                    using (InstalledFontCollection installed = new InstalledFontCollection())
-                    {
-                        if (HasInstalledFamily(installed, "Yu Gothic"))
-                        {
-                            compositionFace = "Yu Gothic";
-                        }
-                        else if (HasInstalledFamily(installed, "Yu Gothic UI"))
-                        {
-                            compositionFace = "Yu Gothic UI";
-                        }
-                        else if (HasInstalledFamily(installed, "MS Gothic"))
-                        {
-                            compositionFace = "MS Gothic";
-                        }
-                    }
-                }
-                catch
-                {
-                    compositionFace = "MS Gothic";
-                }
-
-                return compositionFace;
-            }
-
-            private static bool HasInstalledFamily(InstalledFontCollection installed, string name)
-            {
-                FontFamily[] families = installed.Families;
-                if (families == null)
-                {
-                    return false;
-                }
-
-                int i;
-                for (i = 0; i < families.Length; i++)
-                {
-                    if (string.Equals(families[i].Name, name, StringComparison.Ordinal))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
         }
     }
 }

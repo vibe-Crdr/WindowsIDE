@@ -11,8 +11,8 @@ namespace WindowsIDE.Ui
     /// </summary>
     public sealed class FindBar : Control
     {
-        private readonly TextBox findBox;
-        private readonly TextBox replaceBox;
+        private readonly DualFontField findBox;
+        private readonly DualFontField replaceBox;
         private readonly ChromeMark searchLabel;
         private readonly ChromeMark replaceLabel;
         private readonly ChromeMark countLabel;
@@ -25,7 +25,8 @@ namespace WindowsIDE.Ui
         private Font halfFont;
         private Font fullFont;
         private FontLoadResult fontSource;
-        private Font inputFont;
+        private Font inputHalf;
+        private Font inputFull;
         private int editorFontDip;
         private bool replaceRowVisible;
         private bool suppressQueryEvent;
@@ -131,6 +132,12 @@ namespace WindowsIDE.Ui
             get { return this.findBox.Focused || this.findBox.ContainsFocus; }
         }
 
+        /// <summary>検索または置換欄が IME 変換中のとき true。</summary>
+        public bool IsComposing
+        {
+            get { return this.findBox.IsComposing || this.replaceBox.IsComposing; }
+        }
+
         /// <summary>
         /// ラベル・件数・ボタン用の 12 DIP 双フォントを受け取る。所有権は移さない。検索欄の本文サイズには使わない。
         /// </summary>
@@ -192,6 +199,7 @@ namespace WindowsIDE.Ui
                 this.countLabel.Caption = "";
                 this.countLabel.ForeColor = Theme.Foreground;
                 this.findBox.ForeColor = Theme.Foreground;
+                this.replaceBox.ForeColor = Theme.Foreground;
             }
             else
             {
@@ -206,6 +214,8 @@ namespace WindowsIDE.Ui
                     this.countLabel.ForeColor = Theme.Foreground;
                     this.findBox.ForeColor = Theme.Foreground;
                 }
+
+                this.replaceBox.ForeColor = Theme.Foreground;
             }
 
             this.countLabel.Invalidate();
@@ -313,7 +323,7 @@ namespace WindowsIDE.Ui
             }
         }
 
-        /// <summary>検索行と置換行を、入力欄の PreferredHeight に合わせて並べる。</summary>
+        /// <summary>検索行と置換行を、入力欄の PreferredOuterHeight に合わせて並べる。</summary>
         protected override void OnLayout(LayoutEventArgs levent)
         {
             base.OnLayout(levent);
@@ -397,16 +407,11 @@ namespace WindowsIDE.Ui
 
         private int InputBoxHeight()
         {
-            int h = this.findBox.PreferredHeight;
-            int rh = this.replaceBox.PreferredHeight;
+            int h = this.findBox.PreferredOuterHeight;
+            int rh = this.replaceBox.PreferredOuterHeight;
             if (rh > h)
             {
                 h = rh;
-            }
-
-            if (h < 8)
-            {
-                return 8;
             }
 
             return h;
@@ -446,29 +451,33 @@ namespace WindowsIDE.Ui
 
             int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
             int px = DpiUtil.ToPixels(this.editorFontDip, dpi);
-            Font created = this.fontSource.CreateHalfWidth(px);
-            Font old = this.inputFont;
-            this.inputFont = created;
-            this.findBox.Font = created;
-            this.replaceBox.Font = created;
-            if (old != null)
+            Font newHalf = this.fontSource.CreateHalfWidth(px);
+            Font newFull = this.fontSource.CreateFullWidth(px);
+            Font oldHalf = this.inputHalf;
+            Font oldFull = this.inputFull;
+            this.inputHalf = newHalf;
+            this.inputFull = newFull;
+            this.findBox.SetFonts(newHalf, newFull, this.editorFontDip);
+            this.replaceBox.SetFonts(newHalf, newFull, this.editorFontDip);
+            if (oldHalf != null)
             {
-                old.Dispose();
+                oldHalf.Dispose();
+            }
+
+            if (oldFull != null)
+            {
+                oldFull.Dispose();
             }
 
             this.ApplyBarHeight();
             this.PerformLayout();
         }
 
-        private TextBox CreateBox()
+        private DualFontField CreateBox()
         {
-            TextBox box = new TextBox();
-            box.BorderStyle = BorderStyle.FixedSingle;
+            DualFontField box = new DualFontField();
             box.BackColor = Theme.EditorBackground;
             box.ForeColor = Theme.Foreground;
-            box.AcceptsReturn = false;
-            box.AcceptsTab = false;
-            box.AutoSize = false;
             return box;
         }
 
@@ -548,6 +557,11 @@ namespace WindowsIDE.Ui
                 return;
             }
 
+            if (this.findBox.IsComposing)
+            {
+                return;
+            }
+
             e.Handled = true;
             e.SuppressKeyPress = true;
             if (e.Shift)
@@ -563,6 +577,11 @@ namespace WindowsIDE.Ui
         private void OnReplaceBoxKeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode != Keys.Enter)
+            {
+                return;
+            }
+
+            if (this.replaceBox.IsComposing)
             {
                 return;
             }
@@ -592,16 +611,23 @@ namespace WindowsIDE.Ui
             }
         }
 
-        /// <summary>入力フォントを破棄する。</summary>
+        /// <summary>所有する半角・全角入力フォントを破棄する。フィールド Font には割り当てない。</summary>
         /// <param name="disposing">マネージドも捨てるなら true。</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && this.inputFont != null)
+            if (disposing)
             {
-                this.findBox.Font = this.Font;
-                this.replaceBox.Font = this.Font;
-                this.inputFont.Dispose();
-                this.inputFont = null;
+                if (this.inputHalf != null)
+                {
+                    this.inputHalf.Dispose();
+                    this.inputHalf = null;
+                }
+
+                if (this.inputFull != null)
+                {
+                    this.inputFull.Dispose();
+                    this.inputFull = null;
+                }
             }
 
             base.Dispose(disposing);

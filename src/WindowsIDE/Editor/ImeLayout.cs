@@ -71,5 +71,38 @@
 
             return -physicalPx;
         }
+
+        /// <summary>
+        /// 単一行欄のクライアント X。ガター無し・列 X は 0。既存 ClientX は変えない。
+        /// </summary>
+        /// <param name="contentLeft">内側余白を含む左端。</param>
+        /// <param name="scrollX">横スクロール量。</param>
+        /// <param name="prefixWidth">確定接頭辞＋未確定カーソルまでの幅。</param>
+        /// <returns>クライアント X。</returns>
+        public static int FieldClientX(int contentLeft, int scrollX, float prefixWidth)
+        {
+            return ClientX(0, contentLeft, 0f, scrollX, prefixWidth);
+        }
+
+        /// <summary>
+        /// 単一行欄の外周高さ。cell が 1 未満なら 1、borderPx が負なら 0。
+        /// </summary>
+        /// <param name="cellHeight">半角・全角 Font.Height の大きい方。</param>
+        /// <param name="borderPx">片側の枠（物理 px）。</param>
+        /// <returns>cell + borderPx * 2。</returns>
+        public static int FieldOuterHeight(int cellHeight, int borderPx)
+        {
+            if (cellHeight < 1)
+            {
+                cellHeight = 1;
+            }
+
+            if (borderPx < 0)
+            {
+                borderPx = 0;
+            }
+
+            return cellHeight + borderPx * 2;
+        }
     }
 }

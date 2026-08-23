@@ -649,6 +649,9 @@ namespace WindowsIDE.Ui
                 this.clickable = clickable;
                 this.toggle = toggle;
                 this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                // MouseDown で OnClick する（押した瞬間に反応する既存 UX）。
+                // StandardClick を切らないと MouseUp で Click がもう一度上がり、次／前が 2 ヒット飛ぶ。
+                this.SetStyle(ControlStyles.StandardClick, false);
                 this.TabStop = false;
                 this.BackColor = Theme.Background;
             }

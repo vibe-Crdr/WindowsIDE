@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。F-SIND / F-GSRCH / F-PS-RUN / F-TERM と混ぜない。
+凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。F-SIND / F-GSRCH / F-CMD-RUN / F-TERM と混ぜない。
 
 ## P0 スライス
 
@@ -65,9 +65,17 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 | --- | --- | --- |
 | F-CS-RUN | トップ「実行」の「デバッグなしで実行」（表示 Ctrl+F5。ShortcutKeys は付けず ProcessCmdKey。IME 変換中は奪わない）。毎回手動 csc と同じ経路。成功（ExitCode==0 かつ StartError 空）のときだけその回の `OutputExe` を `Host.Csharp` が起動。警告付き exit 0 は起動する。下パネルは問題と出力のみ。ビルド完了と csc 失敗は問題タブ、csc 成功して起動するときは出力を空にして出力タブ。stdout/stderr は出力パネル（4000 行キャップ） | F-PS-RUN / F-CMD-RUN / F-TERM、P7/P8、F5 デバッグ、ビルド成功時の自動起動、引数 UI、対話 stdin、新しい `/r`・Theme 色・XML、ListView / DataGrid / RichTextBox、空のデバッグ/ターミナルタブ、`.windows-ide/`、Excel COM、Host.PowerShell/Cmd、F-LIVE、`lastManualOutputExe` だけの起動近道、Build への起動、CscRunner 契約変更 |
 
+## P1 F-PS-RUN スライス
+
+ディスク上の `.ps1` を Windows PowerShell 5.1 の子プロセスで実行し、stdout/stderr/起動終了を既存の出力パネルへ出す。F-CMD-RUN / F-TERM / P7 / P8 と混ぜない。
+
+| ID | P1 F-PS-RUN でやる | P1 F-PS-RUN でやらない |
+| --- | --- | --- |
+| F-PS-RUN | フォーカス中タブの拡張子で Ctrl+F5 を分岐。ディスク上 `.ps1` は `Environment.SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe` を `-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File` で起動（PATH / 対話 stdin は使わない）。cwd はその `.ps1` のディレクトリ。パス付き dirty はそのタブだけ `Document.Save()`。無題は一時ファイルを作らず拒否。開始前拒否は問題タブ、開始後は出力。C# ホストと同時に走らせない（保持 Process 参照だけ Kill。プロセス名検索はしない）。Ctrl+Shift+B はどのタブでも現行どおり C# csc | F-CMD-RUN / F-TERM、P7/P8、F5、引数 UI、対話 stdin、新しい `/r`・Theme・XML、ListView / DataGrid / RichTextBox、空ターミナルタブ、Excel COM、Host.Cmd、Runspace、Languages `ParseInput` 変更、CscRunner 契約変更、共通 ProcessHost 基底、`.psm1` / `.psd1` 実行、Set-ExecutionPolicy / Unblock-File |
+
 ## 残 P1
 
-字句ハイライトと P1 F-IND / P1 F-FIND / P1 F-CS-BLD / F-PROB / P1 F-CS-RUN スライス以外の P1（F-PS-RUN / F-CMD-RUN / F-TERM）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
+字句ハイライトと P1 F-IND / P1 F-FIND / P1 F-CS-BLD / F-PROB / P1 F-CS-RUN / P1 F-PS-RUN スライス以外の P1（F-CMD-RUN / F-TERM）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
 
 ## フェーズ P7（編集器インテリジェンス）— 今は実装しない
 

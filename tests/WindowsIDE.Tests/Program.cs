@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Editor;
 using WindowsIDE.Host.Csharp;
+using WindowsIDE.Host.PowerShell;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Ui;
@@ -59,6 +60,7 @@ namespace WindowsIDE.Tests
             RunCscArgumentBuilder();
             RunCscBrokenSource();
             RunCsharpProcessHost();
+            RunPowerShellProcessHost();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
             return (failed == 0) ? 0 : 1;
@@ -1466,6 +1468,210 @@ namespace WindowsIDE.Tests
             {
                 helloHost.Kill();
                 helloHost.WaitUntilExited(5000);
+                sleepHost.Kill();
+                sleepHost.WaitUntilExited(5000);
+                restartHost.Kill();
+                restartHost.WaitUntilExited(5000);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        private static void RunPowerShellProcessHost()
+        {
+            string hostSrc = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Host", "PowerShell", "PowerShellProcessHost.cs"));
+            if (File.Exists(hostSrc))
+            {
+                string srcText = File.ReadAllText(hostSrc);
+                Check("ps host no GetProcessesByName", srcText.IndexOf("GetProcessesByName", StringComparison.Ordinal) < 0);
+                Check("ps host no pwsh", srcText.IndexOf("pwsh", StringComparison.Ordinal) < 0);
+                Check("ps host no Runspace", srcText.IndexOf("Runspace", StringComparison.Ordinal) < 0);
+                Check("ps host FileName", srcText.IndexOf("WindowsPowerShell", StringComparison.Ordinal) >= 0 && srcText.IndexOf("v1.0", StringComparison.Ordinal) >= 0 && srcText.IndexOf("powershell.exe", StringComparison.Ordinal) >= 0);
+                Check("ps host SpecialFolder.System", srcText.IndexOf("SpecialFolder.System", StringComparison.Ordinal) >= 0);
+                Check("ps args NoProfile", srcText.IndexOf("-NoProfile", StringComparison.Ordinal) >= 0);
+                Check("ps args ExecutionPolicy Bypass", srcText.IndexOf("-ExecutionPolicy Bypass", StringComparison.Ordinal) >= 0);
+                Check("ps args File", srcText.IndexOf("-File ", StringComparison.Ordinal) >= 0);
+            }
+            else
+            {
+                Check("ps host source readable", false);
+            }
+
+            PowerShellProcessHost missingHost = new PowerShellProcessHost();
+            bool missingFailed = false;
+            missingHost.StartFailed += delegate(object sender, PowerShellStartFailedEventArgs e)
+            {
+                missingFailed = true;
+            };
+            string missingPath = Path.Combine(Path.GetTempPath(), "WindowsIDE-ps-missing-" + Guid.NewGuid().ToString("N"), "missing.ps1");
+            missingHost.Start(missingPath, Path.GetTempPath(), 1);
+            Check("ps missing not running", !missingHost.IsRunning);
+            Check("ps missing StartError", !string.IsNullOrEmpty(missingHost.StartError));
+            Check("ps missing StartFailed", missingFailed);
+            missingHost.Kill();
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-ps-host-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            PowerShellProcessHost versionHost = new PowerShellProcessHost();
+            PowerShellProcessHost errorHost = new PowerShellProcessHost();
+            PowerShellProcessHost sleepHost = new PowerShellProcessHost();
+            PowerShellProcessHost restartHost = new PowerShellProcessHost();
+            try
+            {
+                string versionPs1 = Path.Combine(dir, "version.ps1");
+                File.WriteAllText(versionPs1, "Write-Output $PSVersionTable.PSVersion.Major\r\n", Encoding.ASCII);
+                string errorPs1 = Path.Combine(dir, "error.ps1");
+                File.WriteAllText(errorPs1, "Write-Error 'from-ps-stderr'\r\n", Encoding.ASCII);
+                string sleepPs1 = Path.Combine(dir, "sleep.ps1");
+                File.WriteAllText(sleepPs1, "Start-Sleep -Seconds 60\r\n", Encoding.ASCII);
+
+                List<string> versionLines = new List<string>();
+                ManualResetEvent versionDone = new ManualResetEvent(false);
+                int versionExit = int.MinValue;
+                versionHost.LineReceived += delegate(object sender, PowerShellLineReceivedEventArgs e)
+                {
+                    if (e != null && !e.IsStderr)
+                    {
+                        lock (versionLines)
+                        {
+                            versionLines.Add(e.Text);
+                        }
+                    }
+                };
+                versionHost.Exited += delegate(object sender, PowerShellProcessExitedEventArgs e)
+                {
+                    if (e != null)
+                    {
+                        versionExit = e.ExitCode;
+                    }
+
+                    versionDone.Set();
+                };
+                versionHost.Start(versionPs1, dir, 2);
+                Check("ps version wait exit", versionDone.WaitOne(20000));
+                Check("ps version exit 0", versionExit == 0);
+                bool sawFive = false;
+                lock (versionLines)
+                {
+                    for (int i = 0; i < versionLines.Count; i++)
+                    {
+                        if (versionLines[i] != null && versionLines[i].Trim() == "5")
+                        {
+                            sawFive = true;
+                        }
+                    }
+                }
+
+                Check("ps version stdout 5", sawFive);
+                Check("ps version not running", !versionHost.IsRunning);
+
+                ManualResetEvent errorSeen = new ManualResetEvent(false);
+                bool sawStderr = false;
+                errorHost.LineReceived += delegate(object sender, PowerShellLineReceivedEventArgs e)
+                {
+                    if (e != null && e.IsStderr)
+                    {
+                        sawStderr = true;
+                        errorSeen.Set();
+                    }
+                };
+                errorHost.Start(errorPs1, dir, 3);
+                Check("ps Write-Error stderr", errorSeen.WaitOne(20000) && sawStderr);
+                errorHost.WaitUntilExited(20000);
+                Check("ps error not running", !errorHost.IsRunning);
+
+                sleepHost.Start(sleepPs1, dir, 4);
+                bool sleepRunning = sleepHost.IsRunning;
+                if (!sleepRunning)
+                {
+                    Thread.Sleep(400);
+                    sleepRunning = sleepHost.IsRunning;
+                }
+
+                Check("ps sleep running", sleepRunning);
+                sleepHost.Kill();
+                Check("ps sleep kill waited", sleepHost.WaitUntilExited(15000));
+                Check("ps sleep not running after kill", !sleepHost.IsRunning);
+
+                ManualResetEvent firstDone = new ManualResetEvent(false);
+                ManualResetEvent secondDone = new ManualResetEvent(false);
+                int secondExit = int.MinValue;
+                List<string> restartLines = new List<string>();
+                restartHost.LineReceived += delegate(object sender, PowerShellLineReceivedEventArgs e)
+                {
+                    if (e != null && e.Generation == 6 && !e.IsStderr)
+                    {
+                        lock (restartLines)
+                        {
+                            restartLines.Add(e.Text);
+                        }
+                    }
+                };
+                restartHost.Exited += delegate(object sender, PowerShellProcessExitedEventArgs e)
+                {
+                    if (e == null)
+                    {
+                        return;
+                    }
+
+                    if (e.Generation == 5)
+                    {
+                        firstDone.Set();
+                    }
+
+                    if (e.Generation == 6)
+                    {
+                        secondExit = e.ExitCode;
+                        secondDone.Set();
+                    }
+                };
+                restartHost.Start(sleepPs1, dir, 5);
+                bool firstRunning = restartHost.IsRunning;
+                if (!firstRunning)
+                {
+                    Thread.Sleep(400);
+                    firstRunning = restartHost.IsRunning;
+                }
+
+                Check("ps restart first running", firstRunning);
+                restartHost.Start(versionPs1, dir, 6);
+                Check("ps restart first killed", firstDone.WaitOne(20000));
+                bool secondStopped = secondDone.WaitOne(20000);
+                if (!secondStopped)
+                {
+                    secondStopped = restartHost.WaitUntilExited(15000);
+                }
+
+                Check("ps restart second exit wait", secondStopped);
+                Check("ps restart second exit 0", secondExit == 0);
+                bool sawSecond = false;
+                lock (restartLines)
+                {
+                    for (int i = 0; i < restartLines.Count; i++)
+                    {
+                        if (restartLines[i] != null && restartLines[i].Trim() == "5")
+                        {
+                            sawSecond = true;
+                        }
+                    }
+                }
+
+                Check("ps restart second stdout", sawSecond);
+            }
+            finally
+            {
+                versionHost.Kill();
+                versionHost.WaitUntilExited(5000);
+                errorHost.Kill();
+                errorHost.WaitUntilExited(5000);
                 sleepHost.Kill();
                 sleepHost.WaitUntilExited(5000);
                 restartHost.Kill();

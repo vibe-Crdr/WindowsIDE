@@ -36,7 +36,7 @@ flowchart LR
 
 - UI は WinForms。メインは STA（Excel COM のため `[STAThread]`）。
 - ユーザー C# プログラムは別プロセス。IDE を落とさない。手動ビルド成功後の起動だけが `WindowsIDE.Host.Csharp`（csc は持たない）。常時コンパイル（F-LIVE）の一時生成物は起動しない。
-- PowerShell は可能なら同一プロセスの Runspace（`System.Management.Automation`）。対話ターミナルは `powershell.exe` をリダイレクトしてもよい。波線のために Runspace を増やさない。PS 構文エラー位置は `WindowsIDE.Languages` が `ParseInput` する（実行しない）。
+- P1 のユーザー `.ps1`（F-PS-RUN）は `powershell.exe` 5.1 の子プロセス（`WindowsIDE.Host.PowerShell`）。同一プロセスの Runspace は P3 F-DBG-PS の余地として残し、波線のために Runspace を増やさない。対話ターミナル（F-TERM）はまだ作らない。PS 構文エラー位置は `WindowsIDE.Languages` が `ParseInput` する（実行しない）。
 - VBA の実行主体は Excel。IDE は同期と明示の `Application.Run`、エラー表示を担う。フェーズ P7 で診断専用の Excel Compile を足す（Run はしない。`WindowsIDE.Vba`）。
 
 ## 製品内部（単一 EXE）
@@ -53,7 +53,7 @@ flowchart LR
 | `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード。将来: トークン上の対括弧、F-SIND / F-AC / F-DOC 規則、F-VBA-CASE、位置付きシンボル、F-HOV 抽出、PS `ParseInput` エラー位置、VBA 粗いブロック（構造ヒント。コンパイラと呼ばない）、`MarkdownLexer`（フェーズ P8） |
 | `WindowsIDE.Build` | 手動 csc（指定 Framework パス、6 DLL、rsp、`CscRunner`、診断パース）。生成 EXE は TEMP に出す。`Process.Start` しない。起動は持たない。VBA Compile は置かない。将来の常時コンパイル（デバウンス、前回 csc の Kill、一時出力）もここ |
 | `WindowsIDE.Debug` | セッション、ブレーク、出力 |
-| `WindowsIDE.Host.PowerShell` | 実行と PS デバッガ。波線のために Runspace を増やさない。Parse は Languages |
+| `WindowsIDE.Host.PowerShell` | P1 は `powershell.exe` 5.1 子プロセスでユーザー `.ps1` を実行する。同一プロセス Runspace は P3 F-DBG-PS の余地。波線のために Runspace を増やさない。Parse は Languages |
 | `WindowsIDE.Host.Cmd` | cmd / bat |
 | `WindowsIDE.Host.Csharp` | 手動ビルド成功後のユーザー EXE 起動と stdout/stderr。csc は持たない。常時コンパイル（F-LIVE）はここに置かない。のち CLR デバッグ。VBA Compile は置かない |
 | `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期。将来: プッシュ後の COM Compile 診断（F-VBA-BLD。Run はしない）、References（F-VBA-REF、フェーズ P8） |

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Editor;
+using WindowsIDE.Host.Cmd;
 using WindowsIDE.Host.Csharp;
 using WindowsIDE.Host.PowerShell;
 using WindowsIDE.Languages;
@@ -38,6 +39,7 @@ namespace WindowsIDE.Ui
         private CscRunner cscRunner;
         private CsharpProcessHost csharpHost;
         private PowerShellProcessHost powershellHost;
+        private CmdProcessHost cmdHost;
         private int buildGeneration;
         private int runGeneration;
         private ActiveRunKind activeRunKind;
@@ -81,6 +83,10 @@ namespace WindowsIDE.Ui
             this.powershellHost.LineReceived += this.OnPowerShellLineReceived;
             this.powershellHost.Exited += this.OnPowerShellExited;
             this.powershellHost.StartFailed += this.OnPowerShellStartFailed;
+            this.cmdHost = new CmdProcessHost();
+            this.cmdHost.LineReceived += this.OnCmdLineReceived;
+            this.cmdHost.Exited += this.OnCmdExited;
+            this.cmdHost.StartFailed += this.OnCmdStartFailed;
             this.BuildMenu();
             this.BuildStatus();
             this.BuildBody();
@@ -1323,6 +1329,11 @@ namespace WindowsIDE.Ui
                 this.powershellHost.Kill();
             }
 
+            if (this.cmdHost != null)
+            {
+                this.cmdHost.Kill();
+            }
+
             this.StartManualBuild();
         }
 
@@ -1355,6 +1366,11 @@ namespace WindowsIDE.Ui
                     this.csharpHost.Kill();
                 }
 
+                if (this.cmdHost != null)
+                {
+                    this.cmdHost.Kill();
+                }
+
                 this.StartPs(path);
                 return;
             }
@@ -1369,7 +1385,24 @@ namespace WindowsIDE.Ui
             if (string.Equals(ext, ".cmd", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(ext, ".bat", StringComparison.OrdinalIgnoreCase))
             {
-                this.ShowSynthetic("cmd の実行はまだありません。");
+                this.pendingLaunchAfterBuild = false;
+                this.buildGeneration++;
+                if (this.cscRunner != null)
+                {
+                    this.cscRunner.Kill();
+                }
+
+                if (this.csharpHost != null)
+                {
+                    this.csharpHost.Kill();
+                }
+
+                if (this.powershellHost != null)
+                {
+                    this.powershellHost.Kill();
+                }
+
+                this.StartCmd(path);
                 return;
             }
 
@@ -1379,6 +1412,11 @@ namespace WindowsIDE.Ui
                 if (this.powershellHost != null)
                 {
                     this.powershellHost.Kill();
+                }
+
+                if (this.cmdHost != null)
+                {
+                    this.cmdHost.Kill();
                 }
 
                 this.StartManualBuild();
@@ -1445,11 +1483,88 @@ namespace WindowsIDE.Ui
                 this.csharpHost.Kill();
             }
 
+            if (this.cmdHost != null)
+            {
+                this.cmdHost.Kill();
+            }
+
             this.runGeneration++;
             this.activeRunKind = ActiveRunKind.PowerShell;
             string scriptDir = Path.GetDirectoryName(full);
             this.powershellHost.Start(full, scriptDir, this.runGeneration);
             if (string.IsNullOrEmpty(this.powershellHost.StartError))
+            {
+                this.bottomPane.Output.AppendStatus("起動: " + full);
+            }
+        }
+
+        private void StartCmd(string path)
+        {
+            string cmdExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            if (string.IsNullOrEmpty(cmdExe) || !File.Exists(cmdExe))
+            {
+                this.ShowSynthetic("cmd.exe が見つかりません。");
+                return;
+            }
+
+            string full;
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch (Exception)
+            {
+                this.ShowSynthetic("このファイルは実行できません。");
+                return;
+            }
+
+            if (this.editor != null && this.editor.Document != null && this.editor.Document.IsDirty)
+            {
+                try
+                {
+                    if (!this.editor.Document.Save())
+                    {
+                        this.ShowSynthetic("保存に失敗した: " + this.editor.Document.FilePath);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    this.ShowSynthetic("保存に失敗した: " + ex.Message);
+                    return;
+                }
+
+                if (this.tabs != null)
+                {
+                    this.tabs.RefreshTabs();
+                }
+
+                this.UpdateStatus();
+            }
+
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane == null || this.cmdHost == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.Clear();
+            this.bottomPane.ShowOutput();
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            if (this.powershellHost != null)
+            {
+                this.powershellHost.Kill();
+            }
+
+            this.runGeneration++;
+            this.activeRunKind = ActiveRunKind.Cmd;
+            string scriptDir = Path.GetDirectoryName(full);
+            this.cmdHost.Start(full, scriptDir, this.runGeneration);
+            if (string.IsNullOrEmpty(this.cmdHost.StartError))
             {
                 this.bottomPane.Output.AppendStatus("起動: " + full);
             }
@@ -1466,6 +1581,11 @@ namespace WindowsIDE.Ui
             if (this.powershellHost != null)
             {
                 this.powershellHost.Kill();
+            }
+
+            if (this.cmdHost != null)
+            {
+                this.cmdHost.Kill();
             }
 
             if (this.cscRunner != null)
@@ -1539,7 +1659,7 @@ namespace WindowsIDE.Ui
                 return;
             }
 
-            // 世代が違う＝.ps1 実行などでこの csc は無効。古いワーカーが新しいホストを Kill / 待ってはいけない。
+            // 世代が違う＝.ps1 / .cmd 実行などでこの csc は無効。古いワーカーが新しいホストを Kill / 待ってはいけない。
             if (!this.IsCurrentBuild(req.Generation))
             {
                 return;
@@ -1565,6 +1685,22 @@ namespace WindowsIDE.Ui
 
                 this.powershellHost.Kill();
                 this.powershellHost.WaitUntilExited(5000);
+            }
+
+            if (!this.IsCurrentBuild(req.Generation))
+            {
+                return;
+            }
+
+            if (this.cmdHost != null)
+            {
+                if (!this.IsCurrentBuild(req.Generation))
+                {
+                    return;
+                }
+
+                this.cmdHost.Kill();
+                this.cmdHost.WaitUntilExited(5000);
             }
 
             if (!this.IsCurrentBuild(req.Generation))
@@ -1642,6 +1778,11 @@ namespace WindowsIDE.Ui
             if (this.powershellHost != null)
             {
                 this.powershellHost.Kill();
+            }
+
+            if (this.cmdHost != null)
+            {
+                this.cmdHost.Kill();
             }
 
             this.runGeneration++;
@@ -2267,6 +2408,80 @@ namespace WindowsIDE.Ui
             this.bottomPane.Output.Append(e.Message, true);
         }
 
+        private void OnCmdLineReceived(object sender, CmdLineReceivedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MethodInvoker(delegate
+                {
+                    this.OnCmdLineReceived(sender, e);
+                }));
+                return;
+            }
+
+            if (this.IsDisposed || e.Generation != this.runGeneration || this.activeRunKind != ActiveRunKind.Cmd || this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.Append(e.Text, e.IsStderr);
+        }
+
+        private void OnCmdExited(object sender, CmdProcessExitedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MethodInvoker(delegate
+                {
+                    this.OnCmdExited(sender, e);
+                }));
+                return;
+            }
+
+            if (this.IsDisposed || e.Generation != this.runGeneration || this.activeRunKind != ActiveRunKind.Cmd || this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.AppendStatus("終了コード: " + e.ExitCode.ToString());
+        }
+
+        private void OnCmdStartFailed(object sender, CmdStartFailedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MethodInvoker(delegate
+                {
+                    this.OnCmdStartFailed(sender, e);
+                }));
+                return;
+            }
+
+            if (this.IsDisposed || e.Generation != this.runGeneration || this.activeRunKind != ActiveRunKind.Cmd || this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.EnsureBottomPaneVisible();
+            this.bottomPane.ShowOutput();
+            this.bottomPane.Output.Append(e.Message, true);
+        }
+
         private void OnEditorCaret(object sender, EventArgs e)
         {
             this.UpdateStatus();
@@ -2303,6 +2518,14 @@ namespace WindowsIDE.Ui
                     this.powershellHost.Exited -= this.OnPowerShellExited;
                     this.powershellHost.StartFailed -= this.OnPowerShellStartFailed;
                     this.powershellHost.Kill();
+                }
+
+                if (this.cmdHost != null)
+                {
+                    this.cmdHost.LineReceived -= this.OnCmdLineReceived;
+                    this.cmdHost.Exited -= this.OnCmdExited;
+                    this.cmdHost.StartFailed -= this.OnCmdStartFailed;
+                    this.cmdHost.Kill();
                 }
 
                 if (this.menu != null)
@@ -2369,7 +2592,8 @@ namespace WindowsIDE.Ui
         {
             None = 0,
             CSharp = 1,
-            PowerShell = 2
+            PowerShell = 2,
+            Cmd = 3
         }
 
         private sealed class ManualBuildRequest

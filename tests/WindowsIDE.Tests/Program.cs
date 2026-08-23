@@ -7,6 +7,7 @@ using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Editor;
+using WindowsIDE.Host.Cmd;
 using WindowsIDE.Host.Csharp;
 using WindowsIDE.Host.PowerShell;
 using WindowsIDE.Languages;
@@ -61,6 +62,7 @@ namespace WindowsIDE.Tests
             RunCscBrokenSource();
             RunCsharpProcessHost();
             RunPowerShellProcessHost();
+            RunCmdProcessHost();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
             return (failed == 0) ? 0 : 1;
@@ -1676,6 +1678,278 @@ namespace WindowsIDE.Tests
                 sleepHost.WaitUntilExited(5000);
                 restartHost.Kill();
                 restartHost.WaitUntilExited(5000);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        private static void RunCmdProcessHost()
+        {
+            string hostSrc = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Host", "Cmd", "CmdProcessHost.cs"));
+            if (File.Exists(hostSrc))
+            {
+                string srcText = File.ReadAllText(hostSrc);
+                Check("cmd host no GetProcessesByName", srcText.IndexOf("GetProcessesByName", StringComparison.Ordinal) < 0);
+                Check("cmd host no ComSpec", srcText.IndexOf("ComSpec", StringComparison.Ordinal) < 0);
+                Check("cmd host no SysWOW64", srcText.IndexOf("SysWOW64", StringComparison.Ordinal) < 0);
+                Check("cmd host no pwsh", srcText.IndexOf("pwsh", StringComparison.Ordinal) < 0);
+                Check("cmd host SpecialFolder.System", srcText.IndexOf("SpecialFolder.System", StringComparison.Ordinal) >= 0);
+                Check("cmd host FileName cmd.exe", srcText.IndexOf("cmd.exe", StringComparison.Ordinal) >= 0);
+                Check("cmd args /d /s /c", srcText.IndexOf("/d /s /c", StringComparison.Ordinal) >= 0);
+                Check("cmd args no /k", srcText.IndexOf("/k", StringComparison.Ordinal) < 0);
+            }
+            else
+            {
+                Check("cmd host source readable", false);
+            }
+
+            CmdProcessHost missingHost = new CmdProcessHost();
+            bool missingFailed = false;
+            missingHost.StartFailed += delegate(object sender, CmdStartFailedEventArgs e)
+            {
+                missingFailed = true;
+            };
+            string missingPath = Path.Combine(Path.GetTempPath(), "WindowsIDE-cmd-missing-" + Guid.NewGuid().ToString("N"), "missing.cmd");
+            missingHost.Start(missingPath, Path.GetTempPath(), 1);
+            Check("cmd missing not running", !missingHost.IsRunning);
+            Check("cmd missing StartError", !string.IsNullOrEmpty(missingHost.StartError));
+            Check("cmd missing StartFailed", missingFailed);
+            missingHost.Kill();
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-cmd-host-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            CmdProcessHost helloHost = new CmdProcessHost();
+            CmdProcessHost errorHost = new CmdProcessHost();
+            CmdProcessHost exitHost = new CmdProcessHost();
+            CmdProcessHost sleepHost = new CmdProcessHost();
+            CmdProcessHost restartHost = new CmdProcessHost();
+            CmdProcessHost spaceHost = new CmdProcessHost();
+            try
+            {
+                string helloCmd = Path.Combine(dir, "hello.cmd");
+                File.WriteAllText(helloCmd, "@echo off\r\necho hello-from-cmd\r\n", Encoding.ASCII);
+                string errorCmd = Path.Combine(dir, "error.cmd");
+                File.WriteAllText(errorCmd, "@echo off\r\necho from-cmd-stderr 1>&2\r\n", Encoding.ASCII);
+                string exitBat = Path.Combine(dir, "exit7.bat");
+                File.WriteAllText(exitBat, "@echo off\r\nexit /b 7\r\n", Encoding.ASCII);
+                string sleepCmd = Path.Combine(dir, "sleep.cmd");
+                File.WriteAllText(sleepCmd, "@echo off\r\nping -n 60 127.0.0.1\r\n", Encoding.ASCII);
+                string spaceDir = Path.Combine(dir, "dir with space");
+                Directory.CreateDirectory(spaceDir);
+                string spaceCmd = Path.Combine(spaceDir, "hello.cmd");
+                File.WriteAllText(spaceCmd, "@echo off\r\necho hello-from-cmd\r\n", Encoding.ASCII);
+
+                List<string> helloLines = new List<string>();
+                ManualResetEvent helloDone = new ManualResetEvent(false);
+                int helloExit = int.MinValue;
+                helloHost.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                {
+                    if (e != null && !e.IsStderr)
+                    {
+                        lock (helloLines)
+                        {
+                            helloLines.Add(e.Text);
+                        }
+                    }
+                };
+                helloHost.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                {
+                    if (e != null)
+                    {
+                        helloExit = e.ExitCode;
+                    }
+
+                    helloDone.Set();
+                };
+                helloHost.Start(helloCmd, dir, 2);
+                Check("cmd hello wait exit", helloDone.WaitOne(15000));
+                Check("cmd hello exit 0", helloExit == 0);
+                bool sawHello = false;
+                lock (helloLines)
+                {
+                    for (int i = 0; i < helloLines.Count; i++)
+                    {
+                        if (helloLines[i] != null && helloLines[i].IndexOf("hello-from-cmd", StringComparison.Ordinal) >= 0)
+                        {
+                            sawHello = true;
+                        }
+                    }
+                }
+
+                Check("cmd hello stdout", sawHello);
+                Check("cmd hello not running", !helloHost.IsRunning);
+
+                ManualResetEvent errorSeen = new ManualResetEvent(false);
+                bool sawStderr = false;
+                errorHost.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                {
+                    if (e != null && e.IsStderr && e.Text != null && e.Text.IndexOf("from-cmd-stderr", StringComparison.Ordinal) >= 0)
+                    {
+                        sawStderr = true;
+                        errorSeen.Set();
+                    }
+                };
+                errorHost.Start(errorCmd, dir, 3);
+                Check("cmd echo stderr", errorSeen.WaitOne(15000) && sawStderr);
+                errorHost.WaitUntilExited(15000);
+                Check("cmd error not running", !errorHost.IsRunning);
+
+                ManualResetEvent exitDone = new ManualResetEvent(false);
+                int exitCode = int.MinValue;
+                exitHost.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                {
+                    if (e != null)
+                    {
+                        exitCode = e.ExitCode;
+                    }
+
+                    exitDone.Set();
+                };
+                exitHost.Start(exitBat, dir, 4);
+                Check("cmd exit wait", exitDone.WaitOne(15000));
+                Check("cmd exit 7", exitCode == 7);
+                Check("cmd exit not running", !exitHost.IsRunning);
+
+                sleepHost.Start(sleepCmd, dir, 4);
+                bool sleepRunning = sleepHost.IsRunning;
+                if (!sleepRunning)
+                {
+                    Thread.Sleep(400);
+                    sleepRunning = sleepHost.IsRunning;
+                }
+
+                Check("cmd sleep running", sleepRunning);
+                sleepHost.Kill();
+                Check("cmd sleep kill waited", sleepHost.WaitUntilExited(15000));
+                Check("cmd sleep not running after kill", !sleepHost.IsRunning);
+
+                ManualResetEvent firstDone = new ManualResetEvent(false);
+                ManualResetEvent secondDone = new ManualResetEvent(false);
+                int secondExit = int.MinValue;
+                List<string> restartLines = new List<string>();
+                restartHost.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                {
+                    if (e != null && e.Generation == 6 && !e.IsStderr)
+                    {
+                        lock (restartLines)
+                        {
+                            restartLines.Add(e.Text);
+                        }
+                    }
+                };
+                restartHost.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                {
+                    if (e == null)
+                    {
+                        return;
+                    }
+
+                    if (e.Generation == 5)
+                    {
+                        firstDone.Set();
+                    }
+
+                    if (e.Generation == 6)
+                    {
+                        secondExit = e.ExitCode;
+                        secondDone.Set();
+                    }
+                };
+                restartHost.Start(sleepCmd, dir, 5);
+                bool firstRunning = restartHost.IsRunning;
+                if (!firstRunning)
+                {
+                    Thread.Sleep(400);
+                    firstRunning = restartHost.IsRunning;
+                }
+
+                Check("cmd restart first running", firstRunning);
+                restartHost.Start(helloCmd, dir, 6);
+                Check("cmd restart first killed", firstDone.WaitOne(15000));
+                bool secondStopped = secondDone.WaitOne(15000);
+                if (!secondStopped)
+                {
+                    secondStopped = restartHost.WaitUntilExited(15000);
+                }
+
+                Check("cmd restart second exit wait", secondStopped);
+                Check("cmd restart second exit 0", secondExit == 0);
+                bool sawSecond = false;
+                lock (restartLines)
+                {
+                    for (int i = 0; i < restartLines.Count; i++)
+                    {
+                        if (restartLines[i] != null && restartLines[i].IndexOf("hello-from-cmd", StringComparison.Ordinal) >= 0)
+                        {
+                            sawSecond = true;
+                        }
+                    }
+                }
+
+                Check("cmd restart second stdout", sawSecond);
+
+                List<string> spaceLines = new List<string>();
+                ManualResetEvent spaceDone = new ManualResetEvent(false);
+                int spaceExit = int.MinValue;
+                spaceHost.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                {
+                    if (e != null && !e.IsStderr)
+                    {
+                        lock (spaceLines)
+                        {
+                            spaceLines.Add(e.Text);
+                        }
+                    }
+                };
+                spaceHost.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                {
+                    if (e != null)
+                    {
+                        spaceExit = e.ExitCode;
+                    }
+
+                    spaceDone.Set();
+                };
+                spaceHost.Start(spaceCmd, spaceDir, 7);
+                Check("cmd space wait exit", spaceDone.WaitOne(15000));
+                Check("cmd space exit 0", spaceExit == 0);
+                bool sawSpace = false;
+                lock (spaceLines)
+                {
+                    for (int i = 0; i < spaceLines.Count; i++)
+                    {
+                        if (spaceLines[i] != null && spaceLines[i].IndexOf("hello-from-cmd", StringComparison.Ordinal) >= 0)
+                        {
+                            sawSpace = true;
+                        }
+                    }
+                }
+
+                Check("cmd space stdout", sawSpace);
+                Check("cmd space not running", !spaceHost.IsRunning);
+            }
+            finally
+            {
+                helloHost.Kill();
+                helloHost.WaitUntilExited(5000);
+                errorHost.Kill();
+                errorHost.WaitUntilExited(5000);
+                exitHost.Kill();
+                exitHost.WaitUntilExited(5000);
+                sleepHost.Kill();
+                sleepHost.WaitUntilExited(5000);
+                restartHost.Kill();
+                restartHost.WaitUntilExited(5000);
+                spaceHost.Kill();
+                spaceHost.WaitUntilExited(5000);
                 try
                 {
                     Directory.Delete(dir, true);

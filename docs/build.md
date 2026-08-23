@@ -65,11 +65,12 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 - `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。手動 csc は **`Process.Start` しない**
 - ユーザー EXE の起動と、そのプロセス参照だけの Kill は `WindowsIDE.Host.Csharp`。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - ユーザー `.ps1` の起動は `WindowsIDE.Host.PowerShell`（`SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe` 子プロセス）。SMA は実行ホストではない。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
+- ユーザー `.cmd` / `.bat` の起動は `WindowsIDE.Host.Cmd`（`SpecialFolder.System` + `cmd.exe` 子プロセス）。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - 無題は対象外。csproj は作らない
 
 ## レスポンスファイル
 
-`build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。`src/WindowsIDE/Host/PowerShell/PowerShellProcessHost.cs` を `Host/Csharp/CsharpProcessHost.cs` の次に列挙する（`windows-ide-tests.rsp` も同じ）。
+`build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。`src/WindowsIDE/Host/PowerShell/PowerShellProcessHost.cs` を `Host/Csharp/CsharpProcessHost.cs` の次に列挙する（`windows-ide-tests.rsp` も同じ）。`src/WindowsIDE/Host/Cmd/CmdProcessHost.cs` を PowerShell ホストの次に列挙する。
 
 出力は `build/out/WindowsIDE.exe`。`bin/` や `obj/` は使ってもよいが git に入れない。
 

@@ -286,7 +286,8 @@ namespace WindowsIDE.Ui
                     || keyData == Keys.F3
                     || keyData == (Keys.Shift | Keys.F3)
                     || keyData == (Keys.Control | Keys.Shift | Keys.B)
-                    || keyData == (Keys.Control | Keys.F5))
+                    || keyData == (Keys.Control | Keys.F5)
+                    || keyData == Keys.F8)
                 {
                     return false;
                 }
@@ -349,6 +350,12 @@ namespace WindowsIDE.Ui
             if (keyData == (Keys.Control | Keys.F5))
             {
                 this.OnRun(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == Keys.F8)
+            {
+                this.OnRunSelection(this, EventArgs.Empty);
                 return true;
             }
 
@@ -431,6 +438,7 @@ namespace WindowsIDE.Ui
 
             ToolStripMenuItem run = this.CreateTop("実行(&R)");
             run.DropDownItems.Add(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun));
+            run.DropDownItems.Add(this.CreateRunSelectionItem("選択行を実行(&L)", this.OnRunSelection));
 
             ToolStripMenuItem help = this.CreateTop("ヘルプ(&H)");
             help.DropDownItems.Add(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout));
@@ -507,6 +515,16 @@ namespace WindowsIDE.Ui
             item.ForeColor = Theme.Foreground;
             item.BackColor = Theme.Background;
             item.ShortcutKeyDisplayString = "Ctrl+F5";
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateRunSelectionItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = "F8";
             item.Click += handler;
             return item;
         }
@@ -1424,6 +1442,102 @@ namespace WindowsIDE.Ui
             }
 
             this.ShowSynthetic("このファイルは実行できません。");
+        }
+
+        private void OnRunSelection(object sender, EventArgs e)
+        {
+            string path = null;
+            if (this.editor != null && this.editor.Document != null)
+            {
+                path = this.editor.Document.FilePath;
+            }
+
+            if (string.IsNullOrEmpty(path))
+            {
+                this.ShowSynthetic("無題は実行できない。");
+                return;
+            }
+
+            string ext = Path.GetExtension(path);
+            if (!string.Equals(ext, ".cmd", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(ext, ".bat", StringComparison.OrdinalIgnoreCase))
+            {
+                this.ShowSynthetic("選択行の実行は .cmd / .bat だけです。");
+                return;
+            }
+
+            Document doc = this.editor.Document;
+            BufferPoint selStart;
+            BufferPoint selEnd;
+            doc.GetSelection(out selStart, out selEnd);
+            string scriptText = CmdSelectionRules.Extract(doc.Buffer, doc.CaretLine, selStart, selEnd);
+            if (CmdSelectionRules.IsBlank(scriptText))
+            {
+                this.ShowSynthetic("実行する行がありません。");
+                return;
+            }
+
+            string cmdExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            if (string.IsNullOrEmpty(cmdExe) || !File.Exists(cmdExe))
+            {
+                this.ShowSynthetic("cmd.exe が見つかりません。");
+                return;
+            }
+
+            string full;
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch (Exception)
+            {
+                this.ShowSynthetic("このファイルは実行できません。");
+                return;
+            }
+
+            string scriptDir = Path.GetDirectoryName(full);
+            this.pendingLaunchAfterBuild = false;
+            this.buildGeneration++;
+            if (this.cscRunner != null)
+            {
+                this.cscRunner.Kill();
+            }
+
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            if (this.powershellHost != null)
+            {
+                this.powershellHost.Kill();
+            }
+
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane == null || this.cmdHost == null)
+            {
+                return;
+            }
+
+            this.bottomPane.Output.Clear();
+            this.bottomPane.ShowOutput();
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            if (this.powershellHost != null)
+            {
+                this.powershellHost.Kill();
+            }
+
+            this.runGeneration++;
+            this.activeRunKind = ActiveRunKind.Cmd;
+            this.cmdHost.StartSelection(scriptText, scriptDir, this.runGeneration);
+            if (string.IsNullOrEmpty(this.cmdHost.StartError))
+            {
+                this.bottomPane.Output.AppendStatus("起動: 選択行 (" + full + ")");
+            }
         }
 
         private void StartPs(string path)

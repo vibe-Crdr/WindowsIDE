@@ -37,6 +37,7 @@ namespace WindowsIDE.Tests
             RunTextBuffer();
             RunIndentRules();
             RunFindRules();
+            RunCmdSelectionRules();
             RunFileEncoding();
             RunDocumentOpen();
             RunGlyphClassifier();
@@ -217,6 +218,40 @@ namespace WindowsIDE.Tests
             aaa.SetText("aaa");
             Check("count non-overlap aa", FindRules.Count(aaa, "aa", false) == 1);
             Check("count ignore Ab in abab", FindRules.Count(ab, "AB", true) == 1);
+        }
+
+        private static void RunCmdSelectionRules()
+        {
+            TextBuffer none = new TextBuffer();
+            none.SetText("first\nsecond");
+            string noneText = CmdSelectionRules.Extract(none, 1, new BufferPoint(1, 0), new BufferPoint(1, 0));
+            Check("sel none uses caret line", noneText == "second");
+
+            TextBuffer same = new TextBuffer();
+            same.SetText("echo hello world");
+            string sameText = CmdSelectionRules.Extract(same, 0, new BufferPoint(0, 5), new BufferPoint(0, 10));
+            Check("sel same line partial", sameText == "hello");
+
+            TextBuffer col0 = new TextBuffer();
+            col0.SetText("line0\nline1");
+            string col0Text = CmdSelectionRules.Extract(col0, 0, new BufferPoint(0, 0), new BufferPoint(1, 0));
+            Check("sel (0,0)-(1,0) line0 only", col0Text == "line0");
+
+            TextBuffer mid = new TextBuffer();
+            mid.SetText("aaa\nbbb\nccc");
+            string midText = CmdSelectionRules.Extract(mid, 0, new BufferPoint(0, 1), new BufferPoint(2, 2));
+            Check("sel multi mid last", midText == "aa\r\nbbb\r\ncc");
+
+            Check("sel blank spaces", CmdSelectionRules.IsBlank("  \t\r\n"));
+            Check("sel blank empty", CmdSelectionRules.IsBlank(""));
+            Check("sel blank null", CmdSelectionRules.IsBlank(null));
+            Check("sel blank false", !CmdSelectionRules.IsBlank("a"));
+
+            TextBuffer lf = new TextBuffer();
+            lf.NewLine = "\n";
+            lf.SetText("a\nb\nc");
+            string joined = CmdSelectionRules.Extract(lf, 0, new BufferPoint(0, 0), new BufferPoint(2, 1));
+            Check("sel join crlf", joined == "a\r\nb\r\nc");
         }
 
         private static void RunFileEncoding()
@@ -1705,11 +1740,14 @@ namespace WindowsIDE.Tests
                 Check("cmd host FileName cmd.exe", srcText.IndexOf("cmd.exe", StringComparison.Ordinal) >= 0);
                 Check("cmd args /d /s /c", srcText.IndexOf("/d /s /c", StringComparison.Ordinal) >= 0);
                 Check("cmd args no /k", srcText.IndexOf("/k", StringComparison.Ordinal) < 0);
+                Check("cmd host has StartSelection", srcText.IndexOf("StartSelection", StringComparison.Ordinal) >= 0);
             }
             else
             {
                 Check("cmd host source readable", false);
             }
+
+            InspectCmdSelectionMainFormSource();
 
             CmdProcessHost missingHost = new CmdProcessHost();
             bool missingFailed = false;
@@ -1935,6 +1973,184 @@ namespace WindowsIDE.Tests
 
                 Check("cmd space stdout", sawSpace);
                 Check("cmd space not running", !spaceHost.IsRunning);
+
+                CmdProcessHost selHello = new CmdProcessHost();
+                CmdProcessHost selCwd = new CmdProcessHost();
+                CmdProcessHost selBlank = new CmdProcessHost();
+                CmdProcessHost selAmp = new CmdProcessHost();
+                CmdProcessHost selAcp = new CmdProcessHost();
+                try
+                {
+                    string[] tempsBeforeHello = ListCmdRunTemps();
+                    List<string> selHelloLines = new List<string>();
+                    ManualResetEvent selHelloDone = new ManualResetEvent(false);
+                    int selHelloExit = int.MinValue;
+                    selHello.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                    {
+                        if (e != null && !e.IsStderr)
+                        {
+                            lock (selHelloLines)
+                            {
+                                selHelloLines.Add(e.Text);
+                            }
+                        }
+                    };
+                    selHello.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                    {
+                        if (e != null)
+                        {
+                            selHelloExit = e.ExitCode;
+                        }
+
+                        selHelloDone.Set();
+                    };
+                    string selWork = Path.Combine(dir, "sel-src");
+                    Directory.CreateDirectory(selWork);
+                    selHello.StartSelection("echo hello-from-sel", selWork, 8);
+                    Check("cmd sel hello wait", selHelloDone.WaitOne(15000));
+                    Check("cmd sel hello exit 0", selHelloExit == 0);
+                    bool sawSelHello = false;
+                    lock (selHelloLines)
+                    {
+                        for (int i = 0; i < selHelloLines.Count; i++)
+                        {
+                            if (selHelloLines[i] != null && selHelloLines[i].IndexOf("hello-from-sel", StringComparison.Ordinal) >= 0)
+                            {
+                                sawSelHello = true;
+                            }
+                        }
+                    }
+
+                    Check("cmd sel hello stdout", sawSelHello);
+                    Check("cmd sel hello not running", !selHello.IsRunning);
+                    Check("cmd sel hello wait until exited", selHello.WaitUntilExited(15000));
+                    Check("cmd sel hello temps gone", NoNewCmdRunTemps(tempsBeforeHello));
+
+                    File.WriteAllText(Path.Combine(selWork, "marker.txt"), "from-source-dir", Encoding.ASCII);
+                    List<string> selCwdLines = new List<string>();
+                    ManualResetEvent selCwdDone = new ManualResetEvent(false);
+                    selCwd.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                    {
+                        if (e != null && !e.IsStderr)
+                        {
+                            lock (selCwdLines)
+                            {
+                                selCwdLines.Add(e.Text);
+                            }
+                        }
+                    };
+                    selCwd.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                    {
+                        selCwdDone.Set();
+                    };
+                    selCwd.StartSelection("type marker.txt", selWork, 9);
+                    Check("cmd sel cwd wait", selCwdDone.WaitOne(15000));
+                    bool sawMarker = false;
+                    lock (selCwdLines)
+                    {
+                        for (int i = 0; i < selCwdLines.Count; i++)
+                        {
+                            if (selCwdLines[i] != null && selCwdLines[i].IndexOf("from-source-dir", StringComparison.Ordinal) >= 0)
+                            {
+                                sawMarker = true;
+                            }
+                        }
+                    }
+
+                    Check("cmd sel cwd reads source dir", sawMarker);
+                    selCwd.WaitUntilExited(15000);
+
+                    string[] tempsBeforeBlank = ListCmdRunTemps();
+                    bool blankFailed = false;
+                    selBlank.StartFailed += delegate(object sender, CmdStartFailedEventArgs e)
+                    {
+                        blankFailed = true;
+                    };
+                    selBlank.StartSelection("  \t\r\n", selWork, 10);
+                    Check("cmd sel blank StartFailed", blankFailed);
+                    Check("cmd sel blank StartError", !string.IsNullOrEmpty(selBlank.StartError));
+                    Check("cmd sel blank not running", !selBlank.IsRunning);
+                    Check("cmd sel blank no temps", NoNewCmdRunTemps(tempsBeforeBlank));
+
+                    List<string> selAmpLines = new List<string>();
+                    ManualResetEvent selAmpDone = new ManualResetEvent(false);
+                    int selAmpExit = int.MinValue;
+                    selAmp.LineReceived += delegate(object sender, CmdLineReceivedEventArgs e)
+                    {
+                        if (e != null && !e.IsStderr)
+                        {
+                            lock (selAmpLines)
+                            {
+                                selAmpLines.Add(e.Text);
+                            }
+                        }
+                    };
+                    selAmp.Exited += delegate(object sender, CmdProcessExitedEventArgs e)
+                    {
+                        if (e != null)
+                        {
+                            selAmpExit = e.ExitCode;
+                        }
+
+                        selAmpDone.Set();
+                    };
+                    selAmp.StartSelection("echo a&echo b", selWork, 11);
+                    Check("cmd sel amp wait", selAmpDone.WaitOne(15000));
+                    bool sawA = false;
+                    bool sawB = false;
+                    lock (selAmpLines)
+                    {
+                        for (int i = 0; i < selAmpLines.Count; i++)
+                        {
+                            if (selAmpLines[i] == null)
+                            {
+                                continue;
+                            }
+
+                            if (selAmpLines[i].IndexOf("a", StringComparison.Ordinal) >= 0)
+                            {
+                                sawA = true;
+                            }
+
+                            if (selAmpLines[i].IndexOf("b", StringComparison.Ordinal) >= 0)
+                            {
+                                sawB = true;
+                            }
+                        }
+                    }
+
+                    Check("cmd sel amp ran", selAmpExit == 0 && sawA && sawB);
+                    Check("cmd sel amp not running", !selAmp.IsRunning);
+
+                    bool acpFailed = false;
+                    string acpMessage = null;
+                    selAcp.StartFailed += delegate(object sender, CmdStartFailedEventArgs e)
+                    {
+                        acpFailed = true;
+                        if (e != null)
+                        {
+                            acpMessage = e.Message;
+                        }
+                    };
+                    selAcp.StartSelection("echo " + char.ConvertFromUtf32(0x1F600), selWork, 12);
+                    Check("cmd sel acp StartFailed", acpFailed);
+                    Check("cmd sel acp message", acpMessage == "この選択はコマンドプロンプトのコードページで書けません。");
+                    Check("cmd sel acp not running", !selAcp.IsRunning);
+                    Check("cmd sel acp StartError", !string.IsNullOrEmpty(selAcp.StartError));
+                }
+                finally
+                {
+                    selHello.Kill();
+                    selHello.WaitUntilExited(5000);
+                    selCwd.Kill();
+                    selCwd.WaitUntilExited(5000);
+                    selBlank.Kill();
+                    selBlank.WaitUntilExited(5000);
+                    selAmp.Kill();
+                    selAmp.WaitUntilExited(5000);
+                    selAcp.Kill();
+                    selAcp.WaitUntilExited(5000);
+                }
             }
             finally
             {
@@ -1961,6 +2177,91 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void InspectCmdSelectionMainFormSource()
+        {
+            string mainSrcPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Ui", "MainForm.cs"));
+            if (!File.Exists(mainSrcPath))
+            {
+                Check("cmd sel mainform source readable", false);
+                return;
+            }
+
+            string src = File.ReadAllText(mainSrcPath);
+            Check("cmd sel mainform Keys.F8", src.IndexOf("Keys.F8", StringComparison.Ordinal) >= 0);
+            Check("cmd sel mainform OnRunSelection", src.IndexOf("OnRunSelection", StringComparison.Ordinal) >= 0);
+            int f5At = src.LastIndexOf("if (keyData == (Keys.Control | Keys.F5))", StringComparison.Ordinal);
+            int f8At = src.IndexOf("if (keyData == Keys.F8)", StringComparison.Ordinal);
+            Check("cmd sel mainform Ctrl+F5 present", f5At >= 0);
+            Check("cmd sel mainform F8 handler", f8At > f5At);
+            if (f5At >= 0 && f8At > f5At)
+            {
+                string f5Block = src.Substring(f5At, f8At - f5At);
+                Check("cmd sel mainform Ctrl+F5 OnRun", f5Block.IndexOf("this.OnRun(this, EventArgs.Empty)", StringComparison.Ordinal) >= 0);
+                Check("cmd sel mainform Ctrl+F5 not selection", f5Block.IndexOf("OnRunSelection", StringComparison.Ordinal) < 0);
+            }
+
+            Check("cmd sel mainform F8 display", src.IndexOf("ShortcutKeyDisplayString = \"F8\"", StringComparison.Ordinal) >= 0);
+            Check("cmd sel mainform no F8 ShortcutKeys", src.IndexOf("ShortcutKeys = Keys.F8", StringComparison.Ordinal) < 0);
+            int selAt = src.IndexOf("private void OnRunSelection(", StringComparison.Ordinal);
+            int psAt = src.IndexOf("private void StartPs(", StringComparison.Ordinal);
+            Check("cmd sel mainform OnRunSelection body", selAt >= 0 && psAt > selAt);
+            if (selAt >= 0 && psAt > selAt)
+            {
+                string body = src.Substring(selAt, psAt - selAt);
+                Check("cmd sel mainform no Save", body.IndexOf("Document.Save()", StringComparison.Ordinal) < 0);
+            }
+        }
+
+        private static string[] ListCmdRunTemps()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE", "run", "cmd");
+            if (!Directory.Exists(dir))
+            {
+                return new string[0];
+            }
+
+            return Directory.GetFiles(dir, "*.cmd");
+        }
+
+        private static bool NoNewCmdRunTemps(string[] before)
+        {
+            string[] after = ListCmdRunTemps();
+            if (after == null)
+            {
+                return true;
+            }
+
+            int i = 0;
+            while (i < after.Length)
+            {
+                string path = after[i];
+                bool known = false;
+                if (before != null)
+                {
+                    int j = 0;
+                    while (j < before.Length)
+                    {
+                        if (string.Equals(before[j], path, StringComparison.OrdinalIgnoreCase))
+                        {
+                            known = true;
+                            break;
+                        }
+
+                        j++;
+                    }
+                }
+
+                if (!known)
+                {
+                    return false;
+                }
+
+                i++;
+            }
+
+            return true;
         }
 
         private static bool TryCompileTempExe(string dir, string name, string source, out string exePath, out string error)

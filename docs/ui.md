@@ -51,6 +51,10 @@ Ctrl+F は P1 F-FIND。
 
 P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`TabStrip` は `Dock.Top`、その下の `editorColumn` が `Dock.Fill`。列内は FindBar `Dock.Top`、`TextView` `Dock.Fill`）。`Visible=false` のとき占有しない。検索・置換の入力は DualFont オーナー描画（`DualFontField`。本文と同じ IME。`BackColor=EditorBackground`、`ForeColor=Foreground`。外周 1 物理 px の Theme.Border）。高さはセル＋1px 枠で、行の内側いっぱいに引き伸ばさない。行高はその高さ＋上下 4 DIP。半角は本文と同じ Cascadia Mono と `editor/@fontSize` DIP（`CreateHalfWidth` + `GetDpi` の物理 px。メニューの 12 DIP ではない）。全角は源ノ角ゴシック。ラベル・件数・ボタン・「Aa」はメニュー／ステータスと同じ 12 DIP 双フォント（本文 `fontSize` 非連動）。ボタン内の文字は DualFontPainter で矩形の中央。新しい Theme 色は足さない。0 件かつクエリ非空の件数と検索欄は既存 Error。現在ヒットは既存 Selection。
 
+### P1 F-CMD-RUN 選択行
+
+実行メニューに「選択行を実行」（表示 F8。ShortcutKeys は付けない。ProcessCmdKey）。出力契約は F-CS-RUN と同じ（stdout は `Foreground`、stderr は `Error`、起動／終了は `Comment`）。空のターミナルタブは置かない。
+
 ### フェーズ P7（今は実装しない）
 
 波線は既存エラー `#f7768e`。対括弧は Selection。クイックインフォ（F-HOV）の枠は既存の背景 / 前景 / 枠。フェーズ P7 でも新しいテーマ色は足さない。虹色括弧は W。P1 の「これ以外の新しい色は足さない」は維持する。

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading;
+using WindowsIDE.Editor;
 
 namespace WindowsIDE.Host.Cmd
 {
@@ -114,13 +115,14 @@ namespace WindowsIDE.Host.Cmd
 
     /// <summary>
     /// ディスク上の .cmd / .bat を OS 同梱 cmd.exe の子プロセスで 1 本だけ起動する。WinForms 非依存。
-    /// 保持している Process 参照だけ Kill する。プロセス名検索はしない。
+    /// 選択行は所有 TEMP の .cmd を書いて同じ Start 経路へ渡す。保持している Process 参照だけ Kill する。
     /// </summary>
     public sealed class CmdProcessHost
     {
         private readonly object gate;
         private Process process;
         private string startError;
+        private string pendingOwnedTempPath;
 
         /// <summary>
         /// 空のホストを作る。
@@ -171,6 +173,64 @@ namespace WindowsIDE.Host.Cmd
         public event EventHandler<CmdStartFailedEventArgs> StartFailed;
 
         /// <summary>
+        /// 選択本文を所有 TEMP の .cmd に ACP（BOM なし、CRLF）で書き、既存の Start で起動する。
+        /// workingDirectory は必須。空なら TEMP へは落とさない。stdin は Start 側で閉じる。
+        /// </summary>
+        /// <param name="scriptText">実行する本文。空や空白のみは起動しない。</param>
+        /// <param name="workingDirectory">作業ディレクトリ。ソース .cmd / .bat のディレクトリ。</param>
+        /// <param name="generation">古い完了を捨てるための世代。</param>
+        public void StartSelection(string scriptText, string workingDirectory, int generation)
+        {
+            this.startError = null;
+            this.Kill();
+            if (string.IsNullOrEmpty(workingDirectory))
+            {
+                this.startError = "作業ディレクトリがありません。";
+                this.RaiseStartFailed(generation, this.startError);
+                return;
+            }
+
+            if (CmdSelectionRules.IsBlank(scriptText))
+            {
+                this.startError = "実行する行がありません。";
+                this.RaiseStartFailed(generation, this.startError);
+                return;
+            }
+
+            byte[] bytes;
+            try
+            {
+                string body = scriptText.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n");
+                Encoding acp = Encoding.GetEncoding(Encoding.Default.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+                bytes = acp.GetBytes(body);
+            }
+            catch (EncoderFallbackException)
+            {
+                this.startError = "この選択はコマンドプロンプトのコードページで書けません。";
+                this.RaiseStartFailed(generation, this.startError);
+                return;
+            }
+
+            string tempPath;
+            try
+            {
+                string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE", "run", "cmd");
+                Directory.CreateDirectory(dir);
+                tempPath = Path.Combine(dir, Guid.NewGuid().ToString("N") + ".cmd");
+                File.WriteAllBytes(tempPath, bytes);
+            }
+            catch (Exception ex)
+            {
+                this.startError = ex.Message;
+                this.RaiseStartFailed(generation, this.startError);
+                return;
+            }
+
+            this.SetPendingOwnedTempPath(tempPath);
+            this.Start(tempPath, workingDirectory, generation);
+        }
+
+        /// <summary>
         /// 既存プロセスを Kill してから scriptPath を /d /s /c で起動する。stdin は直後に閉じる。
         /// 呼び出しスレッドで WaitForExit しない。
         /// </summary>
@@ -181,9 +241,11 @@ namespace WindowsIDE.Host.Cmd
         {
             this.startError = null;
             this.Kill();
+            string ownedTemp = this.TakePendingOwnedTempPath();
             if (!string.IsNullOrEmpty(scriptPath) && scriptPath.IndexOf('"') >= 0)
             {
                 this.startError = "パスに引用符を含められません。";
+                TryDeleteOwnedTemp(ownedTemp);
                 this.RaiseStartFailed(generation, this.startError);
                 return;
             }
@@ -191,6 +253,7 @@ namespace WindowsIDE.Host.Cmd
             if (string.IsNullOrEmpty(scriptPath) || !File.Exists(scriptPath))
             {
                 this.startError = "実行ファイルがありません。";
+                TryDeleteOwnedTemp(ownedTemp);
                 this.RaiseStartFailed(generation, this.startError);
                 return;
             }
@@ -241,6 +304,7 @@ namespace WindowsIDE.Host.Cmd
                 {
                     this.startError = "プロセスを起動できませんでした。";
                     this.ClearProcess(p);
+                    TryDeleteOwnedTemp(ownedTemp);
                     this.RaiseStartFailed(generation, this.startError);
                     return;
                 }
@@ -250,7 +314,7 @@ namespace WindowsIDE.Host.Cmd
                 p.StandardInput.Close();
                 Thread waiter = new Thread(delegate()
                 {
-                    this.WaitAndRaise(p, gen, stdoutEnd, stderrEnd);
+                    this.WaitAndRaise(p, gen, stdoutEnd, stderrEnd, ownedTemp);
                 });
                 waiter.IsBackground = true;
                 waiter.Start();
@@ -259,6 +323,7 @@ namespace WindowsIDE.Host.Cmd
             {
                 this.startError = ex.Message;
                 this.ClearProcess(p);
+                TryDeleteOwnedTemp(ownedTemp);
                 this.RaiseStartFailed(generation, this.startError);
             }
         }
@@ -354,7 +419,7 @@ namespace WindowsIDE.Host.Cmd
             this.RaiseLine(generation, e.Data, isStderr);
         }
 
-        private void WaitAndRaise(Process p, int generation, StreamEnd stdoutEnd, StreamEnd stderrEnd)
+        private void WaitAndRaise(Process p, int generation, StreamEnd stdoutEnd, StreamEnd stderrEnd, string ownedTempPath)
         {
             int code = -1;
             try
@@ -385,6 +450,7 @@ namespace WindowsIDE.Host.Cmd
                 {
                 }
 
+                TryDeleteOwnedTemp(ownedTempPath);
                 this.RaiseExited(generation, code);
             }
             catch (Exception)
@@ -393,6 +459,7 @@ namespace WindowsIDE.Host.Cmd
             finally
             {
                 this.ClearProcess(p);
+                TryDeleteOwnedTemp(ownedTempPath);
                 if (stdoutEnd != null)
                 {
                     stdoutEnd.Dispose();
@@ -402,6 +469,46 @@ namespace WindowsIDE.Host.Cmd
                 {
                     stderrEnd.Dispose();
                 }
+            }
+        }
+
+        private void SetPendingOwnedTempPath(string path)
+        {
+            lock (this.gate)
+            {
+                this.pendingOwnedTempPath = path;
+            }
+        }
+
+        private string TakePendingOwnedTempPath()
+        {
+            lock (this.gate)
+            {
+                string path = this.pendingOwnedTempPath;
+                this.pendingOwnedTempPath = null;
+                return path;
+            }
+        }
+
+        private static void TryDeleteOwnedTemp(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
             }
         }
 

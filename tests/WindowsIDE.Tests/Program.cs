@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -12,6 +13,7 @@ using WindowsIDE.Host.Csharp;
 using WindowsIDE.Host.PowerShell;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
+using WindowsIDE.Terminal;
 using WindowsIDE.Ui;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
@@ -25,6 +27,26 @@ namespace WindowsIDE.Tests
     {
         private static int passed;
         private static int failed;
+
+        private const int StdInputHandle = -10;
+        private const int StdOutputHandle = -11;
+        private const int StdErrorHandle = -12;
+        private const uint AttachParentProcess = 0xFFFFFFFF;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GetStdHandle(int nStdHandle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetStdHandle(int nStdHandle, IntPtr hHandle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool FreeConsole();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool AttachConsole(uint dwProcessId);
 
         /// <summary>
         /// 単体テストを順に実行する。
@@ -64,6 +86,17 @@ namespace WindowsIDE.Tests
             RunCsharpProcessHost();
             RunPowerShellProcessHost();
             RunCmdProcessHost();
+            RunShellPaths();
+            RunCellWidth();
+            RunTerminalInput();
+            RunVtParser();
+            RunEnvironmentBlockWithoutTerm();
+            RunPseudoConsoleSession();
+            RunPseudoConsolePowerShellConsole();
+            RunPseudoConsolePowerShellInteractive();
+            InspectPseudoConsoleSessionSource();
+            InspectMainFormTerminalSource();
+            InspectBottomPaneTerminalSource();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
             return (failed == 0) ? 0 : 1;
@@ -2388,6 +2421,679 @@ namespace WindowsIDE.Tests
             }
 
             return TokenKind.Text;
+        }
+
+        private static void RunShellPaths()
+        {
+            string system = Environment.GetFolderPath(Environment.SpecialFolder.System);
+            string ps = ShellPaths.GetExecutable(ShellKind.PowerShell51);
+            string cmd = ShellPaths.GetExecutable(ShellKind.Cmd);
+            Check("shell ps system32", string.Equals(ps, Path.Combine(system, "WindowsPowerShell", "v1.0", "powershell.exe"), StringComparison.OrdinalIgnoreCase));
+            Check("shell cmd system32", string.Equals(cmd, Path.Combine(system, "cmd.exe"), StringComparison.OrdinalIgnoreCase));
+            string psArgs = ShellPaths.GetArguments(ShellKind.PowerShell51);
+            string cmdArgs = ShellPaths.GetArguments(ShellKind.Cmd);
+            Check("shell ps no NonInteractive", psArgs.IndexOf("-NonInteractive", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("shell ps no Command", psArgs.IndexOf("-Command", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("shell ps no Import-Module", psArgs.IndexOf("Import-Module", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("shell ps no PSReadLine", psArgs.IndexOf("PSReadLine", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("shell cmd no /c", cmdArgs.IndexOf("/c", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("shell cmd no /k", cmdArgs.IndexOf("/k", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("shell cmd is /d", string.Equals(cmdArgs, "/d", StringComparison.Ordinal));
+            string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            Check("shell cwd profile", string.Equals(ShellPaths.GetWorkingDirectory(null), profile, StringComparison.OrdinalIgnoreCase));
+            string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            if (Directory.Exists(root))
+            {
+                Check("shell cwd root", string.Equals(ShellPaths.GetWorkingDirectory(root), Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                Check("shell cwd root", false);
+            }
+
+            string termDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Terminal"));
+            if (!Directory.Exists(termDir))
+            {
+                Check("terminal folder readable", false);
+                return;
+            }
+
+            string[] files = Directory.GetFiles(termDir, "*.cs");
+            bool hasPwsh = false;
+            bool hasWow = false;
+            bool hasComSpec = false;
+            bool hasByName = false;
+            int i;
+            for (i = 0; i < files.Length; i++)
+            {
+                string text = File.ReadAllText(files[i]);
+                if (text.IndexOf("pwsh", StringComparison.Ordinal) >= 0)
+                {
+                    hasPwsh = true;
+                }
+
+                if (text.IndexOf("SysWOW64", StringComparison.Ordinal) >= 0)
+                {
+                    hasWow = true;
+                }
+
+                if (text.IndexOf("ComSpec", StringComparison.Ordinal) >= 0)
+                {
+                    hasComSpec = true;
+                }
+
+                if (text.IndexOf("GetProcessesByName", StringComparison.Ordinal) >= 0)
+                {
+                    hasByName = true;
+                }
+            }
+
+            Check("terminal src no pwsh", !hasPwsh);
+            Check("terminal src no SysWOW64", !hasWow);
+            Check("terminal src no ComSpec", !hasComSpec);
+            Check("terminal src no GetProcessesByName", !hasByName);
+        }
+
+        private static void RunCellWidth()
+        {
+            Check("cell ascii 1", CellWidth.Of('A') == 1);
+            Check("cell fullwidth 2", CellWidth.Of('あ') == 2);
+        }
+
+        private static void RunTerminalInput()
+        {
+            int toggle = (int)(Keys.Control | Keys.Oemtilde);
+            Check("input toggle", TerminalInput.Classify(toggle, false, false).Kind == TerminalInputKind.Toggle);
+            Check("input toggle composing", TerminalInput.Classify(toggle, false, true).Kind == TerminalInputKind.None);
+            Check("input copy", TerminalInput.Classify((int)(Keys.Control | Keys.C), true, false).Kind == TerminalInputKind.Copy);
+            TerminalInputResult interrupt = TerminalInput.Classify((int)(Keys.Control | Keys.C), false, false);
+            Check("input eot kind", interrupt.Kind == TerminalInputKind.Send && interrupt.Payload != null && interrupt.Payload.Length == 1 && interrupt.Payload[0] == 0x03);
+            Check("input paste", TerminalInput.Classify((int)(Keys.Control | Keys.V), false, false).Kind == TerminalInputKind.Paste);
+        }
+
+        private static void RunVtParser()
+        {
+            VtScreen screen = new VtScreen(80, 24);
+            VtParser parser = new VtParser(screen);
+            parser.Feed("A\r\nB");
+            Check("vt lf A", screen.GetCell(0, 0).Character == 'A');
+            Check("vt lf B", screen.GetCell(1, 0).Character == 'B');
+
+            screen.ClearAll();
+            parser.Reset();
+            parser.Feed("AB\bC");
+            Check("vt bs A", screen.GetCell(0, 0).Character == 'A');
+            Check("vt bs C", screen.GetCell(0, 1).Character == 'C');
+
+            screen.ClearAll();
+            parser.Reset();
+            parser.Feed("A\tB");
+            Check("vt tab B", screen.GetCell(0, 8).Character == 'B');
+
+            screen.ClearAll();
+            parser.Reset();
+            parser.Feed("\u001b[5;10HX");
+            Check("vt cup X", screen.GetCell(4, 9).Character == 'X');
+            Check("vt cup row", screen.CaretRow == 4);
+            Check("vt cup col", screen.CaretColumn == 10);
+
+            screen.ClearAll();
+            parser.Reset();
+            parser.Feed("ABC\r\u001b[C\u001b[K");
+            Check("vt el A", screen.GetCell(0, 0).Character == 'A');
+            Check("vt el B gone", screen.GetCell(0, 1).Character == '\0');
+            Check("vt el C gone", screen.GetCell(0, 2).Character == '\0');
+
+            screen.ClearAll();
+            parser.Reset();
+            parser.Feed("\u001b[31mE\u001b[32mS\u001b[33mN\u001b[34mL\u001b[35mK\u001b[36mT\u001b[37mF\u001b[30mC");
+            Check("vt sgr error", screen.GetCell(0, 0).Slot == ColorSlot.Error);
+            Check("vt sgr string", screen.GetCell(0, 1).Slot == ColorSlot.String);
+            Check("vt sgr number", screen.GetCell(0, 2).Slot == ColorSlot.Number);
+            Check("vt sgr local", screen.GetCell(0, 3).Slot == ColorSlot.Local);
+            Check("vt sgr keyword", screen.GetCell(0, 4).Slot == ColorSlot.Keyword);
+            Check("vt sgr type", screen.GetCell(0, 5).Slot == ColorSlot.Type);
+            Check("vt sgr fg", screen.GetCell(0, 6).Slot == ColorSlot.Foreground);
+            Check("vt sgr comment", screen.GetCell(0, 7).Slot == ColorSlot.Comment);
+
+            screen.ClearAll();
+            parser.Reset();
+            parser.Feed("\u001b[999Qhello");
+            Check("vt unknown no esc", screen.GetCell(0, 0).Character == 'h');
+            Check("vt unknown hello", screen.GetHistoryText(screen.ScrollbackCount).Trim().StartsWith("hello", StringComparison.Ordinal));
+        }
+
+        private static void RunPseudoConsoleSession()
+        {
+            string exe = ShellPaths.GetExecutable(ShellKind.Cmd);
+            Check("pty cmd exists", File.Exists(exe));
+            Check("startupinfoex size", Marshal.SizeOf(typeof(NativeMethods.StartupInfoEx)) == 112);
+            Check("startupinfo size", Marshal.SizeOf(typeof(NativeMethods.StartupInfo)) == 104);
+            StringBuilder collected = new StringBuilder();
+            ManualResetEvent done = new ManualResetEvent(false);
+            PseudoConsoleSession session = new PseudoConsoleSession();
+            session.OutputReceived += delegate(object sender, TerminalOutputEventArgs e)
+            {
+                if (e != null && e.Text != null)
+                {
+                    lock (collected)
+                    {
+                        collected.Append(e.Text);
+                    }
+                }
+            };
+            session.Exited += delegate(object sender, TerminalExitedEventArgs e)
+            {
+                done.Set();
+            };
+            string cwd = ShellPaths.GetWorkingDirectory(null);
+            bool finished = false;
+            string text = "";
+            WithDetachedStdio(delegate()
+            {
+                session.Start(exe, "/d /c echo TERM-OK", cwd, 80, 24, 1);
+                finished = done.WaitOne(8000);
+                Thread.Sleep(400);
+                lock (collected)
+                {
+                    text = collected.ToString();
+                }
+
+                session.Kill();
+                session.WaitUntilExited(2000);
+                session.Dispose();
+            });
+            done.Close();
+            Check("pty start error empty", string.IsNullOrEmpty(session.StartError));
+            Check("pty finished", finished);
+            Check("pty TERM-OK", text.IndexOf("TERM-OK", StringComparison.Ordinal) >= 0);
+
+            string oldTerm = Environment.GetEnvironmentVariable("TERM");
+            StringBuilder termCollected = new StringBuilder();
+            ManualResetEvent termDone = new ManualResetEvent(false);
+            PseudoConsoleSession termSession = new PseudoConsoleSession();
+            termSession.OutputReceived += delegate(object sender, TerminalOutputEventArgs e)
+            {
+                if (e != null && e.Text != null)
+                {
+                    lock (termCollected)
+                    {
+                        termCollected.Append(e.Text);
+                    }
+                }
+            };
+            termSession.Exited += delegate(object sender, TerminalExitedEventArgs e)
+            {
+                termDone.Set();
+            };
+            bool termFinished = false;
+            string termText = "";
+            try
+            {
+                Environment.SetEnvironmentVariable("TERM", "dumb");
+                WithDetachedStdio(delegate()
+                {
+                    termSession.Start(exe, "/d /c echo TERM=[%TERM%]", cwd, 80, 24, 2);
+                    termFinished = termDone.WaitOne(8000);
+                    Thread.Sleep(400);
+                    lock (termCollected)
+                    {
+                        termText = termCollected.ToString();
+                    }
+
+                    termSession.Kill();
+                    termSession.WaitUntilExited(2000);
+                    termSession.Dispose();
+                });
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("TERM", oldTerm);
+            }
+
+            termDone.Close();
+            Check("pty term echo start error empty", string.IsNullOrEmpty(termSession.StartError));
+            Check("pty term echo finished", termFinished);
+            Check("pty term echo not empty", !string.IsNullOrEmpty(termText));
+            Check("pty child TERM not dumb", termText.IndexOf("TERM=[dumb]", StringComparison.OrdinalIgnoreCase) < 0);
+        }
+
+        private static void RunPseudoConsolePowerShellConsole()
+        {
+            string exe = ShellPaths.GetExecutable(ShellKind.PowerShell51);
+            Check("pty ps exists", File.Exists(exe));
+            string args = ShellPaths.GetArguments(ShellKind.PowerShell51);
+            Check("pty ps product args no Command", args.IndexOf("-Command", StringComparison.OrdinalIgnoreCase) < 0);
+            args = args + " -Command \"if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { 'REDIRECTED' } else { 'CONSOLE-OK' }\"";
+            StringBuilder collected = new StringBuilder();
+            ManualResetEvent done = new ManualResetEvent(false);
+            PseudoConsoleSession session = new PseudoConsoleSession();
+            session.OutputReceived += delegate(object sender, TerminalOutputEventArgs e)
+            {
+                if (e != null && e.Text != null)
+                {
+                    lock (collected)
+                    {
+                        collected.Append(e.Text);
+                    }
+                }
+            };
+            session.Exited += delegate(object sender, TerminalExitedEventArgs e)
+            {
+                done.Set();
+            };
+            string cwd = ShellPaths.GetWorkingDirectory(null);
+            bool finished = false;
+            string text = "";
+            WithDetachedStdio(delegate()
+            {
+                session.Start(exe, args, cwd, 80, 24, 1);
+                finished = done.WaitOne(8000);
+                Thread.Sleep(400);
+                lock (collected)
+                {
+                    text = collected.ToString();
+                }
+
+                session.Kill();
+                session.WaitUntilExited(2000);
+                session.Dispose();
+            });
+            done.Close();
+            Check("pty ps start error empty", string.IsNullOrEmpty(session.StartError));
+            Check("pty ps finished", finished);
+            Check("pty ps CONSOLE-OK", text.IndexOf("CONSOLE-OK", StringComparison.Ordinal) >= 0);
+            Check("pty ps no REDIRECTED", text.IndexOf("REDIRECTED", StringComparison.Ordinal) < 0);
+            Check("pty ps no PSReadLine", text.IndexOf("PSReadLine", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("pty ps no screen JP", text.IndexOf("スクリーン", StringComparison.Ordinal) < 0);
+            Check("pty ps no screen reader", text.IndexOf("screen reader", StringComparison.OrdinalIgnoreCase) < 0);
+        }
+
+        private static void RunEnvironmentBlockWithoutTerm()
+        {
+            IntPtr source = NativeMethods.GetEnvironmentStringsW();
+            Check("env source", source != IntPtr.Zero);
+            bool sourceHasHidden = false;
+            if (source != IntPtr.Zero)
+            {
+                try
+                {
+                    IntPtr p = source;
+                    while (true)
+                    {
+                        string entry = Marshal.PtrToStringUni(p);
+                        if (string.IsNullOrEmpty(entry))
+                        {
+                            break;
+                        }
+
+                        if (entry[0] == '=')
+                        {
+                            sourceHasHidden = true;
+                        }
+
+                        p = new IntPtr(p.ToInt64() + (entry.Length + 1) * 2);
+                    }
+                }
+                finally
+                {
+                    NativeMethods.FreeEnvironmentStringsW(source);
+                }
+            }
+
+            IntPtr copy = NativeMethods.AllocUnicodeEnvironmentWithoutTerm();
+            Check("env copy alloc", copy != IntPtr.Zero);
+            bool copyHasHidden = false;
+            if (copy != IntPtr.Zero)
+            {
+                try
+                {
+                    IntPtr p = copy;
+                    while (true)
+                    {
+                        string entry = Marshal.PtrToStringUni(p);
+                        if (string.IsNullOrEmpty(entry))
+                        {
+                            break;
+                        }
+
+                        if (entry[0] == '=')
+                        {
+                            copyHasHidden = true;
+                        }
+
+                        p = new IntPtr(p.ToInt64() + (entry.Length + 1) * 2);
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(copy);
+                }
+            }
+
+            if (sourceHasHidden)
+            {
+                Check("env block keeps hidden", copyHasHidden);
+            }
+            else
+            {
+                Check("env block hidden skip", true);
+            }
+
+            string oldTerm = Environment.GetEnvironmentVariable("TERM");
+            string oldColor = Environment.GetEnvironmentVariable("COLORTERM");
+            IntPtr block = IntPtr.Zero;
+            try
+            {
+                Environment.SetEnvironmentVariable("TERM", "dumb");
+                Environment.SetEnvironmentVariable("COLORTERM", "testcolor");
+                block = NativeMethods.AllocUnicodeEnvironmentWithoutTerm();
+                Check("env block alloc", block != IntPtr.Zero);
+                if (block == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                bool hasTerm = false;
+                bool hasColor = false;
+                IntPtr p = block;
+                while (true)
+                {
+                    string entry = Marshal.PtrToStringUni(p);
+                    if (string.IsNullOrEmpty(entry))
+                    {
+                        break;
+                    }
+
+                    int eq = entry.IndexOf('=');
+                    string name = (eq < 0) ? entry : entry.Substring(0, eq);
+                    if (string.Equals(name, "TERM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasTerm = true;
+                    }
+
+                    if (string.Equals(name, "COLORTERM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasColor = true;
+                    }
+
+                    p = new IntPtr(p.ToInt64() + (entry.Length + 1) * 2);
+                }
+
+                Check("env block no TERM", !hasTerm);
+                Check("env block keeps COLORTERM", hasColor);
+            }
+            finally
+            {
+                if (block != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(block);
+                }
+
+                Environment.SetEnvironmentVariable("TERM", oldTerm);
+                Environment.SetEnvironmentVariable("COLORTERM", oldColor);
+            }
+
+            int spi = 0;
+            bool got = NativeMethods.SystemParametersInfo(NativeMethods.SpiGetScreenReader, 0, ref spi, 0);
+            Check("spi get works", got);
+        }
+
+        private static void RunPseudoConsolePowerShellInteractive()
+        {
+            string exe = ShellPaths.GetExecutable(ShellKind.PowerShell51);
+            Check("pty ps interactive exists", File.Exists(exe));
+            string args = ShellPaths.GetArguments(ShellKind.PowerShell51);
+            Check("pty ps interactive product args", string.Equals(args, "-NoLogo -NoProfile -ExecutionPolicy Bypass", StringComparison.Ordinal));
+            StringBuilder collected = new StringBuilder();
+            PseudoConsoleSession session = new PseudoConsoleSession();
+            session.OutputReceived += delegate(object sender, TerminalOutputEventArgs e)
+            {
+                if (e != null && e.Text != null)
+                {
+                    lock (collected)
+                    {
+                        collected.Append(e.Text);
+                    }
+                }
+            };
+            string cwd = ShellPaths.GetWorkingDirectory(null);
+            string text = "";
+            WithDetachedStdio(delegate()
+            {
+                session.Start(ShellKind.PowerShell51, cwd, 80, 24, 1);
+                Thread.Sleep(6000);
+                lock (collected)
+                {
+                    text = collected.ToString();
+                }
+
+                session.Kill();
+                session.WaitUntilExited(2000);
+                session.Dispose();
+            });
+            Check("pty ps interactive start error empty", string.IsNullOrEmpty(session.StartError));
+            Check("pty ps interactive output", !string.IsNullOrEmpty(text));
+            if (NativeMethods.IsBlindAccessOn())
+            {
+                Check("pty ps interactive skip warn (Blind Access On)", true);
+            }
+            else
+            {
+                Check("pty ps interactive no スクリーン", text.IndexOf("スクリーン", StringComparison.Ordinal) < 0);
+                Check("pty ps interactive no PSReadLine", text.IndexOf("PSReadLine", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("pty ps interactive no screen reader", text.IndexOf("screen reader", StringComparison.OrdinalIgnoreCase) < 0);
+            }
+        }
+
+        private static void InspectPseudoConsoleSessionSource()
+        {
+            string sessionPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Terminal", "PseudoConsoleSession.cs"));
+            if (!File.Exists(sessionPath))
+            {
+                Check("pty session source readable", false);
+                return;
+            }
+
+            string src = File.ReadAllText(sessionPath);
+            Check("pty no StartFUseStdHandles", src.IndexOf("StartFUseStdHandles", StringComparison.Ordinal) < 0);
+
+            int flagsAt = src.IndexOf("uint flags =", StringComparison.Ordinal);
+            int createAt = src.IndexOf("NativeMethods.CreateProcessW(", StringComparison.Ordinal);
+            Check("pty CreateProcess flags span", flagsAt >= 0 && createAt > flagsAt);
+            if (flagsAt >= 0 && createAt > flagsAt)
+            {
+                string flagsBody = src.Substring(flagsAt, createAt - flagsAt);
+                Check("pty flags has EXTENDED", flagsBody.IndexOf("ExtendedStartupinfoPresent", StringComparison.Ordinal) >= 0);
+                Check("pty flags no CREATE_NO_WINDOW", flagsBody.IndexOf("CREATE_NO_WINDOW", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("pty flags no CreateNoWindow", flagsBody.IndexOf("CreateNoWindow", StringComparison.Ordinal) < 0);
+                Check("pty flags no 0x08000000", flagsBody.IndexOf("0x08000000", StringComparison.OrdinalIgnoreCase) < 0);
+            }
+
+            string nativePath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Terminal", "NativeMethods.cs"));
+            if (!File.Exists(nativePath))
+            {
+                Check("pty native source readable", false);
+                return;
+            }
+
+            string native = File.ReadAllText(nativePath);
+            Check("pty native no StartFUseStdHandles", native.IndexOf("StartFUseStdHandles", StringComparison.Ordinal) < 0);
+            Check("pty session no CREATE_NO_WINDOW", src.IndexOf("CREATE_NO_WINDOW", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("pty session no 0x08000000", src.IndexOf("0x08000000", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("pty session no DETACHED_PROCESS", src.IndexOf("DETACHED_PROCESS", StringComparison.Ordinal) < 0);
+            Check("pty native no CREATE_NO_WINDOW", native.IndexOf("CREATE_NO_WINDOW", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("pty native no 0x08000000", native.IndexOf("0x08000000", StringComparison.OrdinalIgnoreCase) < 0);
+            Check("pty native no GetSystemMetrics", native.IndexOf("GetSystemMetrics", StringComparison.Ordinal) < 0);
+            Check("pty native no SetValue", native.IndexOf("SetValue", StringComparison.Ordinal) < 0);
+            Check("pty native set fWinIni 0", native.IndexOf("SystemParametersInfo(SpiSetScreenReader, 0, IntPtr.Zero, 0)", StringComparison.Ordinal) >= 0);
+
+            string pathsPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Terminal", "ShellPaths.cs"));
+            if (!File.Exists(pathsPath))
+            {
+                Check("pty paths source readable", false);
+                return;
+            }
+
+            string paths = File.ReadAllText(pathsPath);
+            int getArgsAt = paths.IndexOf("public static string GetArguments", StringComparison.Ordinal);
+            int getCwdAt = paths.IndexOf("public static string GetWorkingDirectory", StringComparison.Ordinal);
+            Check("pty GetArguments span", getArgsAt >= 0 && getCwdAt > getArgsAt);
+            if (getArgsAt >= 0 && getCwdAt > getArgsAt)
+            {
+                string argsBody = paths.Substring(getArgsAt, getCwdAt - getArgsAt);
+                Check("pty GetArguments no -Command", argsBody.IndexOf("-Command", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("pty GetArguments no Import-Module", argsBody.IndexOf("Import-Module", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("pty GetArguments no PSReadLine", argsBody.IndexOf("PSReadLine", StringComparison.OrdinalIgnoreCase) < 0);
+            }
+
+            string termDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Terminal"));
+            if (!Directory.Exists(termDir))
+            {
+                Check("pty terminal folder inspect", false);
+                return;
+            }
+
+            string[] termFiles = Directory.GetFiles(termDir, "*.cs");
+            bool hasByName = false;
+            int i;
+            for (i = 0; i < termFiles.Length; i++)
+            {
+                string termSrc = File.ReadAllText(termFiles[i]);
+                if (termSrc.IndexOf("GetProcessesByName", StringComparison.Ordinal) >= 0)
+                {
+                    hasByName = true;
+                }
+            }
+
+            Check("pty Terminal no GetProcessesByName", !hasByName);
+        }
+
+        /// <summary>
+        /// テスト exe の標準ハンドル（キャプチャ用パイプを含む）を子へ継承させない。製品 winexe と同じく ConPTY がコンソールを付ける。
+        /// </summary>
+        /// <param name="action">PTY 起動から破棄まで。</param>
+        private static void WithDetachedStdio(Action action)
+        {
+            IntPtr oldIn = GetStdHandle(StdInputHandle);
+            IntPtr oldOut = GetStdHandle(StdOutputHandle);
+            IntPtr oldErr = GetStdHandle(StdErrorHandle);
+            try
+            {
+                SetStdHandle(StdInputHandle, IntPtr.Zero);
+                SetStdHandle(StdOutputHandle, IntPtr.Zero);
+                SetStdHandle(StdErrorHandle, IntPtr.Zero);
+                FreeConsole();
+                action();
+            }
+            finally
+            {
+                AttachConsole(AttachParentProcess);
+                SetStdHandle(StdInputHandle, oldIn);
+                SetStdHandle(StdOutputHandle, oldOut);
+                SetStdHandle(StdErrorHandle, oldErr);
+            }
+        }
+
+        private static void InspectMainFormTerminalSource()
+        {
+            string mainSrcPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Ui", "MainForm.cs"));
+            if (!File.Exists(mainSrcPath))
+            {
+                Check("term mainform source readable", false);
+                return;
+            }
+
+            string src = File.ReadAllText(mainSrcPath);
+            Check("term mainform 表示", src.IndexOf("表示(&V)", StringComparison.Ordinal) >= 0);
+            Check("term mainform Ctrl+`", src.IndexOf("ShortcutKeyDisplayString = \"Ctrl+`\"", StringComparison.Ordinal) >= 0);
+            Check("term mainform Oemtilde", src.IndexOf("Keys.Oemtilde", StringComparison.Ordinal) >= 0);
+            int itemAt = src.IndexOf("private ToolStripMenuItem CreateTerminalViewItem(", StringComparison.Ordinal);
+            int statusAt = src.IndexOf("private void BuildStatus(", StringComparison.Ordinal);
+            Check("term mainform view item", itemAt >= 0 && statusAt > itemAt);
+            if (itemAt >= 0 && statusAt > itemAt)
+            {
+                string body = src.Substring(itemAt, statusAt - itemAt);
+                Check("term mainform no ShortcutKeys", body.IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0);
+            }
+
+            Check("term OnRun no pty kill", MethodHasNoPtyKill(src, "private void OnRun(", "private void OnRunSelection("));
+            Check("term StartPs no pty kill", MethodHasNoPtyKill(src, "private void StartPs(", "private void StartCmd("));
+            Check("term StartCmd no pty kill", MethodHasNoPtyKill(src, "private void StartCmd(", "private void StartManualBuild("));
+            Check("term StartManualBuild no pty kill", MethodHasNoPtyKill(src, "private void StartManualBuild(", "private bool IsCurrentBuild("));
+            Check("term TerminalSelected subscribe", src.IndexOf("this.bottomPane.TerminalSelected += this.OnBottomPaneTerminalSelected", StringComparison.Ordinal) >= 0);
+            Check("term TerminalSelected starts pty", MethodCallsShowTerminalPanelOrStartIfNeeded(src, "private void OnBottomPaneTerminalSelected(", "private void OnToggleTerminal("));
+        }
+
+        private static void InspectBottomPaneTerminalSource()
+        {
+            string panePath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "src", "WindowsIDE", "Ui", "BottomPane.cs"));
+            if (!File.Exists(panePath))
+            {
+                Check("term bottompane source readable", false);
+                return;
+            }
+
+            string src = File.ReadAllText(panePath);
+            Check("term chip event field", src.IndexOf("public event EventHandler TerminalSelected", StringComparison.Ordinal) >= 0);
+            int chipAt = src.IndexOf("if (this.terminalChip.Contains(e.Location))", StringComparison.Ordinal);
+            int paintAt = src.IndexOf("protected override void Dispose(bool disposing)", StringComparison.Ordinal);
+            Check("term chip path", chipAt >= 0 && paintAt > chipAt);
+            if (chipAt >= 0 && paintAt > chipAt)
+            {
+                string chipBody = src.Substring(chipAt, paintAt - chipAt);
+                Check("term chip raises TerminalSelected", chipBody.IndexOf("this.TerminalSelected", StringComparison.Ordinal) >= 0);
+            }
+
+            int showAt = src.IndexOf("public void ShowTerminal()", StringComparison.Ordinal);
+            int dpiAt = src.IndexOf("protected override void OnDpiChangedAfterParent(", StringComparison.Ordinal);
+            Check("term ShowTerminal method", showAt >= 0 && dpiAt > showAt);
+            if (showAt >= 0 && dpiAt > showAt)
+            {
+                string showBody = src.Substring(showAt, dpiAt - showAt);
+                Check("term ShowTerminal no StartIfNeeded", showBody.IndexOf("StartIfNeeded", StringComparison.Ordinal) < 0);
+            }
+        }
+
+        private static bool MethodCallsShowTerminalPanelOrStartIfNeeded(string src, string startMarker, string nextMarker)
+        {
+            int a = src.IndexOf(startMarker, StringComparison.Ordinal);
+            int b = src.IndexOf(nextMarker, StringComparison.Ordinal);
+            if (a < 0 || b <= a)
+            {
+                return false;
+            }
+
+            string body = src.Substring(a, b - a);
+            if (body.IndexOf("ShowTerminalPanel", StringComparison.Ordinal) >= 0)
+            {
+                return true;
+            }
+
+            return body.IndexOf("StartIfNeeded", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool MethodHasNoPtyKill(string src, string startMarker, string nextMarker)
+        {
+            int a = src.IndexOf(startMarker, StringComparison.Ordinal);
+            int b = src.IndexOf(nextMarker, StringComparison.Ordinal);
+            if (a < 0 || b <= a)
+            {
+                return false;
+            }
+
+            string body = src.Substring(a, b - a);
+            if (body.IndexOf("PseudoConsoleSession.Kill", StringComparison.Ordinal) >= 0)
+            {
+                return false;
+            }
+
+            if (body.IndexOf("session.Kill", StringComparison.Ordinal) >= 0)
+            {
+                return false;
+            }
+
+            return true;
         }
     }
 }

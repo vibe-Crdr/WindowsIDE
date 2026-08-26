@@ -8,18 +8,20 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// 下パネル。タブは問題と出力のみ。ヘッダ（タブチップ + 件数 + ×）を持つ。
+    /// 下パネル。タブは問題 / 出力 / ターミナル。ヘッダ（タブチップ + 件数 + ×）を持つ。
     /// </summary>
     public sealed class BottomPane : Control
     {
         private readonly ProblemListControl problems;
         private readonly OutputPanelControl output;
+        private readonly TerminalControl terminal;
         private Font halfFont;
         private Font fullFont;
         private StringFormat typographic;
         private int selectedTab;
         private Rectangle problemsChip;
         private Rectangle outputChip;
+        private Rectangle terminalChip;
         private Rectangle closeBounds;
 
         /// <summary>
@@ -37,14 +39,20 @@ namespace WindowsIDE.Ui
 
             this.problems = new ProblemListControl();
             this.output = new OutputPanelControl();
+            this.terminal = new TerminalControl();
             this.problems.Visible = true;
             this.output.Visible = false;
+            this.terminal.Visible = false;
             this.Controls.Add(this.problems);
             this.Controls.Add(this.output);
+            this.Controls.Add(this.terminal);
         }
 
         /// <summary>× で畳む要求。</summary>
         public event EventHandler CloseRequested;
+
+        /// <summary>ヘッダのターミナルチップを選んだ。PTY 起動は親が行う。</summary>
+        public event EventHandler TerminalSelected;
 
         /// <summary>問題一覧の行クリック。</summary>
         public event EventHandler<ProblemActivatedEventArgs> ItemActivated
@@ -65,6 +73,24 @@ namespace WindowsIDE.Ui
             get { return this.output; }
         }
 
+        /// <summary>統合ターミナル。</summary>
+        public TerminalControl Terminal
+        {
+            get { return this.terminal; }
+        }
+
+        /// <summary>ターミナルがフォーカスを持っていれば true。</summary>
+        public bool IsTerminalFocused
+        {
+            get { return this.terminal != null && this.terminal.ContainsFocus; }
+        }
+
+        /// <summary>ターミナルが IME 変換中なら true。</summary>
+        public bool IsTerminalComposing
+        {
+            get { return this.terminal != null && this.terminal.IsComposing; }
+        }
+
         /// <summary>
         /// ツリーと同じ 12 DIP 双フォントを使う。所有権は移さない。
         /// </summary>
@@ -76,6 +102,7 @@ namespace WindowsIDE.Ui
             this.fullFont = full;
             this.problems.SetFonts(half, full);
             this.output.SetFonts(half, full);
+            this.terminal.SetFonts(half, full);
             this.LayoutChildren();
             this.Invalidate();
         }
@@ -96,6 +123,7 @@ namespace WindowsIDE.Ui
             this.selectedTab = 0;
             this.problems.Visible = true;
             this.output.Visible = false;
+            this.terminal.Visible = false;
             this.LayoutChildren();
             this.Invalidate();
         }
@@ -106,8 +134,21 @@ namespace WindowsIDE.Ui
             this.selectedTab = 1;
             this.problems.Visible = false;
             this.output.Visible = true;
+            this.terminal.Visible = false;
             this.LayoutChildren();
             this.Invalidate();
+        }
+
+        /// <summary>ターミナルタブを出し、ターミナルへフォーカスする。</summary>
+        public void ShowTerminal()
+        {
+            this.selectedTab = 2;
+            this.problems.Visible = false;
+            this.output.Visible = false;
+            this.terminal.Visible = true;
+            this.LayoutChildren();
+            this.Invalidate();
+            this.terminal.Focus();
         }
 
         /// <summary>親の DPI 変更後に配置を合わせる。</summary>
@@ -184,6 +225,17 @@ namespace WindowsIDE.Ui
             if (this.outputChip.Contains(e.Location))
             {
                 this.ShowOutput();
+                return;
+            }
+
+            if (this.terminalChip.Contains(e.Location))
+            {
+                this.ShowTerminal();
+                EventHandler selected = this.TerminalSelected;
+                if (selected != null)
+                {
+                    selected(this, EventArgs.Empty);
+                }
             }
         }
 
@@ -225,6 +277,7 @@ namespace WindowsIDE.Ui
             {
                 this.problemsChip = Rectangle.Empty;
                 this.outputChip = Rectangle.Empty;
+                this.terminalChip = Rectangle.Empty;
                 return;
             }
 
@@ -233,9 +286,11 @@ namespace WindowsIDE.Ui
             this.problemsChip = this.DrawChip(g, header, dpi, x, "問題", this.selectedTab == 0);
             x = this.problemsChip.Right + DpiUtil.ToPixels(2, dpi);
             this.outputChip = this.DrawChip(g, header, dpi, x, "出力", this.selectedTab == 1);
+            x = this.outputChip.Right + DpiUtil.ToPixels(2, dpi);
+            this.terminalChip = this.DrawChip(g, header, dpi, x, "ターミナル", this.selectedTab == 2);
 
             string counts = string.Format("エラー {0}, 警告 {1}", this.problems.ErrorCount, this.problems.WarningCount);
-            int countX = this.outputChip.Right + chipPad;
+            int countX = this.terminalChip.Right + chipPad;
             int countRight = this.closeBounds.Left - pad;
             if (countRight > countX)
             {
@@ -297,6 +352,7 @@ namespace WindowsIDE.Ui
             Rectangle content = new Rectangle(0, headerH, this.ClientSize.Width, Math.Max(0, this.ClientSize.Height - headerH));
             this.problems.Bounds = content;
             this.output.Bounds = content;
+            this.terminal.Bounds = content;
         }
 
         private int HeaderHeight(int dpi)

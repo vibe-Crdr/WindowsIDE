@@ -31,6 +31,7 @@ src\WindowsIDE\Ui\FindBar.cs
 src\WindowsIDE\Ui\ProblemListControl.cs
 src\WindowsIDE\Ui\OutputPanelControl.cs
 src\WindowsIDE\Ui\BottomPane.cs
+src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Ui\DualFontField.cs
 src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
@@ -90,3 +91,12 @@ src\WindowsIDE\Build\CscRunner.cs
 src\WindowsIDE\Host\Csharp\CsharpProcessHost.cs
 src\WindowsIDE\Host\PowerShell\PowerShellProcessHost.cs
 src\WindowsIDE\Host\Cmd\CmdProcessHost.cs
+src\WindowsIDE\Terminal\ShellKind.cs
+src\WindowsIDE\Terminal\ShellPaths.cs
+src\WindowsIDE\Terminal\CellWidth.cs
+src\WindowsIDE\Terminal\ColorSlot.cs
+src\WindowsIDE\Terminal\VtScreen.cs
+src\WindowsIDE\Terminal\VtParser.cs
+src\WindowsIDE\Terminal\TerminalInput.cs
+src\WindowsIDE\Terminal\NativeMethods.cs
+src\WindowsIDE\Terminal\PseudoConsoleSession.cs

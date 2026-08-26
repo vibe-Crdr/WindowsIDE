@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。
+凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。
 
 ## P0 スライス
 
@@ -89,9 +89,17 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 | --- | --- | --- |
 | F-CMD-RUN | 実行メニュー「選択行を実行(&L)」（表示 F8。ShortcutKeys は付けず ProcessCmdKey。IME 変換中は奪わない）。ディスク上 `.cmd` / `.bat` のみ（FilePath 拡張子。LanguageKind では判定しない）。選択なしは現在行、同一行は文字どおり、複数行は `IndentRules.BlockLastLine`（終端列 0 は最終行除外）で CRLF 結合。空・空白のみと無題は拒否。所有 TEMP `%TEMP%\WindowsIDE\run\cmd\<guid>.cmd` を ACP・CRLF・BOM なしで書き既存 Start（`/d /s /c`）へ。cwd はソースのディレクトリ。本文に `@echo off` 等を足さない。`"%&^` はサニタイズしない。F8 では `Save` しない。起動行はソースフルパス（TEMP は出さない）。開始前拒否は問題タブ、開始後は出力。Ctrl+F5 はファイル全体のまま | F-TERM、`/k`、P9、F-DBG-CMD、F5、引数 UI、対話 stdin、本文を `/c` に連結、PATH の別 cmd、共通 ProcessHost 基底、C# / PS 選択を cmd として走らせること、無題の一時ファイル化、Excel COM、Runspace、新しい `/r` / Theme / XML、ListView / DataGrid / RichTextBox、P7/P8、Ctrl+F5 を選択時に奪うこと、F8 に ShortcutKeys を付けること |
 
+## P1 F-TERM スライス
+
+下パネルに実体のある統合ターミナル。既定は `SpecialFolder.System` の powershell.exe 5.1、切替で同梱 cmd.exe。ConPTY で対話する。1 ショット実行（Host.*）とは共存する。
+
+| ID | P1 F-TERM でやる | P1 F-TERM でやらない |
+| --- | --- | --- |
+| F-TERM | 下パネル順は問題 / 出力 / ターミナル。CreatePseudoConsole + CreateProcessW（EXTENDED_STARTUPINFO_PRESENT。CREATE_NO_WINDOW は付けない。STARTF_USESTDHANDLES も付けない（付けると PowerShell がリダイレクト扱いになり PSReadLine 警告が出る）。レジストリ Blind Access Off のときだけ張り付き SPI_GETSCREENREADER をライブ解除。PTY 子へ TERM を渡さない）+ 匿名パイプ。既定 `SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe`（`-NoLogo -NoProfile -ExecutionPolicy Bypass`）。切替は同梱 `cmd.exe`（`/d` のみ）。cwd はワークスペース根、無ければユーザープロファイル。パイプは UTF-8。ReadFile は専用スレッド、UI へ BeginInvoke、世代で stale を捨てる。Kill は保持ハンドルと HPCON / パイプだけ。× はパネルを畳むだけで PTY は殺さない。Ctrl+` は ProcessCmdKey（ShortcutKeys なし。変換中は奪わない）。ターミナルフォーカス中は編集器へ Ctrl+C/V/Z/Y/X/A を送らない。シェル自己終了はバッファを残し Enter で同種を再起動。VT は CR/LF/BS/HT/BEL 無視と CUP/CUU/CUD/CUF/CUB/CHA/EL/ED/SGR、ESC 7/8、CSI ?25。未知 CSI は最終バイトまで読んで捨てる。折り返しは PTY 列（最小 20×4）。IME は TerminalControl が IImeClient（未確定は自前、候補はシステム）。失敗はターミナル本文 1 行（Error 色）。1 本のみ。フォントは 12 DIP DualFont | 複数セッション、分割、検索、リンク、マウス追跡、alt screen、OSC、256/truecolor、DECSTBM、Sixel、vim 品質 VT、PSReadLine UI、引数 UI、Host.* 変更、共通 ProcessHost、Host.Cmd への `/k`、P9、F-DBG-*、空デバッグタブ、F5、P2 VBA、P7/P8、本文 fontSize 連動、workspace.xml 属性、新しい Theme 色、新しい `/r`、AllocConsole、黒いコンソール窓、SMA Runspace、pwsh、PATH / ComSpec でシェル exe を解決すること、GetProcessesByName、UI スレッドの同期 ReadFile / WaitForExit、1 ショット Kill 集合に PTY を足すこと |
+
 ## 残 P1
 
-字句ハイライトと P1 F-IND / P1 F-FIND / P1 F-CS-BLD / F-PROB / P1 F-CS-RUN / P1 F-PS-RUN / P1 F-CMD-RUN（ファイル実行と選択行）スライス以外の P1（F-TERM）は既存の M のまま。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
+残作業なし。P1 完了。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
 
 ## フェーズ P7（編集器インテリジェンス）— 今は実装しない
 
@@ -285,7 +293,7 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | F-CS-RUN | M | ビルド成功後に EXE 起動 | stdout/stderr が出力パネル。常時コンパイルの生成物は起動しない |
 | F-PS-RUN | M | `.ps1` を PowerShell 5.1 で実行 | `$PSVersionTable.PSVersion.Major -eq 5` |
 | F-CMD-RUN | M | `.cmd` / `.bat` / 選択行を cmd で実行 | ディスク上の `.cmd` / `.bat` を OS 同梱 `cmd.exe` で実行し、stdout/stderr/起動終了が出力パネルに出る。選択テキスト（無ければ現在行）も同じ `cmd.exe` で実行し、stdout/stderr/起動終了が出力パネルに出る。Ctrl+F5 はファイル全体。F8 は選択行。 |
-| F-TERM | M | 統合ターミナル | 既定 powershell.exe 5.1、cmd に切替可 |
+| F-TERM | M | 統合ターミナル | 下パネルにターミナルがあり、既定は System32 の powershell.exe 5.1（`-NoLogo -NoProfile -ExecutionPolicy Bypass`）、メニューで cmd.exe（`/d`）に切替できる。ConPTY でプロンプト・Read-Host・`dir /p` が対話できる。Ctrl+` で表示／フォーカス（ターミナルフォーカス中なら畳む）。1 ショット実行と共存する |
 | F-PROB | M | 問題一覧 | クリックでファイル+行。残 P1 の受け入れは手動 `csc` の診断を問題一覧に出すこと。将来の常時 csc（F-LIVE、フェーズ P7）と VBA Compile（F-VBA-BLD、フェーズ P7）も同じ診断モデル。VBA Compile の受け入れは F-VBA-BLD。競合したら新しい方で置き換える |
 | F-LIVE | S | 常時コンパイル（診断のみ） | 入力停止後にデバウンスした Framework `csc.exe` が走り、失敗が問題一覧と波線に出る。生成物は起動されない。フェーズ P7-C。csc 専用（VBA Compile は F-VBA-BLD） |
 | F-SQU | S | 構文エラーの波線 | C# は csc 診断位置、PS は `ParseInput` エラー位置、VBA は F-VBA-BLD の位置に、エラー色の波線が付く。cmd は波線なし。フェーズ P7-C |

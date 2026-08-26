@@ -13,13 +13,14 @@ using WindowsIDE.Host.Csharp;
 using WindowsIDE.Host.PowerShell;
 using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
+using WindowsIDE.Terminal;
 using WindowsIDE.Ui.Fonts;
 using WindowsIDE.Workspace;
 
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力）、ステータス。起動時は下パネルを畳む。
+    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力 / ターミナル）、ステータス。起動時は下パネルを畳む。
     /// </summary>
     public sealed class MainForm : Form
     {
@@ -40,6 +41,9 @@ namespace WindowsIDE.Ui
         private CsharpProcessHost csharpHost;
         private PowerShellProcessHost powershellHost;
         private CmdProcessHost cmdHost;
+        private ToolStripMenuItem viewTerminalItem;
+        private ToolStripMenuItem viewPowerShellItem;
+        private ToolStripMenuItem viewCmdItem;
         private int buildGeneration;
         private int runGeneration;
         private ActiveRunKind activeRunKind;
@@ -274,7 +278,7 @@ namespace WindowsIDE.Ui
                 return true;
             }
 
-            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing))
+            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing) || (this.bottomPane != null && this.bottomPane.IsTerminalComposing))
             {
                 if (keyData == (Keys.Control | Keys.Z)
                     || keyData == (Keys.Control | Keys.Y)
@@ -287,7 +291,8 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Shift | Keys.F3)
                     || keyData == (Keys.Control | Keys.Shift | Keys.B)
                     || keyData == (Keys.Control | Keys.F5)
-                    || keyData == Keys.F8)
+                    || keyData == Keys.F8
+                    || keyData == (Keys.Control | Keys.Oemtilde))
                 {
                     return false;
                 }
@@ -332,12 +337,29 @@ namespace WindowsIDE.Ui
 
             if (keyData == Keys.Escape && this.findBar != null && this.findBar.Visible)
             {
-                if ((this.editor != null && this.editor.IsComposing) || this.findBar.IsComposing)
+                if ((this.editor != null && this.editor.IsComposing) || this.findBar.IsComposing || (this.bottomPane != null && this.bottomPane.IsTerminalComposing))
                 {
                     return false;
                 }
 
                 this.CloseFindBar();
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Oemtilde))
+            {
+                this.OnToggleTerminal();
+                return true;
+            }
+
+            if (keyData == Keys.Escape && this.bottomPane != null && this.bottomPane.IsTerminalFocused)
+            {
+                if (this.bottomPane.IsTerminalComposing)
+                {
+                    return false;
+                }
+
+                this.bottomPane.Terminal.SendToPty(new byte[] { 0x1B });
                 return true;
             }
 
@@ -357,6 +379,19 @@ namespace WindowsIDE.Ui
             {
                 this.OnRunSelection(this, EventArgs.Empty);
                 return true;
+            }
+
+            if (this.bottomPane != null && this.bottomPane.IsTerminalFocused)
+            {
+                if (keyData == (Keys.Control | Keys.Z)
+                    || keyData == (Keys.Control | Keys.Y)
+                    || keyData == (Keys.Control | Keys.X)
+                    || keyData == (Keys.Control | Keys.C)
+                    || keyData == (Keys.Control | Keys.V)
+                    || keyData == (Keys.Control | Keys.A))
+                {
+                    return false;
+                }
             }
 
             if (keyData == (Keys.Control | Keys.Z))
@@ -440,6 +475,16 @@ namespace WindowsIDE.Ui
             run.DropDownItems.Add(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun));
             run.DropDownItems.Add(this.CreateRunSelectionItem("選択行を実行(&L)", this.OnRunSelection));
 
+            ToolStripMenuItem view = this.CreateTop("表示(&V)");
+            this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
+            view.DropDownItems.Add(this.viewTerminalItem);
+            view.DropDownItems.Add(new ToolStripSeparator());
+            this.viewPowerShellItem = this.CreateShellCheckItem("PowerShell 5.1", this.OnViewPowerShell);
+            this.viewPowerShellItem.Checked = true;
+            this.viewCmdItem = this.CreateShellCheckItem("コマンド プロンプト", this.OnViewCmd);
+            view.DropDownItems.Add(this.viewPowerShellItem);
+            view.DropDownItems.Add(this.viewCmdItem);
+
             ToolStripMenuItem help = this.CreateTop("ヘルプ(&H)");
             help.DropDownItems.Add(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout));
 
@@ -447,6 +492,7 @@ namespace WindowsIDE.Ui
             this.menu.Items.Add(edit);
             this.menu.Items.Add(build);
             this.menu.Items.Add(run);
+            this.menu.Items.Add(view);
             this.menu.Items.Add(help);
             this.Controls.Add(this.menu);
         }
@@ -525,6 +571,25 @@ namespace WindowsIDE.Ui
             item.ForeColor = Theme.Foreground;
             item.BackColor = Theme.Background;
             item.ShortcutKeyDisplayString = "F8";
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateTerminalViewItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = "Ctrl+`";
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateShellCheckItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
             item.Click += handler;
             return item;
         }
@@ -711,6 +776,7 @@ namespace WindowsIDE.Ui
             this.bottomPane = new BottomPane();
             this.bottomPane.Dock = DockStyle.Fill;
             this.bottomPane.CloseRequested += this.OnBottomPaneClose;
+            this.bottomPane.TerminalSelected += this.OnBottomPaneTerminalSelected;
             this.bottomPane.ItemActivated += this.OnProblemActivated;
 
             this.bodySplit.Panel1.Controls.Add(this.split);
@@ -1022,6 +1088,10 @@ namespace WindowsIDE.Ui
                 this.ApplyEditorSettings(this.workspace.Settings.FontSize, this.workspace.Settings.TabSize);
                 this.Text = "WindowsIDE - " + this.workspace.RootPath;
                 WorkspaceTypeNames.Invalidate();
+                if (this.bottomPane != null)
+                {
+                    this.bottomPane.Terminal.SetWorkspaceRoot(this.workspace.RootPath);
+                }
                 if (this.editor != null)
                 {
                     this.ApplyWorkspaceToDocument(this.editor.Document);
@@ -2086,6 +2156,87 @@ namespace WindowsIDE.Ui
             }
         }
 
+        private void OnBottomPaneTerminalSelected(object sender, EventArgs e)
+        {
+            this.ShowTerminalPanel();
+        }
+
+        private void OnToggleTerminal()
+        {
+            if (this.bodySplit != null && !this.bodySplit.Panel2Collapsed && this.bottomPane != null && this.bottomPane.IsTerminalFocused)
+            {
+                this.bodySplit.Panel2Collapsed = true;
+                if (this.editor != null)
+                {
+                    this.editor.Focus();
+                }
+
+                return;
+            }
+
+            this.ShowTerminalPanel();
+        }
+
+        private void OnViewTerminal(object sender, EventArgs e)
+        {
+            this.ShowTerminalPanel();
+        }
+
+        private void OnViewPowerShell(object sender, EventArgs e)
+        {
+            this.SwitchTerminalShell(ShellKind.PowerShell51);
+        }
+
+        private void OnViewCmd(object sender, EventArgs e)
+        {
+            this.SwitchTerminalShell(ShellKind.Cmd);
+        }
+
+        private void ShowTerminalPanel()
+        {
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane == null)
+            {
+                return;
+            }
+
+            string root = (this.workspace == null) ? null : this.workspace.RootPath;
+            this.bottomPane.Terminal.SetWorkspaceRoot(root);
+            this.bottomPane.ShowTerminal();
+            this.bottomPane.Terminal.StartIfNeeded();
+        }
+
+        private void SwitchTerminalShell(ShellKind kind)
+        {
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane == null)
+            {
+                return;
+            }
+
+            string root = (this.workspace == null) ? null : this.workspace.RootPath;
+            this.bottomPane.Terminal.SetWorkspaceRoot(root);
+            this.bottomPane.ShowTerminal();
+            if (this.bottomPane.Terminal.ShellKind == kind)
+            {
+                this.bottomPane.Terminal.StartIfNeeded();
+            }
+            else
+            {
+                this.bottomPane.Terminal.SwitchShell(kind);
+            }
+
+            if (this.viewPowerShellItem != null)
+            {
+                this.viewPowerShellItem.Checked = (kind == ShellKind.PowerShell51);
+            }
+
+            if (this.viewCmdItem != null)
+            {
+                this.viewCmdItem.Checked = (kind == ShellKind.Cmd);
+            }
+        }
+
         private void OnProblemActivated(object sender, ProblemActivatedEventArgs e)
         {
             if (e == null || e.Diagnostic == null || string.IsNullOrEmpty(e.Diagnostic.FilePath))
@@ -2640,6 +2791,11 @@ namespace WindowsIDE.Ui
                     this.cmdHost.Exited -= this.OnCmdExited;
                     this.cmdHost.StartFailed -= this.OnCmdStartFailed;
                     this.cmdHost.Kill();
+                }
+
+                if (this.bottomPane != null)
+                {
+                    this.bottomPane.Terminal.CloseSession();
                 }
 
                 if (this.menu != null)

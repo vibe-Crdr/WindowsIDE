@@ -17,6 +17,7 @@ tests\WindowsIDE.Tests\Program.cs
 src\WindowsIDE\StartupArgs.cs
 src\WindowsIDE\Ui\DpiUtil.cs
 src\WindowsIDE\Ui\Theme.cs
+src\WindowsIDE\Ui\ThemedScrollBar.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\NativeCaption.cs
 src\WindowsIDE\Ui\Fonts\FontLoader.cs
@@ -25,6 +26,7 @@ src\WindowsIDE\Ui\Fonts\GlyphClassifier.cs
 src\WindowsIDE\Ui\Fonts\DualFontPainter.cs
 src\WindowsIDE\Ui\Fonts\UiMnemonic.cs
 src\WindowsIDE\Editor\ImeLayout.cs
+src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Editor\TextBuffer.cs
 src\WindowsIDE\Editor\UndoStack.cs
 src\WindowsIDE\Editor\FileEncoding.cs
@@ -65,6 +67,16 @@ src\WindowsIDE\Build\CscRunner.cs
 src\WindowsIDE\Host\Csharp\CsharpProcessHost.cs
 src\WindowsIDE\Host\PowerShell\PowerShellProcessHost.cs
 src\WindowsIDE\Host\Cmd\CmdProcessHost.cs
+src\WindowsIDE\Terminal\ShellKind.cs
+src\WindowsIDE\Terminal\ShellPaths.cs
+src\WindowsIDE\Terminal\CellWidth.cs
+src\WindowsIDE\Terminal\ColorSlot.cs
+src\WindowsIDE\Terminal\VtScreen.cs
+src\WindowsIDE\Terminal\VtParser.cs
+src\WindowsIDE\Terminal\TerminalInput.cs
+src\WindowsIDE\Terminal\NativeMethods.cs
+src\WindowsIDE\Terminal\PseudoConsoleSession.cs
+src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\PathGuard.cs

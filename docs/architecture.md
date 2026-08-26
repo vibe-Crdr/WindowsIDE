@@ -36,8 +36,8 @@ flowchart LR
 
 - UI は WinForms。メインは STA（Excel COM のため `[STAThread]`）。
 - ユーザー C# プログラムは別プロセス。IDE を落とさない。手動ビルド成功後の起動だけが `WindowsIDE.Host.Csharp`（csc は持たない）。常時コンパイル（F-LIVE）の一時生成物は起動しない。
-- P1 のユーザー `.ps1`（F-PS-RUN）は `powershell.exe` 5.1 の子プロセス（`WindowsIDE.Host.PowerShell`）。同一プロセスの Runspace は P3 F-DBG-PS の余地として残し、波線のために Runspace を増やさない。対話ターミナル（F-TERM）はまだ作らない。PS 構文エラー位置は `WindowsIDE.Languages` が `ParseInput` する（実行しない）。
-- P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `cmd.exe` の子プロセス（`WindowsIDE.Host.Cmd`）。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話ターミナル（F-TERM）はまだ作らない。C# / PowerShell / cmd の 3 ホストは同時に走らせない。
+- P1 のユーザー `.ps1`（F-PS-RUN）は `powershell.exe` 5.1 の子プロセス（`WindowsIDE.Host.PowerShell`）。同一プロセスの Runspace は P3 F-DBG-PS の余地として残し、波線のために Runspace を増やさない。対話ターミナル（F-TERM）は `WindowsIDE.Terminal` の ConPTY であり、この 1 ショットホストとは別プロセスとして共存できる。PS 構文エラー位置は `WindowsIDE.Languages` が `ParseInput` する（実行しない）。
+- P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `cmd.exe` の子プロセス（`WindowsIDE.Host.Cmd`）。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話ターミナル（F-TERM）は `WindowsIDE.Terminal` の ConPTY。C# / PowerShell / cmd の 3 つの 1 ショットホストは同時に走らせない。PTY は 1 ショットと共存し、1 ショットの Kill 集合には入らない。
 - VBA の実行主体は Excel。IDE は同期と明示の `Application.Run`、エラー表示を担う。フェーズ P7 で診断専用の Excel Compile を足す（Run はしない。`WindowsIDE.Vba`）。
 
 ## 製品内部（単一 EXE）
@@ -47,7 +47,7 @@ flowchart LR
 | 名前空間 | 責務 |
 | --- | --- |
 | `WindowsIDE` | `Program.Main`、起動引数（`StartupArgs`）、未処理例外 |
-| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、DualFontField（FindBar の単一行入力）、BottomPane（問題 / 出力）、ProblemListControl、OutputPanelControl。将来: コマンドパレット、ホバーの見た目（既存色。フェーズ P7）、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
+| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、DualFontField（FindBar の単一行入力）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、ホバーの見た目（既存色。フェーズ P7）、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）。将来: 括弧描画、波線描画、自動閉じ / F-DOC の挿入、ホバー枠のホスト、キー記録（フェーズ P7–P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML |
@@ -55,11 +55,11 @@ flowchart LR
 | `WindowsIDE.Build` | 手動 csc（指定 Framework パス、6 DLL、rsp、`CscRunner`、診断パース）。生成 EXE は TEMP に出す。`Process.Start` しない。起動は持たない。VBA Compile は置かない。将来の常時コンパイル（デバウンス、前回 csc の Kill、一時出力）もここ |
 | `WindowsIDE.Debug` | セッション、ブレーク、出力 |
 | `WindowsIDE.Host.PowerShell` | P1 は `powershell.exe` 5.1 子プロセスでユーザー `.ps1` を実行する。同一プロセス Runspace は P3 F-DBG-PS の余地。波線のために Runspace を増やさない。Parse は Languages |
-| `WindowsIDE.Host.Cmd` | P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `System32\cmd.exe` の子プロセス。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話ターミナル（F-TERM）はまだ作らない。C# / PowerShell / cmd の 3 ホストは同時に走らせない。 |
+| `WindowsIDE.Host.Cmd` | P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `System32\cmd.exe` の子プロセス。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話は `WindowsIDE.Terminal`（ConPTY）。C# / PowerShell / cmd の 3 つの 1 ショットは同時に走らせない |
 | `WindowsIDE.Host.Csharp` | 手動ビルド成功後のユーザー EXE 起動と stdout/stderr。csc は持たない。常時コンパイル（F-LIVE）はここに置かない。のち CLR デバッグ。VBA Compile は置かない |
 | `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期。将来: プッシュ後の COM Compile 診断（F-VBA-BLD。Run はしない）、References（F-VBA-REF、フェーズ P8） |
 | `WindowsIDE.Macro` | フェーズ P8。キー記録の再生と、パレットコマンド名を PowerShell 5.1 から呼ぶ薄い面。拡張ホストではない |
-| `WindowsIDE.Terminal` | 統合ターミナル |
+| `WindowsIDE.Terminal` | 統合ターミナル（ConPTY）。CreateProcess は EXTENDED_STARTUPINFO_PRESENT。CREATE_NO_WINDOW と STARTF_USESTDHANDLES は付けない。レジストリ Blind Access Off のときだけ張り付き SPI_GETSCREENREADER をライブ解除し、PTY 子へ TERM は渡さない。シェルパス、VT 画面、セッション、入力分類。WinForms / Theme / Host.* は参照しない。1 ショットホストとは共存する |
 
 編集器は `RichTextBox` に色を載せる方式にしない（遅い、フォント混在が苦しい）。`Control` を継承し、GDI+ で行単位描画する。
 

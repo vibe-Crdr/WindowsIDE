@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。
+凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
 
 ## P0 スライス
 
@@ -100,6 +100,18 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 ## 残 P1
 
 残作業なし。P1 完了。スマートインデント・括弧強調・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時コンパイル・波線・VBA Compile 診断は残 P1 に入れない。
+
+## P2 F-VBA-SYNC スライス
+
+R7 の VBA ディレクトリ ↔ Excel 明示プル／プッシュ。Compile / Run / References / UserForm は入れない。
+
+| ID | P2 F-VBA-SYNC でやる | P2 F-VBA-SYNC でやらない |
+| --- | --- | --- |
+| F-VBA-SYNC | ディスク `vba/`（マップ root）の `.bas` / `.cls` とマクロ有効ブック（`.xlsm` / `.xlsb`）の明示プル／プッシュ。Excel 側にフォルダは作らない。両方の `namingMode`（正は vba-map）。VBA 既定 CP932。マップ `{workspace}/.windows-ide/vba-map.xml`。トップ `VBA(&A)`（実行と表示の間）。遅延バインディング（`Type.InvokeMember`）。IDE が起動した Excel を Quit しない | F-VBA-BLD / Compile、F-VBA-REF、F-DBG-VBA、`Application.Run`、UserForm（`.frm` / `.frx`）、Excel のみモジュールの削除コマンド、複数ブック、一般メニュー「ファイルを開く」、D&D、新 Theme 色、Office PIA `/r`、`Microsoft.CSharp.dll`、`dynamic`、Host.* / Terminal / Languages レキサ変更、`workspace.xml` に namingMode、プッシュ成功後の Workbook.Save、Excel の Quit/Close、GetProcessesByName、バックグラウンド COM、DoEvents、進捗ダイアログ、P7/P8 |
+
+## 残 P2
+
+残作業なし。Compile 等は残 P2 に入れない。
 
 ## フェーズ P7（編集器インテリジェンス）— 今は実装しない
 
@@ -265,7 +277,7 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | F-SAVE | M | 保存、すべて保存、名前を付けて保存 | エンコーディング規則どおり書き込む。保存ダイアログは Common Item Dialog |
 | F-PAL | S | コマンドパレット | コマンド名で絞り込み実行 |
 | F-QO | S | クイックオープン | ワークスペース内ファイル名で開く |
-| F-SET | M | 設定 UI または XML 編集 | フォントサイズと VBA `namingMode` を切替できる。半角フォントは Cascadia Mono 固定 |
+| F-SET | M | 設定 UI または XML 編集 | フォントサイズと VBA `namingMode` を切替できる。半角フォントは Cascadia Mono 固定。P2 の namingMode は vba-map + VBA メニュー。設定画面なし |
 
 ## 編集器
 
@@ -294,6 +306,7 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | F-PS-RUN | M | `.ps1` を PowerShell 5.1 で実行 | `$PSVersionTable.PSVersion.Major -eq 5` |
 | F-CMD-RUN | M | `.cmd` / `.bat` / 選択行を cmd で実行 | ディスク上の `.cmd` / `.bat` を OS 同梱 `cmd.exe` で実行し、stdout/stderr/起動終了が出力パネルに出る。選択テキスト（無ければ現在行）も同じ `cmd.exe` で実行し、stdout/stderr/起動終了が出力パネルに出る。Ctrl+F5 はファイル全体。F8 は選択行。 |
 | F-TERM | M | 統合ターミナル | 下パネルにターミナルがあり、既定は System32 の powershell.exe 5.1（`-NoLogo -NoProfile -ExecutionPolicy Bypass`）、メニューで cmd.exe（`/d`）に切替できる。ConPTY でプロンプト・Read-Host・`dir /p` が対話できる。Ctrl+` で表示／フォーカス（ターミナルフォーカス中なら畳む）。1 ショット実行と共存する |
+| F-VBA-SYNC | M | VBA ディレクトリ ↔ Excel プッシュ / プル | ディスクの `vba/` で `.bas` / `.cls` を管理し、マクロ有効ブックと明示のプル／プッシュができる。Excel 側にフォルダは作らない。両方の namingMode。VBA 既定 CP932 |
 | F-PROB | M | 問題一覧 | クリックでファイル+行。残 P1 の受け入れは手動 `csc` の診断を問題一覧に出すこと。将来の常時 csc（F-LIVE、フェーズ P7）と VBA Compile（F-VBA-BLD、フェーズ P7）も同じ診断モデル。VBA Compile の受け入れは F-VBA-BLD。競合したら新しい方で置き換える |
 | F-LIVE | S | 常時コンパイル（診断のみ） | 入力停止後にデバウンスした Framework `csc.exe` が走り、失敗が問題一覧と波線に出る。生成物は起動されない。フェーズ P7-C。csc 専用（VBA Compile は F-VBA-BLD） |
 | F-SQU | S | 構文エラーの波線 | C# は csc 診断位置、PS は `ParseInput` エラー位置、VBA は F-VBA-BLD の位置に、エラー色の波線が付く。cmd は波線なし。フェーズ P7-C |

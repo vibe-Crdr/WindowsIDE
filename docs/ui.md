@@ -55,6 +55,10 @@ P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`T
 
 下パネルにターミナルタブを足す。空のデバッグタブは置かない。件数は問題一覧の「エラー n, 警告 m」のまま（ターミナル用件数なし）。× はパネル全体を畳み、PTY は殺さない。フォントは BottomPane と同じ **12 DIP** DualFont（本文 `fontSize` 非連動）。背景 `Background`、枠 `Border`、キャレットは細いバー。`ShowTerminal` だけターミナルへフォーカスする。`ShowProblems` / `ShowOutput` はフォーカスを奪わない。初回表示 180 DIP（既存 EnsureBottomPaneVisible）。PTY は初回 ShowTerminal で遅延起動。
 
+### P2 F-VBA-SYNC（VBA メニュー）
+
+トップ `VBA(&A)` を実行と表示の間に置く。ブックを選ぶ / プル（表示 Ctrl+Alt+P）/ プッシュ（表示 Ctrl+Alt+H）/ 名前の付け方。ShortcutKeys は付けず ProcessCmdKey。新しい Theme 色は足さない。ステータス列は増やさない。同期完了で編集フォーカスを奪わない。UseWaitCursor。進捗 UI なし。
+
 ### P1 F-CMD-RUN 選択行
 
 実行メニューに「選択行を実行」（表示 F8。ShortcutKeys は付けない。ProcessCmdKey）。出力契約は F-CS-RUN と同じ（stdout は `Foreground`、stderr は `Error`、起動／終了は `Comment`）。空のターミナルタブは置かない。

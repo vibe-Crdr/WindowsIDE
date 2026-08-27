@@ -57,7 +57,7 @@ flowchart LR
 | `WindowsIDE.Host.PowerShell` | P1 は `powershell.exe` 5.1 子プロセスでユーザー `.ps1` を実行する。同一プロセス Runspace は P3 F-DBG-PS の余地。波線のために Runspace を増やさない。Parse は Languages |
 | `WindowsIDE.Host.Cmd` | P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `System32\cmd.exe` の子プロセス。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話は `WindowsIDE.Terminal`（ConPTY）。C# / PowerShell / cmd の 3 つの 1 ショットは同時に走らせない |
 | `WindowsIDE.Host.Csharp` | 手動ビルド成功後のユーザー EXE 起動と stdout/stderr。csc は持たない。常時コンパイル（F-LIVE）はここに置かない。のち CLR デバッグ。VBA Compile は置かない |
-| `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期。将来: プッシュ後の COM Compile 診断（F-VBA-BLD。Run はしない）、References（F-VBA-REF、フェーズ P8） |
+| `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期（P2 F-VBA-SYNC 実装済み）。Compile（F-VBA-BLD）/ References（F-VBA-REF）/ `Application.Run` は将来 |
 | `WindowsIDE.Macro` | フェーズ P8。キー記録の再生と、パレットコマンド名を PowerShell 5.1 から呼ぶ薄い面。拡張ホストではない |
 | `WindowsIDE.Terminal` | 統合ターミナル（ConPTY）。CreateProcess は EXTENDED_STARTUPINFO_PRESENT。CREATE_NO_WINDOW と STARTF_USESTDHANDLES は付けない。レジストリ Blind Access Off のときだけ張り付き SPI_GETSCREENREADER をライブ解除し、PTY 子へ TERM は渡さない。シェルパス、VT 画面、セッション、入力分類。WinForms / Theme / Host.* は参照しない。1 ショットホストとは共存する |
 

@@ -172,12 +172,17 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
-        /// 名前を付けて保存する。パスを更新する。
+        /// 名前を付けて保存する。パスを更新する。無題を .bas / .cls にした場合は CP932 BOM なしへ切り替えてから書く。
         /// </summary>
         /// <param name="path">保存先。</param>
         public void SaveAs(string path)
         {
             LanguageKind before = this.Language;
+            if (string.IsNullOrEmpty(this.filePath) && IsBasOrCls(path))
+            {
+                this.encodingInfo = new FileEncodingInfo(932, false, false, this.encodingInfo.NewLine);
+            }
+
             this.WriteTo(path);
             this.filePath = Path.GetFullPath(path);
             this.untitledName = null;
@@ -185,6 +190,41 @@ namespace WindowsIDE.Editor
             {
                 this.ResetHighlight();
             }
+        }
+
+        /// <summary>
+        /// ディスクから本文を再読込する。キャレットは Clamp。Undo は捨てる。ダーティを落とす。
+        /// </summary>
+        /// <returns>読めたら true。</returns>
+        public bool ReloadFromDisk()
+        {
+            if (string.IsNullOrEmpty(this.filePath) || !File.Exists(this.filePath))
+            {
+                return false;
+            }
+
+            byte[] data = File.ReadAllBytes(this.filePath);
+            string text;
+            FileEncodingInfo info;
+            string error;
+            if (!FileEncoding.TryDecode(data, out text, out info, out error))
+            {
+                return false;
+            }
+
+            this.encodingInfo = info;
+            this.buffer.NewLine = info.NewLine;
+            this.buffer.SetText(text);
+            this.undo.Clear();
+            this.isDirty = false;
+            BufferPoint caret = this.buffer.Clamp(new BufferPoint(this.caretLine, this.caretColumn));
+            this.caretLine = caret.Line;
+            this.caretColumn = caret.Column;
+            BufferPoint anchor = this.buffer.Clamp(new BufferPoint(this.anchorLine, this.anchorColumn));
+            this.anchorLine = anchor.Line;
+            this.anchorColumn = anchor.Column;
+            this.ResetHighlight();
+            return true;
         }
 
         /// <summary>
@@ -257,6 +297,17 @@ namespace WindowsIDE.Editor
             }
 
             this.isDirty = false;
+        }
+
+        private static bool IsBasOrCls(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            return path.EndsWith(".bas", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".cls", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

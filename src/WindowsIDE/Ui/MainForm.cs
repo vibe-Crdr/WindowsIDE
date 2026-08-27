@@ -15,6 +15,7 @@ using WindowsIDE.Languages;
 using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Terminal;
 using WindowsIDE.Ui.Fonts;
+using WindowsIDE.Vba;
 using WindowsIDE.Workspace;
 
 namespace WindowsIDE.Ui
@@ -44,6 +45,8 @@ namespace WindowsIDE.Ui
         private ToolStripMenuItem viewTerminalItem;
         private ToolStripMenuItem viewPowerShellItem;
         private ToolStripMenuItem viewCmdItem;
+        private ToolStripMenuItem vbaNameFilenameItem;
+        private ToolStripMenuItem vbaNameFolderPrefixItem;
         private int buildGeneration;
         private int runGeneration;
         private ActiveRunKind activeRunKind;
@@ -292,7 +295,9 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.Shift | Keys.B)
                     || keyData == (Keys.Control | Keys.F5)
                     || keyData == Keys.F8
-                    || keyData == (Keys.Control | Keys.Oemtilde))
+                    || keyData == (Keys.Control | Keys.Oemtilde)
+                    || keyData == (Keys.Control | Keys.Alt | Keys.P)
+                    || keyData == (Keys.Control | Keys.Alt | Keys.H))
                 {
                     return false;
                 }
@@ -378,6 +383,18 @@ namespace WindowsIDE.Ui
             if (keyData == Keys.F8)
             {
                 this.OnRunSelection(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Alt | Keys.P))
+            {
+                this.OnVbaPull(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Alt | Keys.H))
+            {
+                this.OnVbaPush(this, EventArgs.Empty);
                 return true;
             }
 
@@ -475,6 +492,19 @@ namespace WindowsIDE.Ui
             run.DropDownItems.Add(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun));
             run.DropDownItems.Add(this.CreateRunSelectionItem("選択行を実行(&L)", this.OnRunSelection));
 
+            ToolStripMenuItem vba = this.CreateTop("VBA(&A)");
+            vba.DropDownOpening += this.OnVbaMenuOpening;
+            vba.DropDownItems.Add(this.CreateItem("ブックを選ぶ(&B)", Keys.None, this.OnVbaPickWorkbook));
+            vba.DropDownItems.Add(this.CreateVbaPullItem("プル(&P)", this.OnVbaPull));
+            vba.DropDownItems.Add(this.CreateVbaPushItem("プッシュ(&H)", this.OnVbaPush));
+            vba.DropDownItems.Add(new ToolStripSeparator());
+            ToolStripMenuItem naming = this.CreateTop("名前の付け方(&N)");
+            this.vbaNameFilenameItem = this.CreateShellCheckItem("filename", this.OnVbaNamingFilename);
+            this.vbaNameFolderPrefixItem = this.CreateShellCheckItem("folder_prefix", this.OnVbaNamingFolderPrefix);
+            naming.DropDownItems.Add(this.vbaNameFilenameItem);
+            naming.DropDownItems.Add(this.vbaNameFolderPrefixItem);
+            vba.DropDownItems.Add(naming);
+
             ToolStripMenuItem view = this.CreateTop("表示(&V)");
             this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
             view.DropDownItems.Add(this.viewTerminalItem);
@@ -492,6 +522,7 @@ namespace WindowsIDE.Ui
             this.menu.Items.Add(edit);
             this.menu.Items.Add(build);
             this.menu.Items.Add(run);
+            this.menu.Items.Add(vba);
             this.menu.Items.Add(view);
             this.menu.Items.Add(help);
             this.Controls.Add(this.menu);
@@ -551,6 +582,26 @@ namespace WindowsIDE.Ui
             item.ForeColor = Theme.Foreground;
             item.BackColor = Theme.Background;
             item.ShortcutKeyDisplayString = "Ctrl+Shift+B";
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateVbaPullItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = "Ctrl+Alt+P";
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateVbaPushItem(string text, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = "Ctrl+Alt+H";
             item.Click += handler;
             return item;
         }
@@ -1388,6 +1439,356 @@ namespace WindowsIDE.Ui
         private void OnSaveAll(object sender, EventArgs e) { this.SaveAll(); }
         private void OnCloseTab(object sender, EventArgs e) { this.CloseCurrentTab(); }
         private void OnExit(object sender, EventArgs e) { this.Close(); }
+
+        private void OnVbaMenuOpening(object sender, EventArgs e)
+        {
+            bool filename = false;
+            bool folder = false;
+            if (this.workspace != null)
+            {
+                VbaMap map;
+                string error;
+                if (VbaMap.TryLoad(this.workspace.RootPath, out map, out error) == VbaMapLoadStatus.Ok && map != null)
+                {
+                    filename = map.NamingMode == VbaNamingMode.Filename;
+                    folder = map.NamingMode == VbaNamingMode.FolderPrefix;
+                }
+            }
+
+            if (this.vbaNameFilenameItem != null)
+            {
+                this.vbaNameFilenameItem.Checked = filename;
+            }
+
+            if (this.vbaNameFolderPrefixItem != null)
+            {
+                this.vbaNameFolderPrefixItem.Checked = folder;
+            }
+        }
+
+        private void OnVbaPickWorkbook(object sender, EventArgs e)
+        {
+            if (this.workspace == null)
+            {
+                MessageBox.Show(this, "ワークスペースを開いてください。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string initial = this.workspace.RootPath;
+            string path;
+            try
+            {
+                if (!CommonItemDialog.TryPickOpenFile(
+                    this,
+                    "Excel マクロ有効ブックを選ぶ",
+                    initial,
+                    "Excel マクロ有効ブック (*.xlsm;*.xlsb)|*.xlsm;*.xlsb",
+                    out path))
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!VbaWorkbookPath.IsMacroWorkbook(path))
+            {
+                MessageBox.Show(this, "マクロ有効ブック（.xlsm / .xlsb）ではありません。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            this.ApplyVbaSyncResult(VbaSyncService.SetWorkbook(this.workspace.RootPath, path), false);
+        }
+
+        private void OnVbaPull(object sender, EventArgs e)
+        {
+            this.RunVbaSync(delegate(VbaSyncConfirm confirm)
+            {
+                return VbaSyncService.Pull(this.workspace.RootPath, confirm);
+            }, true);
+        }
+
+        private void OnVbaPush(object sender, EventArgs e)
+        {
+            this.RunVbaSync(delegate(VbaSyncConfirm confirm)
+            {
+                return VbaSyncService.Push(this.workspace.RootPath, confirm);
+            }, false);
+        }
+
+        private void OnVbaNamingFilename(object sender, EventArgs e)
+        {
+            this.ChangeVbaNamingMode(VbaNamingMode.Filename);
+        }
+
+        private void OnVbaNamingFolderPrefix(object sender, EventArgs e)
+        {
+            this.ChangeVbaNamingMode(VbaNamingMode.FolderPrefix);
+        }
+
+        private void ChangeVbaNamingMode(VbaNamingMode mode)
+        {
+            if (this.workspace == null)
+            {
+                MessageBox.Show(this, "ワークスペースを開いてください。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            VbaRenamePreview[] rows;
+            VbaSyncResult preview = VbaSyncService.PreviewNaming(this.workspace.RootPath, mode, out rows);
+            if (!preview.Success)
+            {
+                this.ApplyVbaSyncResult(preview, false);
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            int shown = (rows.Length < 20) ? rows.Length : 20;
+            for (int i = 0; i < shown; i++)
+            {
+                sb.Append(rows[i].OldName);
+                sb.Append(" → ");
+                sb.Append(rows[i].NewName);
+                if (rows[i].IsDocument)
+                {
+                    sb.Append("（document）");
+                }
+
+                sb.AppendLine();
+            }
+
+            if (rows.Length > 20)
+            {
+                sb.Append("他 ");
+                sb.Append((rows.Length - 20).ToString());
+                sb.AppendLine(" 件");
+            }
+
+            sb.Append("名前の付け方だけを更新します。Excel 側はまだリネームしません。");
+            DialogResult answer = MessageBox.Show(this, sb.ToString(), "WindowsIDE", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes)
+            {
+                return;
+            }
+
+            this.ApplyVbaSyncResult(VbaSyncService.SetNamingMode(this.workspace.RootPath, mode), false);
+        }
+
+        private void RunVbaSync(Func<VbaSyncConfirm, VbaSyncResult> action, bool reloadWritten)
+        {
+            if (this.workspace == null)
+            {
+                MessageBox.Show(this, "ワークスペースを開いてください。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            VbaSyncConfirm confirm = new VbaSyncConfirm(this.ConfirmVbaDirty, this.ConfirmVbaExcelUnsaved);
+            this.UseWaitCursor = true;
+            VbaSyncResult result;
+            try
+            {
+                result = action(confirm);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            finally
+            {
+                this.UseWaitCursor = false;
+            }
+
+            this.ApplyVbaSyncResult(result, reloadWritten);
+        }
+
+        private bool ConfirmVbaDirty(string[] paths)
+        {
+            bool wait = this.UseWaitCursor;
+            this.UseWaitCursor = false;
+            try
+            {
+                List<Document> dirty = new List<Document>();
+                if (this.tabs != null && paths != null)
+                {
+                    for (int i = 0; i < this.tabs.Tabs.Count; i++)
+                    {
+                        Document doc = this.tabs.Tabs[i];
+                        if (doc == null || !doc.IsDirty || string.IsNullOrEmpty(doc.FilePath))
+                        {
+                            continue;
+                        }
+
+                        for (int j = 0; j < paths.Length; j++)
+                        {
+                            if (paths[j] != null && string.Equals(doc.FilePath, paths[j], StringComparison.OrdinalIgnoreCase))
+                            {
+                                dirty.Add(doc);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (dirty.Count == 0)
+                {
+                    return true;
+                }
+
+                DialogResult r = MessageBox.Show(
+                    this,
+                    "対象ファイルに未保存のタブがあります。保存して続行しますか?",
+                    "WindowsIDE",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                if (r != DialogResult.Yes)
+                {
+                    return false;
+                }
+
+                for (int i = 0; i < dirty.Count; i++)
+                {
+                    try
+                    {
+                        if (!dirty[i].Save())
+                        {
+                            return false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(this, ex.Message, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return false;
+                    }
+                }
+
+                if (this.tabs != null)
+                {
+                    this.tabs.RefreshTabs();
+                }
+
+                return true;
+            }
+            finally
+            {
+                this.UseWaitCursor = wait;
+            }
+        }
+
+        private bool ConfirmVbaExcelUnsaved()
+        {
+            bool wait = this.UseWaitCursor;
+            this.UseWaitCursor = false;
+            try
+            {
+                DialogResult r = MessageBox.Show(
+                    this,
+                    "Excel のブックが未保存です。保存して続行しますか?",
+                    "WindowsIDE",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                return r == DialogResult.Yes;
+            }
+            finally
+            {
+                this.UseWaitCursor = wait;
+            }
+        }
+
+        private void ApplyVbaSyncResult(VbaSyncResult result, bool reloadWritten)
+        {
+            if (result == null || result.Cancelled)
+            {
+                return;
+            }
+
+            if (result.ReplaceProblems)
+            {
+                this.ShowBuildDiagnostics(result.Diagnostics);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(result.Message))
+            {
+                MessageBox.Show(
+                    this,
+                    result.Message,
+                    "WindowsIDE",
+                    MessageBoxButtons.OK,
+                    result.IsErrorMessage ? MessageBoxIcon.Error : MessageBoxIcon.Warning);
+                if (!result.Success)
+                {
+                    return;
+                }
+            }
+
+            if (!result.Success)
+            {
+                return;
+            }
+
+            if (result.CreatedMap)
+            {
+                MessageBox.Show(
+                    this,
+                    "Excel 上の VBA は平坦です。フォルダは IDE のディスク専用です。",
+                    "WindowsIDE",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+
+            if (reloadWritten && this.tree != null && this.workspace != null)
+            {
+                this.tree.Rebuild();
+            }
+
+            if (reloadWritten && result.WrittenPaths != null && this.tabs != null)
+            {
+                for (int i = 0; i < this.tabs.Tabs.Count; i++)
+                {
+                    Document doc = this.tabs.Tabs[i];
+                    if (doc == null || string.IsNullOrEmpty(doc.FilePath) || doc.IsDirty)
+                    {
+                        continue;
+                    }
+
+                    for (int j = 0; j < result.WrittenPaths.Length; j++)
+                    {
+                        if (result.WrittenPaths[j] != null
+                            && string.Equals(doc.FilePath, result.WrittenPaths[j], StringComparison.OrdinalIgnoreCase))
+                        {
+                            doc.ReloadFromDisk();
+                            break;
+                        }
+                    }
+                }
+
+                if (this.editor != null && this.editor.Document != null)
+                {
+                    Document current = this.editor.Document;
+                    this.editor.Document = current;
+                }
+
+                this.tabs.RefreshTabs();
+                this.UpdateStatus();
+            }
+
+            if (result.ExcelOnlyNames != null && result.ExcelOnlyNames.Length > 0)
+            {
+                StringBuilder names = new StringBuilder();
+                names.AppendLine("Excel にだけあるモジュール（削除していません）:");
+                for (int i = 0; i < result.ExcelOnlyNames.Length; i++)
+                {
+                    names.AppendLine(result.ExcelOnlyNames[i]);
+                }
+
+                MessageBox.Show(this, names.ToString(), "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
         private void OnUndo(object sender, EventArgs e) { this.editor.Undo(); }
         private void OnRedo(object sender, EventArgs e) { this.editor.Redo(); }
         private void OnCut(object sender, EventArgs e) { this.editor.Cut(); }

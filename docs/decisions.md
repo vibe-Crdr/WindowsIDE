@@ -33,7 +33,7 @@
 
 | ID | 内容 |
 | --- | --- |
-| P4 | 設定・マップは **XML**（`System.Xml` / `XmlDocument`）。P0 の `{workspace}/.windows-ide/workspace.xml` は `editor/@fontSize` と `editor/@tabSize` のみ。フォルダを開いただけでは作らない。`namingMode` / `vba-map` は P2 まで作らない |
+| P4 | 設定・マップは **XML**（`System.Xml` / `XmlDocument`）。P0 の `{workspace}/.windows-ide/workspace.xml` は `editor/@fontSize` と `editor/@tabSize` のみ。`vba-map` は P2 の同期操作で作る。workspace.xml に namingMode は書かない。フォルダを開いただけでは `.windows-ide` を作らない |
 | P6 | 製品は **単一 WinExe**。`build/out/WindowsIDE.exe` のみ（隣の PDB と `WindowsIDE.exe.config` は可）。クラスライブラリ分割はしない |
 | P7 | 製品 C# ソースと新規ユーザー `.cs` は **UTF-8 BOM**。新規ファイルの改行は CRLF。VBA / CP932 既定は P2 |
 

@@ -95,6 +95,11 @@ namespace WindowsIDE.Editor
                 return this.utf16BigEndian ? new UnicodeEncoding(true, this.hasBom) : new UnicodeEncoding(false, this.hasBom);
             }
 
+            if (this.codePage == 932)
+            {
+                return Encoding.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ReplacementFallback);
+            }
+
             return Encoding.GetEncoding(this.codePage);
         }
     }

@@ -76,6 +76,16 @@ src\WindowsIDE\Terminal\VtParser.cs
 src\WindowsIDE\Terminal\TerminalInput.cs
 src\WindowsIDE\Terminal\NativeMethods.cs
 src\WindowsIDE\Terminal\PseudoConsoleSession.cs
+src\WindowsIDE\Vba\ComInvoker.cs
+src\WindowsIDE\Vba\VbaComponentKind.cs
+src\WindowsIDE\Vba\VbaIdentifier.cs
+src\WindowsIDE\Vba\VbaExportText.cs
+src\WindowsIDE\Vba\VbaNaming.cs
+src\WindowsIDE\Vba\VbaMap.cs
+src\WindowsIDE\Vba\VbaDiskTree.cs
+src\WindowsIDE\Vba\VbaWorkbookPath.cs
+src\WindowsIDE\Vba\VbaSyncResult.cs
+src\WindowsIDE\Vba\VbaSyncService.cs
 src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs

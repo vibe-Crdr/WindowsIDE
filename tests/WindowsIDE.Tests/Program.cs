@@ -16,6 +16,7 @@ using WindowsIDE.Languages.CSharp;
 using WindowsIDE.Terminal;
 using WindowsIDE.Ui;
 using WindowsIDE.Ui.Fonts;
+using WindowsIDE.Vba;
 using WindowsIDE.Workspace;
 
 namespace WindowsIDE.Tests
@@ -65,6 +66,8 @@ namespace WindowsIDE.Tests
             RunGlyphClassifier();
             RunPathGuard();
             RunWorkspaceSettings();
+            RunVbaOffline();
+            RunDocumentVbaEncoding();
             RunFontLoaderFallback();
             RunTabSwitchScroll();
             RunDpiUtil();
@@ -96,6 +99,7 @@ namespace WindowsIDE.Tests
             RunPseudoConsolePowerShellInteractive();
             InspectPseudoConsoleSessionSource();
             InspectMainFormTerminalSource();
+            InspectVbaSyncSource();
             InspectBottomPaneTerminalSource();
             Console.WriteLine();
             Console.WriteLine("Passed: " + passed.ToString() + "  Failed: " + failed.ToString());
@@ -323,6 +327,25 @@ namespace WindowsIDE.Tests
 
             byte[] utf16 = new byte[] { 0xFF, 0xFE, 0x41, 0x00 };
             Check("utf16 le", FileEncoding.TryDecode(utf16, out text, out info, out error) && text == "A" && info.CodePage == 1200);
+
+            FileEncodingInfo cp932Info = new FileEncodingInfo(932, false, false, "\r\n");
+            byte[] cp932Save = FileEncoding.GetBytesToSave("abc", cp932Info, "C:\\tmp\\a.bas");
+            Check("cp932 save no bom", cp932Save.Length == 3 && cp932Save[0] == 0x61 && cp932Save[1] == 0x62 && cp932Save[2] == 0x63);
+
+            byte[] cp932Ja = FileEncoding.GetBytesToSave("あ", cp932Info, "C:\\tmp\\a.bas");
+            Check("cp932 save kana", cp932Ja.Length == 2 && cp932Ja[0] == 0x82 && cp932Ja[1] == 0xA0);
+
+            bool encThrew = false;
+            try
+            {
+                FileEncoding.GetBytesToSave("\u2603", cp932Info, "C:\\tmp\\a.bas");
+            }
+            catch (EncoderFallbackException)
+            {
+                encThrew = true;
+            }
+
+            Check("cp932 encoder exception", encThrew);
         }
 
         private static void RunDocumentOpen()
@@ -1183,6 +1206,10 @@ namespace WindowsIDE.Tests
             Diagnostic syn = Diagnostic.CreateSynthetic("C# ソースがありません。");
             Check("synthetic not CSxxxx", syn.Code == null && syn.IsError && syn.FilePath == null);
             Check("synthetic message", syn.Message == "C# ソースがありません。");
+
+            Diagnostic synPath = Diagnostic.CreateSynthetic("C:\\tmp\\Lib\\A.bas", "衝突");
+            Check("synthetic path FilePath", synPath.FilePath == "C:\\tmp\\Lib\\A.bas" && synPath.Code == null && synPath.IsError);
+            Check("synthetic path message", synPath.Message == "衝突");
 
             Diagnostic[] exit0Empty = DiagnosticParser.ApplyExitCode(new Diagnostic[0], 0, "");
             Check("exit 0 empty stays empty", exit0Empty != null && exit0Empty.Length == 0);
@@ -2993,6 +3020,233 @@ namespace WindowsIDE.Tests
                 SetStdHandle(StdOutputHandle, oldOut);
                 SetStdHandle(StdErrorHandle, oldErr);
             }
+        }
+
+        private static void RunVbaOffline()
+        {
+            Check("ident ok", VbaIdentifier.IsValid("StringUtil"));
+            Check("ident digit first", !VbaIdentifier.IsValid("1abc"));
+            Check("ident symbol", !VbaIdentifier.IsValid("A-b"));
+            Check("ident empty", !VbaIdentifier.IsValid(""));
+            Check("ident 31", VbaIdentifier.IsValid("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345"));
+            Check("ident 32", !VbaIdentifier.IsValid("ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"));
+
+            Check("export strip null", VbaExportText.StripForCodeModule(null) == "");
+            string basExport = "Attribute VB_Name = \"Mod1\"\r\nOption Explicit\r\n";
+            Check("export strip bas", VbaExportText.StripForCodeModule(basExport) == "Option Explicit\r\n");
+            string clsExport = "VERSION 1.0 CLASS\r\nBEGIN\r\n  MultiUse = -1  'True\r\nEND\r\nAttribute VB_Name = \"Class1\"\r\nAttribute VB_GlobalNameSpace = False\r\nOption Explicit\r\n";
+            Check("export strip cls", VbaExportText.StripForCodeModule(clsExport) == "Option Explicit\r\n");
+            Check("export body only", VbaExportText.StripForCodeModule("Option Explicit\r\n") == "Option Explicit\r\n");
+            string bodyAttr = "Option Explicit\r\nAttribute VB_Name = \"kept\"\r\n";
+            Check("export keep body attribute", VbaExportText.StripForCodeModule(bodyAttr) == bodyAttr);
+
+            Check("name filename", VbaNaming.FromRelPath("Lib/StringUtil.bas", VbaNamingMode.Filename) == "StringUtil");
+            Check("name folder_prefix", VbaNaming.FromRelPath("Lib/StringUtil.bas", VbaNamingMode.FolderPrefix) == "Lib_StringUtil");
+            Check("name nested prefix", VbaNaming.FromRelPath("Lib/Text/Join.bas", VbaNamingMode.FolderPrefix) == "Lib_Text_Join");
+            Check("name document ignores mode", VbaNaming.ToExcelName("Lib/ThisWorkbook.cls", VbaNamingMode.FolderPrefix, VbaComponentKind.Document, "ThisWorkbook") == "ThisWorkbook");
+
+            VbaNameCollision[] collisions = VbaNaming.FindCollisions(
+                new string[] { "StringUtil", "StringUtil" },
+                new string[] { "vba/Lib/StringUtil.bas", "vba/App/StringUtil.bas" });
+            Check("collision count", collisions != null && collisions.Length == 1);
+            Check("collision both paths", collisions.Length == 1
+                && collisions[0].PathA.IndexOf("Lib", StringComparison.OrdinalIgnoreCase) >= 0
+                && collisions[0].PathB.IndexOf("App", StringComparison.OrdinalIgnoreCase) >= 0);
+
+            Check("workbook xlsm", VbaWorkbookPath.IsMacroWorkbook("C:\\tmp\\Book.xlsm"));
+            Check("workbook xlsb", VbaWorkbookPath.IsMacroWorkbook("Book.XLSB"));
+            Check("workbook xlsx no", !VbaWorkbookPath.IsMacroWorkbook("C:\\tmp\\Book.xlsx"));
+            Check("workbook xls no", !VbaWorkbookPath.IsMacroWorkbook("Book.xls"));
+
+            string root = Path.Combine(Path.GetTempPath(), "WindowsIDE-vba-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                string vbaRoot = Path.Combine(root, "vba");
+                Directory.CreateDirectory(Path.Combine(vbaRoot, "Lib"));
+                File.WriteAllText(Path.Combine(vbaRoot, "Lib", "StringUtil.bas"), "Option Explicit");
+                Directory.CreateDirectory(Path.Combine(vbaRoot, "bin"));
+                File.WriteAllText(Path.Combine(vbaRoot, "bin", "skip.bas"), "skip");
+                File.WriteAllText(Path.Combine(vbaRoot, "form.frm"), "VERSION 5.00");
+
+                string[] listed = VbaDiskTree.List(vbaRoot);
+                Check("disk keeps bas", ContainsPath(listed, Path.Combine(vbaRoot, "Lib", "StringUtil.bas")));
+                Check("disk drops bin", !ContainsPath(listed, Path.Combine(vbaRoot, "bin", "skip.bas")));
+                Check("disk drops frm", !ContainsPath(listed, Path.Combine(vbaRoot, "form.frm")));
+
+                string planned;
+                string planErr;
+                Check("plan write inside", VbaDiskTree.TryPlanWrite(root, "vba", "Lib/A.bas", out planned, out planErr)
+                    && planned != null
+                    && PathGuard.IsInsideWorkspace(root, planned));
+                Check("plan write .. rejected", !VbaDiskTree.TryPlanWrite(root, "vba", "../escape.bas", out planned, out planErr));
+                Check("plan write abs root rejected", !VbaDiskTree.TryPlanWrite(root, "C:\\Windows", "A.bas", out planned, out planErr));
+
+                VbaMap map = VbaMap.CreateDefault(Path.Combine(root, "Book.xlsm"));
+                map.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("StringUtil", "Lib/StringUtil.bas", VbaComponentKind.Std),
+                    new VbaMapComponent("ThisWorkbook", "ThisWorkbook.cls", VbaComponentKind.Document)
+                });
+                string saveErr;
+                Check("map save", map.TrySave(root, out saveErr));
+                string xml = File.ReadAllText(VbaMap.GetFilePath(root), Encoding.UTF8);
+                Check("map no guid element", xml.IndexOf("<guid", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("map no reference element", xml.IndexOf("<reference", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("map has namingMode", xml.IndexOf("<namingMode>filename</namingMode>", StringComparison.Ordinal) >= 0);
+
+                VbaMap loaded;
+                string loadErr;
+                Check("map load ok", VbaMap.TryLoad(root, out loaded, out loadErr) == VbaMapLoadStatus.Ok && loaded != null);
+                Check("map load component", loaded.FindByRelPath("Lib/StringUtil.bas") != null
+                    && loaded.FindByRelPath("Lib/StringUtil.bas").Kind == VbaComponentKind.Std);
+
+                byte[] beforeBroken = File.ReadAllBytes(VbaMap.GetFilePath(root));
+                File.WriteAllText(VbaMap.GetFilePath(root), "<not-xml", Encoding.ASCII);
+                VbaMap broken;
+                string brokenErr;
+                VbaMapLoadStatus brokenStatus = VbaMap.TryLoad(root, out broken, out brokenErr);
+                Check("map broken status", brokenStatus == VbaMapLoadStatus.Broken && broken == null);
+                byte[] afterBroken = File.ReadAllBytes(VbaMap.GetFilePath(root));
+                Check("map broken not overwritten", afterBroken.Length == 8);
+
+                File.WriteAllBytes(VbaMap.GetFilePath(root), beforeBroken);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(root, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunDocumentVbaEncoding()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-vba-doc-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                Document untitledBas = Document.CreateUntitled();
+                untitledBas.Buffer.Insert(0, 0, "Option Explicit");
+                string basPath = Path.Combine(dir, "NewMod.bas");
+                untitledBas.SaveAs(basPath);
+                Check("untitled bas cp932", untitledBas.EncodingInfo.CodePage == 932 && !untitledBas.EncodingInfo.HasBom);
+                byte[] basBytes = File.ReadAllBytes(basPath);
+                Check("untitled bas no bom", basBytes.Length < 3 || basBytes[0] != 0xEF);
+
+                Document untitledCs = Document.CreateUntitled();
+                untitledCs.Buffer.Insert(0, 0, "class A {}");
+                string csPath = Path.Combine(dir, "A.cs");
+                untitledCs.SaveAs(csPath);
+                Check("untitled cs utf8", untitledCs.EncodingInfo.IsUtf8);
+                byte[] csBytes = File.ReadAllBytes(csPath);
+                Check("untitled cs bom", csBytes.Length >= 3 && csBytes[0] == 0xEF && csBytes[1] == 0xBB && csBytes[2] == 0xBF);
+
+                string utf8Bas = Path.Combine(dir, "Utf8Mod.bas");
+                byte[] bom = new byte[] { 0xEF, 0xBB, 0xBF };
+                byte[] body = Encoding.UTF8.GetBytes("Option Explicit\r\n");
+                byte[] all = new byte[bom.Length + body.Length];
+                Buffer.BlockCopy(bom, 0, all, 0, bom.Length);
+                Buffer.BlockCopy(body, 0, all, bom.Length, body.Length);
+                File.WriteAllBytes(utf8Bas, all);
+                Document opened = Document.Open(utf8Bas);
+                Check("open utf8 bas", opened.EncodingInfo.IsUtf8 && opened.EncodingInfo.HasBom);
+                opened.Save();
+                byte[] saved = File.ReadAllBytes(utf8Bas);
+                Check("save utf8 bas keeps", saved.Length >= 3 && saved[0] == 0xEF && saved[1] == 0xBB && saved[2] == 0xBF);
+
+                string reloadPath = Path.Combine(dir, "Reload.bas");
+                File.WriteAllBytes(reloadPath, Encoding.GetEncoding(932).GetBytes("AAA"));
+                Document reload = Document.Open(reloadPath);
+                reload.Buffer.Insert(0, 3, "BBB");
+                reload.MarkDirty();
+                reload.Undo.RecordInsert(0, 3, "BBB");
+                File.WriteAllBytes(reloadPath, Encoding.GetEncoding(932).GetBytes("ZZZ"));
+                Check("reload from disk", reload.ReloadFromDisk() && reload.Buffer.GetText() == "ZZZ" && !reload.IsDirty && !reload.Undo.CanUndo);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void InspectVbaSyncSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string vbaDir = Path.Combine(repo, "src", "WindowsIDE", "Vba");
+            if (!Directory.Exists(vbaDir))
+            {
+                Check("vba dir exists", false);
+                return;
+            }
+
+            string[] vbaFiles = Directory.GetFiles(vbaDir, "*.cs");
+            StringBuilder all = new StringBuilder();
+            for (int i = 0; i < vbaFiles.Length; i++)
+            {
+                all.Append(File.ReadAllText(vbaFiles[i]));
+            }
+
+            string vbaSrc = all.ToString();
+            Check("vba no dynamic", vbaSrc.IndexOf("dynamic ", StringComparison.Ordinal) < 0);
+            Check("vba no GetProcessesByName", vbaSrc.IndexOf("GetProcessesByName", StringComparison.Ordinal) < 0);
+            Check("vba no Office Interop", vbaSrc.IndexOf("Microsoft.Office.Interop", StringComparison.Ordinal) < 0);
+            Check("vba no Microsoft.CSharp", vbaSrc.IndexOf("Microsoft.CSharp", StringComparison.Ordinal) < 0);
+            Check("vba no Application.Quit", vbaSrc.IndexOf("Application.Quit", StringComparison.Ordinal) < 0 && vbaSrc.IndexOf("\"Quit\"", StringComparison.Ordinal) < 0);
+            Check("vba no Workbooks.Close", vbaSrc.IndexOf("Workbooks.Close", StringComparison.Ordinal) < 0);
+            Check("vba no new Thread ComInvoker", vbaSrc.IndexOf("new Thread", StringComparison.Ordinal) < 0);
+            Check("vba sync no Quit", File.ReadAllText(Path.Combine(vbaDir, "VbaSyncService.cs")).IndexOf("Quit", StringComparison.Ordinal) < 0);
+
+            string comSrc = File.ReadAllText(Path.Combine(vbaDir, "ComInvoker.cs"));
+            Check("cominvoker GetCultureInfo(1033)", comSrc.IndexOf("GetCultureInfo(1033)", StringComparison.Ordinal) >= 0);
+            Check("cominvoker InvokeMember culture", comSrc.IndexOf("InvokeMember(name, flags, null, target, args, ", StringComparison.Ordinal) >= 0);
+            Check("cominvoker no 5-arg InvokeMember", comSrc.IndexOf("InvokeMember(name, flags, null, target, args);", StringComparison.Ordinal) < 0);
+            Check("cominvoker 0x80020003", comSrc.IndexOf("0x80020003", StringComparison.Ordinal) >= 0);
+            Check("cominvoker no CurrentCulture assign", comSrc.IndexOf("CurrentCulture =", StringComparison.Ordinal) < 0);
+            Check("cominvoker no CurrentUICulture assign", comSrc.IndexOf("CurrentUICulture =", StringComparison.Ordinal) < 0);
+            Check("cominvoker no nameof", comSrc.IndexOf("nameof", StringComparison.Ordinal) < 0);
+
+            string mainSrcPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs");
+            string mainSrc = File.ReadAllText(mainSrcPath);
+            Check("vba menu VBA(&A)", mainSrc.IndexOf("VBA(&A)", StringComparison.Ordinal) >= 0);
+            Check("vba display Ctrl+Alt+P", mainSrc.IndexOf("ShortcutKeyDisplayString = \"Ctrl+Alt+P\"", StringComparison.Ordinal) >= 0);
+            Check("vba display Ctrl+Alt+H", mainSrc.IndexOf("ShortcutKeyDisplayString = \"Ctrl+Alt+H\"", StringComparison.Ordinal) >= 0);
+            Check("vba ProcessCmdKey P", mainSrc.IndexOf("Keys.Control | Keys.Alt | Keys.P", StringComparison.Ordinal) >= 0);
+            Check("vba ProcessCmdKey H", mainSrc.IndexOf("Keys.Control | Keys.Alt | Keys.H", StringComparison.Ordinal) >= 0);
+            Check("vba no ファイルを開く menu", mainSrc.IndexOf("ファイルを開く", StringComparison.Ordinal) < 0);
+
+            int vbaItemAt = mainSrc.IndexOf("private ToolStripMenuItem CreateVbaPullItem(", StringComparison.Ordinal);
+            int vbaPushAt = mainSrc.IndexOf("private ToolStripMenuItem CreateVbaPushItem(", StringComparison.Ordinal);
+            int runItemAt = mainSrc.IndexOf("private ToolStripMenuItem CreateRunItem(", StringComparison.Ordinal);
+            Check("vba key item method", vbaItemAt >= 0 && vbaPushAt > vbaItemAt && runItemAt > vbaPushAt);
+            if (vbaItemAt >= 0 && runItemAt > vbaItemAt)
+            {
+                string body = mainSrc.Substring(vbaItemAt, runItemAt - vbaItemAt);
+                Check("vba key item no ShortcutKeys", body.IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0);
+            }
+
+            string settingsSrc = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Workspace", "WorkspaceSettings.cs"));
+            Check("settings no namingMode write", settingsSrc.IndexOf("namingMode", StringComparison.Ordinal) < 0 || settingsSrc.IndexOf("SetAttribute(\"namingMode\"", StringComparison.Ordinal) < 0);
+            Check("settings comment no write", settingsSrc.IndexOf("namingMode は書かない", StringComparison.Ordinal) >= 0);
+
+            string productRsp = File.ReadAllText(Path.Combine(repo, "build", "windows-ide.rsp"));
+            string testRsp = File.ReadAllText(Path.Combine(repo, "build", "windows-ide-tests.rsp"));
+            Check("product rsp Vba", productRsp.IndexOf("src\\WindowsIDE\\Vba\\ComInvoker.cs", StringComparison.Ordinal) >= 0
+                && productRsp.IndexOf("src\\WindowsIDE\\Vba\\VbaExportText.cs", StringComparison.Ordinal) >= 0
+                && productRsp.IndexOf("src\\WindowsIDE\\Vba\\VbaSyncService.cs", StringComparison.Ordinal) >= 0);
+            Check("tests rsp Vba", testRsp.IndexOf("src\\WindowsIDE\\Vba\\ComInvoker.cs", StringComparison.Ordinal) >= 0
+                && testRsp.IndexOf("src\\WindowsIDE\\Vba\\VbaExportText.cs", StringComparison.Ordinal) >= 0
+                && testRsp.IndexOf("src\\WindowsIDE\\Vba\\VbaSyncService.cs", StringComparison.Ordinal) >= 0);
         }
 
         private static void InspectMainFormTerminalSource()

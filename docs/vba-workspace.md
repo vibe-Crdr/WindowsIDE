@@ -6,7 +6,7 @@
 
 ## ディスク側
 
-既定ルートはワークスペースの `vba/`。設定で変更可。
+既定ルートはワークスペースの `vba/`。変更は vba-map の `root/@relative`（既定 `vba`）。絶対・`..`・ワークスペース外は拒否。
 
 ```text
 vba/
@@ -27,7 +27,7 @@ vba/
 
 ## Excel 側の名前（`namingMode`）
 
-Excel にディレクトリは作れない。代わりに、ワークスペース設定で名前の付け方を切り替える。
+Excel にディレクトリは作れない。代わりに、**vba-map だけ**で名前の付け方を切り替える（workspace.xml には書かない。設定画面なし。メニュー「VBA → 名前の付け方」）。
 
 | 値 | 規則 | 例 `vba/Lib/StringUtil.bas` |
 | --- | --- | --- |
@@ -49,24 +49,39 @@ folder_prefix:  vba/Lib/Text/Join.bas   →  Lib_Text_Join
 
 ## マップファイル
 
-`.windows-ide/vba-map.xml` は次を覚える。
+`{workspace}/.windows-ide/vba-map.xml`（UTF-8 BOM）。同期または「ブックを選ぶ」で `.windows-ide/` を作ってよい。フォルダを開いただけでは作らない。workspace.xml は作らない。参照 GUID 要素は書かない（提案 P23。P8 実装時）。
 
-- 対象ブックのフルパス（またはワークスペース相対）
-- ルートフォルダ
-- `namingMode`（`filename` / `folder_prefix`）
-- コンポーネント名 → 相対パス
-- document モジュール（ThisWorkbook、シート）の対応
-- エンコーディング
-- 将来（フェーズ P8 実装時、提案 P23 は確認待ち）: 参照 GUID を残すことがある。**今は要素を足さない**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<vbaMap version="1">
+  <workbook path="C:\full\Book.xlsm" />
+  <root relative="vba" />
+  <namingMode>filename</namingMode>
+  <encoding codePage="932" hasBom="false" />
+  <components>
+    <component name="StringUtil" relpath="Lib/StringUtil.bas" type="std" />
+    <component name="ThisWorkbook" relpath="ThisWorkbook.cls" type="document" />
+    <component name="MyClass" relpath="MyClass.cls" type="class" />
+  </components>
+</vbaMap>
+```
 
-Excel で名前を変えたら、次のプルでマップを更新する。ディスク側リネームはプッシュで Excel 側名を合わせる。
+- `workbook/@path` はワークスペース内なら相対可、外ならフル。
+- `root/@relative` 既定 `vba`。絶対・`..`・外は拒否。
+- `relpath` は root からの相対、区切り `/`。`type` は `std` | `class` | `document` のみ。
+- 壊れた XML は上書きせず MessageBox。
+- 初回プル（relpath 無し）: `{root}/{ExcelName}.bas|.cls` 平坦。folder_prefix でも Excel は平坦なのでフォルダは復元しない。
+
+Excel で名前を変えたら、次のプルでマップを更新する。ディスク側リネームは、マップ relpath が残っているコンポーネントの Name をプッシュで合わせる。切れれば新規＋Excel のみ警告（推測で紐付けない）。マップにあってディスクに無い name は Excel のみ（消さない）。
 
 ## 操作
 
 | 操作 | 動き |
 | --- | --- |
-| プル | ブックを開き（必要なら起動）、VBComponents をエクスポートし、マップに従ってファイルを作る/更新する。IDE に未保存の同名バッファがあれば確認する |
-| プッシュ | ディスクの `.bas` / `.cls` をインポートまたはコード置換する。Excel にだけあるモジュールは削除しない（初回は警告リスト）。削除は別コマンド |
+| ブックを選ぶ | マクロ有効ブック（`.xlsm` / `.xlsb`）を Common Item Dialog で選ぶ。`.xlsx` は拒否。ピッカーはプル／プッシュから自動起動しない |
+| プル | ブックを開き（必要なら起動）、VBComponents をエクスポートし、マップに従ってファイルを作る/更新する。IDE に未保存の同名バッファがあれば確認する（全体中止。破棄して上書きしない）。成功時は問題一覧を触らない。開いている対象タブは ReloadFromDisk |
+| プッシュ | ディスクの `.bas` / `.cls` をインポートまたはコード置換する。識別子・衝突は失敗し問題一覧に両方のパス。部分適用しない。Excel にだけあるモジュールは削除しない（成功後に名前リスト）。削除は別コマンド。プッシュ後に Workbook.Save しない |
+| 名前の付け方 | プレビュー（旧名→新名。document は変更なし。先頭 20 件＋残り件数）の Yes でマップの namingMode だけ更新。この操作では Excel をリネームしない |
 | コンパイル（フェーズ P7。今は実装しない） | 保存確認のうえディスクを先にプッシュし、対象 VBProject を Excel VBA コンパイラで Compile する。失敗は問題一覧と波線（F-VBA-BLD）。`Application.Run` しない。手動は Excel 未起動なら起動してよい。ライブはマップ済みブックが既に開いているときだけ（提案 P25 は確認待ち）。キーごと禁止 |
 | 参照（フェーズ P8。今は実装しない） | 開いている VBProject の `References` を一覧・追加・削除する（F-VBA-REF）。`.bas` には書かない。ビルトイン VBA / Excel 参照は削除しない。任意 COM は Excel プロセスに載る。明示操作だけ |
 | 実行 | モジュール名とマクロ名を指定し `Application.Run`。失敗は COM メッセージを出力パネルへ |
@@ -81,13 +96,17 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 
 ## COM
 
-遅延バインディングを提案する（[decisions.md](decisions.md) P5）。
+遅延バインディング（`Type.InvokeMember`。PIA `/r` なし）。
 
-- `Excel.Application`
-- `Workbooks.Open`
+- `InvokeMember` の culture は常に en-US / LCID 1033（KB 320369）。
+- `Thread.CurrentCulture` は変えない。
+- `VBComponents.Item` と `CodeModule.Lines` は IDispatch 上メソッドのことがあり、`GetProperty` だけだと `DISP_E_MEMBERNOTFOUND`（0x80020003）。`ComInvoker` が GetProperty と InvokeMethod を一度だけ相互再試行する。
+- `Excel.Application`（`Marshal.GetActiveObject`、失敗時は ProgID + `CreateInstance`。CreateObject 時だけ Visible = true）
+- `Workbooks.Open`（実行中なら FullName で探す。開いたブックは Close しない）
 - `VBProject` / `VBComponents` / `CodeModule`
-- エクスポート: `VBComponent.Export`
-- 取り込み: 一時ファイル経由 `Import` または `CodeModule` の一括置換
+- エクスポート: `VBComponent.Export`（TEMP 生バイト、ディスクへはマップ encoding）
+- 取り込み: 既存は CodeModule 置換。新規だけ TEMP 経由 Import。document は Name 変更・Remove・Import しない
+- IDE が起動した Excel を Quit しない。IDE 終了時も Excel を触らない
 - Compile（フェーズ P7）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
 - References（フェーズ P8）: `VBProject.References` の一覧・追加・削除
 

@@ -6,7 +6,7 @@ using System.Windows.Forms;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// フォルダ選択と名前を付けて保存用の Windows Common Item Dialog。ole32 / shell32 の P/Invoke のみ。追加 /r は不要。
+    /// フォルダ選択・ファイルを開く・名前を付けて保存用の Windows Common Item Dialog。ole32 / shell32 の P/Invoke のみ。追加 /r は不要。
     /// </summary>
     public static class CommonItemDialog
     {
@@ -15,6 +15,15 @@ namespace WindowsIDE.Ui
         private const uint FosPickFolders = 0x00000020;
         private const uint FosForceFileSystem = 0x00000040;
         private const uint FosPathMustExist = 0x00000800;
+        private const uint FosFileMustExist = 0x00001000;
+
+        private enum DialogKind
+        {
+            Folder,
+            OpenFile,
+            SaveFile
+        }
+
         private const uint SigdnFileSysPath = 0x80058000;
         private const int HrOk = 0;
         private const int HrErrorCancelled = unchecked((int)0x800704C7);
@@ -29,7 +38,21 @@ namespace WindowsIDE.Ui
         /// <returns>選んだら true。キャンセルは false。</returns>
         public static bool TryPickFolder(IWin32Window owner, string title, string initialPath, out string path)
         {
-            return TryShow(true, owner, title, initialPath, null, null, out path);
+            return TryShow(DialogKind.Folder, owner, title, initialPath, null, null, out path);
+        }
+
+        /// <summary>
+        /// 既存ファイルを選ぶダイアログを出す。UI スレッドのみ。PICKFOLDERS と OVERWRITEPROMPT は付けない。
+        /// </summary>
+        /// <param name="owner">親ウィンドウ。null ならオーナーなし。</param>
+        /// <param name="title">ダイアログ題名。</param>
+        /// <param name="initialDirectory">初期フォルダ。作成や QI に失敗したら使わない。</param>
+        /// <param name="filter">COMDLG 形式（名前|仕様 の | 区切り）。</param>
+        /// <param name="path">選んだフルパス。キャンセル時は null。</param>
+        /// <returns>選んだら true。キャンセルは false。</returns>
+        public static bool TryPickOpenFile(IWin32Window owner, string title, string initialDirectory, string filter, out string path)
+        {
+            return TryShow(DialogKind.OpenFile, owner, title, initialDirectory, null, filter, out path);
         }
 
         /// <summary>
@@ -44,17 +67,17 @@ namespace WindowsIDE.Ui
         /// <returns>選んだら true。キャンセルは false。</returns>
         public static bool TryPickSaveFile(IWin32Window owner, string title, string initialDirectory, string fileName, string filter, out string path)
         {
-            return TryShow(false, owner, title, initialDirectory, fileName, filter, out path);
+            return TryShow(DialogKind.SaveFile, owner, title, initialDirectory, fileName, filter, out path);
         }
 
-        private static bool TryShow(bool folder, IWin32Window owner, string title, string initialDirectory, string fileName, string filter, out string path)
+        private static bool TryShow(DialogKind kind, IWin32Window owner, string title, string initialDirectory, string fileName, string filter, out string path)
         {
             path = null;
             EnsureUiThread(owner);
 
-            Guid clsid = folder
-                ? new Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7")
-                : new Guid("C0B4E2F3-BA21-4773-8DBA-335EC946EB8B");
+            Guid clsid = (kind == DialogKind.SaveFile)
+                ? new Guid("C0B4E2F3-BA21-4773-8DBA-335EC946EB8B")
+                : new Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
             Guid iidDialog = new Guid("42F85136-DB7E-439C-85F1-E4075D135FC8");
             Guid iidShellItem = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
 
@@ -91,9 +114,13 @@ namespace WindowsIDE.Ui
                     Marshal.ThrowExceptionForHR(hr);
                 }
 
-                if (folder)
+                if (kind == DialogKind.Folder)
                 {
                     options = options | FosPickFolders | FosForceFileSystem | FosPathMustExist;
+                }
+                else if (kind == DialogKind.OpenFile)
+                {
+                    options = options | FosFileMustExist | FosForceFileSystem | FosPathMustExist;
                 }
                 else
                 {
@@ -119,7 +146,7 @@ namespace WindowsIDE.Ui
                     }
                 }
 
-                if (!folder && !string.IsNullOrEmpty(fileName))
+                if (kind == DialogKind.SaveFile && !string.IsNullOrEmpty(fileName))
                 {
                     hr = dialog.SetFileName(fileName);
                     if (hr != HrOk)
@@ -128,7 +155,7 @@ namespace WindowsIDE.Ui
                     }
                 }
 
-                if (!folder)
+                if (kind != DialogKind.Folder)
                 {
                     COMDLG_FILTERSPEC[] specs = ParseFilter(filter);
                     if (specs.Length > 0)

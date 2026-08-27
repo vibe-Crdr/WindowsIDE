@@ -77,8 +77,19 @@
         /// <returns>error 扱いの合成診断。</returns>
         public static Diagnostic CreateSynthetic(string message)
         {
+            return CreateSynthetic(null, message);
+        }
+
+        /// <summary>
+        /// ファイル付きの IDE 合成。Code は CSxxxx にしない。
+        /// </summary>
+        /// <param name="filePath">対象パス。無ければ null。</param>
+        /// <param name="message">表示する文。</param>
+        /// <returns>error 扱いの合成診断。</returns>
+        public static Diagnostic CreateSynthetic(string filePath, string message)
+        {
             Diagnostic d = new Diagnostic();
-            d.filePath = null;
+            d.filePath = filePath;
             d.line = 0;
             d.column = 0;
             d.isError = true;

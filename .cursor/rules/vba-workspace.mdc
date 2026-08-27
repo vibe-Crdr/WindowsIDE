@@ -8,8 +8,8 @@ alwaysApply: false
 
 詳細は `docs/vba-workspace.md`。
 
-- ディスクは `vba/` 以下のディレクトリ。Excel の VBProject は平坦。フォルダ名をモジュール名に埋め込まない（提案 P3）。
-- Excel 側名は設定 `namingMode`: `filename`（ファイル名のみ）または `folder_prefix`（相対フォルダを `_` 接続）。既定は `filename`。
+- ディスクは `vba/` 以下のディレクトリ。Excel の VBProject は平坦。
+- Excel 側名は vba-map の `namingMode`: `filename`（ファイル名のみ）または `folder_prefix`（相対フォルダを `_` 接続）。既定は `filename`。
 - document モジュールは常に Excel の名前。識別子不正や 31 文字超え、衝突は同期失敗（切り詰めない）。
 - モード変更はプレビュー確認後。同名が複数なら同期を失敗させる。
 - 既定エンコーディングは CP932。

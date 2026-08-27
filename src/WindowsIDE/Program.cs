@@ -8,7 +8,7 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE
 {
     /// <summary>
-    /// 単一 WinExe の入口。STA。P0 では Excel を起動しない。
+    /// 単一 WinExe の入口。STA。P2 で Excel に接続し得る。Quit しない。
     /// </summary>
     public static class Program
     {

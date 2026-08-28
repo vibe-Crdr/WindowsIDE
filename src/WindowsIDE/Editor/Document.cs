@@ -146,6 +146,11 @@ namespace WindowsIDE.Editor
                 throw new InvalidOperationException(error);
             }
 
+            if (IsBasOrCls(path) && data.Length == 0)
+            {
+                info = new FileEncodingInfo(932, false, false, "\r\n");
+            }
+
             Document doc = new Document();
             doc.filePath = Path.GetFullPath(path);
             doc.encodingInfo = info;

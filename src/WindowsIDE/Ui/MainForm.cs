@@ -34,6 +34,7 @@ namespace WindowsIDE.Ui
         private SplitContainer bodySplit;
         private SplitContainer split;
         private FileTreeControl tree;
+        private FileTreeCreateBar treeCreateBar;
         private TabStrip tabs;
         private FindBar findBar;
         private TextView editor;
@@ -676,7 +677,7 @@ namespace WindowsIDE.Ui
 
         /// <summary>
         /// メニューとステータス用の 12 DIP 双フォントを作り直す。本文 fontSize には連動しない。
-        /// FindBar のラベル／ボタンも同じ 12 DIP。検索欄の本文サイズは ApplyEditorSettings。
+        /// FindBar のラベル／ボタンと作成バーも同じ 12 DIP。検索欄の本文サイズは ApplyEditorSettings。
         /// タブ題名も同じ 12 DIP。本文 fontSize 非連動。
         /// </summary>
         private void RecreateChromeFonts()
@@ -700,6 +701,11 @@ namespace WindowsIDE.Ui
             if (this.findBar != null)
             {
                 this.findBar.SetFonts(newHalf, newFull);
+            }
+
+            if (this.treeCreateBar != null)
+            {
+                this.treeCreateBar.SetFonts(newHalf, newFull);
             }
 
             if (this.bottomPane != null)
@@ -750,6 +756,12 @@ namespace WindowsIDE.Ui
                 this.findBar.PerformLayout();
             }
 
+            if (this.treeCreateBar != null)
+            {
+                this.treeCreateBar.Invalidate();
+                this.treeCreateBar.PerformLayout();
+            }
+
             if (this.bottomPane != null)
             {
                 this.bottomPane.Invalidate();
@@ -787,7 +799,12 @@ namespace WindowsIDE.Ui
             this.tree.Dock = DockStyle.Fill;
             this.tree.ApplyFonts(this.fonts);
             this.tree.FileOpenRequested += this.OnTreeOpen;
+            this.treeCreateBar = new FileTreeCreateBar();
+            this.treeCreateBar.Dock = DockStyle.Top;
+            this.treeCreateBar.FileCreateRequested += this.OnTreeCreateFile;
+            this.treeCreateBar.FolderCreateRequested += this.OnTreeCreateFolder;
             this.split.Panel1.Controls.Add(this.tree);
+            this.split.Panel1.Controls.Add(this.treeCreateBar);
 
             Panel right = new Panel();
             right.Dock = DockStyle.Fill;
@@ -1243,6 +1260,91 @@ namespace WindowsIDE.Ui
             if (!this.TryOpenFile(path, true, out error) && !string.IsNullOrEmpty(error))
             {
                 MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void OnTreeCreateFile(object sender, EventArgs e)
+        {
+            this.BeginInvoke(new MethodInvoker(delegate { this.RunTreeCreate(false); }));
+        }
+
+        private void OnTreeCreateFolder(object sender, EventArgs e)
+        {
+            this.BeginInvoke(new MethodInvoker(delegate { this.RunTreeCreate(true); }));
+        }
+
+        /// <summary>
+        /// 作成バーからファイルまたはフォルダを作る。失敗時は同じ名前でダイアログを再表示する。
+        /// </summary>
+        /// <param name="isFolder">フォルダなら true。</param>
+        private void RunTreeCreate(bool isFolder)
+        {
+            if (this.workspace == null)
+            {
+                MessageBox.Show(this, "ワークスペースを開いてください。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string selected = null;
+            if (this.tree != null && this.tree.SelectedNode != null)
+            {
+                selected = this.tree.SelectedNode.Tag as string;
+            }
+
+            string parent = WorkspaceCreateRules.ResolveCreateDirectory(this.workspace.RootPath, selected);
+            if (parent == null)
+            {
+                MessageBox.Show(this, "作成先を決定できません。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string name = null;
+            while (true)
+            {
+                using (CreateNameForm form = new CreateNameForm(isFolder, this.fonts, this.chromeHalfFont, this.chromeFullFont, name))
+                {
+                    if (form.ShowDialog(this) != DialogResult.OK)
+                    {
+                        return;
+                    }
+
+                    name = form.EnteredName;
+                }
+
+                string created;
+                string error;
+                bool ok;
+                if (isFolder)
+                {
+                    ok = WorkspaceCreateRules.TryCreateDirectory(this.workspace.RootPath, parent, name, out created, out error);
+                }
+                else
+                {
+                    ok = WorkspaceCreateRules.TryCreateFile(this.workspace.RootPath, parent, name, out created, out error);
+                }
+
+                if (!ok)
+                {
+                    MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    continue;
+                }
+
+                if (this.tree != null)
+                {
+                    this.tree.Rebuild();
+                    this.tree.RevealAndSelect(created);
+                }
+
+                if (!isFolder)
+                {
+                    string openError;
+                    if (!this.TryOpenFile(created, true, out openError) && !string.IsNullOrEmpty(openError))
+                    {
+                        MessageBox.Show(this, openError, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+
+                return;
             }
         }
 

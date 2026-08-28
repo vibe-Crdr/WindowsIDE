@@ -90,5 +90,6 @@ src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\PathGuard.cs
+src\WindowsIDE\Workspace\WorkspaceCreateRules.cs
 src\WindowsIDE\Workspace\WorkspaceSettings.cs
 src\WindowsIDE\Workspace\FileKind.cs

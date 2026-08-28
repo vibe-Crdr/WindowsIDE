@@ -28,6 +28,9 @@ src\WindowsIDE\Ui\ThemedScrollBar.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
+src\WindowsIDE\Ui\ChromeMark.cs
+src\WindowsIDE\Ui\FileTreeCreateBar.cs
+src\WindowsIDE\Ui\CreateNameForm.cs
 src\WindowsIDE\Ui\ProblemListControl.cs
 src\WindowsIDE\Ui\OutputPanelControl.cs
 src\WindowsIDE\Ui\BottomPane.cs
@@ -79,6 +82,7 @@ src\WindowsIDE\Languages\HighlightSession.cs
 src\WindowsIDE\Workspace\CsFileEnumerator.cs
 src\WindowsIDE\Workspace\WorkspaceFolder.cs
 src\WindowsIDE\Workspace\PathGuard.cs
+src\WindowsIDE\Workspace\WorkspaceCreateRules.cs
 src\WindowsIDE\Workspace\WorkspaceSettings.cs
 src\WindowsIDE\Workspace\FileTreeControl.cs
 src\WindowsIDE\Workspace\FileKind.cs

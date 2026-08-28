@@ -65,6 +65,7 @@ namespace WindowsIDE.Tests
             RunDocumentOpen();
             RunGlyphClassifier();
             RunPathGuard();
+            RunWorkspaceCreateRules();
             RunWorkspaceSettings();
             RunVbaOffline();
             RunDocumentVbaEncoding();
@@ -418,6 +419,81 @@ namespace WindowsIDE.Tests
                 Check("inside root", PathGuard.IsInsideWorkspace(root, root));
                 string escape = Path.Combine(root, "..", "WindowsIDE-pathguard-escape");
                 Check("escape ..", !PathGuard.IsInsideWorkspace(root, escape));
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(root, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunWorkspaceCreateRules()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "WindowsIDE-create-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string sub = Path.Combine(root, "sub");
+            Directory.CreateDirectory(sub);
+            string nestedFile = Path.Combine(sub, "seed.txt");
+            File.WriteAllText(nestedFile, "x");
+            try
+            {
+                string created;
+                string error;
+
+                string fromFolder = WorkspaceCreateRules.ResolveCreateDirectory(root, sub);
+                Check("resolve folder", string.Equals(fromFolder, Path.GetFullPath(sub), StringComparison.OrdinalIgnoreCase));
+                string fromFile = WorkspaceCreateRules.ResolveCreateDirectory(root, nestedFile);
+                Check("resolve file parent", string.Equals(fromFile, Path.GetFullPath(sub), StringComparison.OrdinalIgnoreCase));
+                string fromNull = WorkspaceCreateRules.ResolveCreateDirectory(root, null);
+                Check("resolve null root", string.Equals(fromNull, Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase));
+                Check("resolve empty root null", WorkspaceCreateRules.ResolveCreateDirectory("", nestedFile) == null);
+
+                Check("reject empty", !WorkspaceCreateRules.TryCreateFile(root, root, "  ", out created, out error));
+                Check("reject dotdot", !WorkspaceCreateRules.TryCreateFile(root, root, "..", out created, out error));
+                Check("reject slash", !WorkspaceCreateRules.TryCreateFile(root, root, "a\\b", out created, out error));
+                Check("reject CON", !WorkspaceCreateRules.TryCreateFile(root, root, "CON", out created, out error));
+                Check("reject CON.txt", !WorkspaceCreateRules.TryCreateFile(root, root, "CON.txt", out created, out error));
+                Check("reject trailing dot", !WorkspaceCreateRules.TryCreateFile(root, root, "foo.", out created, out error));
+                Check("reject invalid char", !WorkspaceCreateRules.TryCreateFile(root, root, "a*b", out created, out error));
+                Check("reject escape", !WorkspaceCreateRules.TryCreateFile(root, root, "..\\x", out created, out error));
+
+                byte[] csBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.cs");
+                Check("new cs bom 3", csBytes != null && csBytes.Length == 3 && csBytes[0] == 0xEF && csBytes[1] == 0xBB && csBytes[2] == 0xBF);
+                byte[] txtBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.txt");
+                Check("new txt bom", txtBytes != null && txtBytes.Length >= 3 && txtBytes[0] == 0xEF && txtBytes[1] == 0xBB && txtBytes[2] == 0xBF);
+                byte[] basBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.bas");
+                Check("new bas empty", basBytes != null && basBytes.Length == 0);
+                byte[] clsBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.cls");
+                Check("new cls empty", clsBytes != null && clsBytes.Length == 0);
+
+                Check("create cs", WorkspaceCreateRules.TryCreateFile(root, root, "New.cs", out created, out error));
+                byte[] writtenCs = File.ReadAllBytes(created);
+                Check("created cs bom", writtenCs.Length >= 3 && writtenCs[0] == 0xEF && writtenCs[1] == 0xBB && writtenCs[2] == 0xBF);
+                Check("create txt", WorkspaceCreateRules.TryCreateFile(root, root, "New.txt", out created, out error));
+                byte[] writtenTxt = File.ReadAllBytes(created);
+                Check("created txt bom", writtenTxt.Length >= 3 && writtenTxt[0] == 0xEF && writtenTxt[1] == 0xBB && writtenTxt[2] == 0xBF);
+                Check("create bas", WorkspaceCreateRules.TryCreateFile(root, root, "New.bas", out created, out error));
+                Check("created bas empty", File.Exists(created) && File.ReadAllBytes(created).Length == 0);
+                Check("create cls", WorkspaceCreateRules.TryCreateFile(root, root, "New.cls", out created, out error));
+                Check("created cls empty", File.Exists(created) && File.ReadAllBytes(created).Length == 0);
+
+                string emptyBas = Path.Combine(root, "empty.bas");
+                File.WriteAllBytes(emptyBas, new byte[0]);
+                Document openedEmpty = Document.Open(emptyBas);
+                Check("open empty bas 932", openedEmpty.EncodingInfo.CodePage == 932 && !openedEmpty.EncodingInfo.HasBom);
+
+                Check("create folder", WorkspaceCreateRules.TryCreateDirectory(root, root, "NewFolder", out created, out error));
+                Check("created folder exists", Directory.Exists(created));
+
+                Check("exist file", !WorkspaceCreateRules.TryCreateFile(root, root, "New.cs", out created, out error));
+                Check("exist folder", !WorkspaceCreateRules.TryCreateDirectory(root, root, "NewFolder", out created, out error));
+                Check("file as folder", !WorkspaceCreateRules.TryCreateDirectory(root, root, "New.cs", out created, out error));
+                Check("folder as file", !WorkspaceCreateRules.TryCreateFile(root, root, "NewFolder", out created, out error));
             }
             finally
             {

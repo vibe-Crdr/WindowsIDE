@@ -142,6 +142,110 @@ namespace WindowsIDE.Workspace
             }
         }
 
+        /// <summary>
+        /// 祖先を EnsureChildren + Expand してから選択する。FileOpenRequested は上げない。Rebuild 中は何もしない。
+        /// </summary>
+        /// <param name="path">対象パス。</param>
+        public void RevealAndSelect(string path)
+        {
+            if (this.rebuildBusy || string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            string full;
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            if (!PathGuard.IsInsideWorkspace(this.rootPath, full))
+            {
+                return;
+            }
+
+            List<string> ancestors = new List<string>();
+            string current;
+            try
+            {
+                current = Path.GetDirectoryName(full);
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            string rootFull = null;
+            try
+            {
+                if (!string.IsNullOrEmpty(this.rootPath))
+                {
+                    rootFull = Path.GetFullPath(this.rootPath);
+                }
+            }
+            catch (Exception)
+            {
+                rootFull = this.rootPath;
+            }
+
+            while (!string.IsNullOrEmpty(current))
+            {
+                string currentFull;
+                try
+                {
+                    currentFull = Path.GetFullPath(current);
+                }
+                catch (Exception)
+                {
+                    break;
+                }
+
+                if (!PathGuard.IsInsideWorkspace(this.rootPath, currentFull))
+                {
+                    break;
+                }
+
+                ancestors.Add(currentFull);
+                if (rootFull != null && string.Equals(currentFull, rootFull, StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                string parent = Path.GetDirectoryName(currentFull);
+                if (string.IsNullOrEmpty(parent) || string.Equals(parent, currentFull, StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                current = parent;
+            }
+
+            ancestors.Reverse();
+            for (int i = 0; i < ancestors.Count; i++)
+            {
+                TreeNode node = this.FindNodeByPath(this.Nodes, ancestors[i]);
+                if (node != null)
+                {
+                    this.EnsureChildren(node);
+                    node.Expand();
+                }
+            }
+
+            TreeNode target = this.FindNodeByPath(this.Nodes, full);
+            if (target == null)
+            {
+                return;
+            }
+
+            this.SelectedNode = target;
+            target.EnsureVisible();
+            this.RefreshChrome();
+        }
+
         private void RebuildCore()
         {
             bool sameRoot = false;

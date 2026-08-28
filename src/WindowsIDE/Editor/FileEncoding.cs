@@ -209,6 +209,23 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
+        /// 新規空ファイルのバイト。`.bas`/`.cls` は CP932 BOM なし CRLF、それ以外は UTF-8 BOM + CRLF。
+        /// </summary>
+        /// <param name="filePath">作成先。拡張子判定に使う。</param>
+        /// <returns>書き込むバイト。</returns>
+        public static byte[] GetBytesForNewEmptyFile(string filePath)
+        {
+            if (!string.IsNullOrEmpty(filePath)
+                && (filePath.EndsWith(".bas", StringComparison.OrdinalIgnoreCase)
+                    || filePath.EndsWith(".cls", StringComparison.OrdinalIgnoreCase)))
+            {
+                return GetBytesToSave("", new FileEncodingInfo(932, false, false, "\r\n"), filePath);
+            }
+
+            return GetBytesToSave("", new FileEncodingInfo(), filePath);
+        }
+
+        /// <summary>
         /// 本文の改行を CRLF か LF かに揃える。
         /// </summary>
         public static string NormalizeNewLines(string text, string newLine)

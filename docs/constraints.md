@@ -25,6 +25,10 @@ VBA プロジェクト オブジェクト モデルへのアクセス信頼は�
 
 ## コンパイラ
 
+製品のビルドとユーザー C# は指定 `csc.exe` だけを使う。ユーザー VB.NET（フェーズ P9。今は実装しない）は、同じフォルダの指定 `vbc.exe` だけを使う。csc に `.vb` を渡さない。vbc に `.cs` を渡さない。
+
+### C#（製品およびユーザー）
+
 | 項目 | 値 |
 | --- | --- |
 | パス | `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe` |
@@ -32,6 +36,16 @@ VBA プロジェクト オブジェクト モデルへのアクセス信頼は�
 | ファイルバージョン | 4.8.9221.0（ビルドタグ `NET481REL1LAST_25H2`） |
 
 Visual Studio / Build Tools / Roslyn の `csc.exe` は、PATH にあっても使わない。
+
+### VB.NET（ユーザーコードのみ。製品は使わない）
+
+| 項目 | 値 |
+| --- | --- |
+| パス | `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\vbc.exe` |
+| バナー | Microsoft (R) Visual Basic Compiler version 14.8.9221 / for Visual Basic 2012 |
+| ファイルバージョン | 14.8.9221.0 |
+
+Visual Studio / Build Tools / Roslyn の `vbc.exe` は、PATH にあっても使わない。製品コードと製品ビルドは指定 `csc.exe` のままである。
 
 ## ランタイム
 
@@ -76,8 +90,8 @@ IDE には WinForms 等が必要なので、**同じ Framework フォルダ**、
 | --- | --- |
 | IDE 本体 | C# **5** のみ |
 | ビルド / 起動補助 | Windows PowerShell 5.1 と cmd |
-| IDE が扱うユーザーコード | C# 5、VBA、PowerShell 5.1、cmd / `.bat`（ホスト言語。実行・デバッグ対象） |
-| IDE が扱う編集専用 | Markdown（`.md`）。ホストではない。実行・デバッグ・csc しない（フェーズ P8。今は実装しない） |
+| IDE が扱うユーザーコード | C# 5、VB.NET（指定 `vbc.exe`、Visual Basic 2012。フェーズ P9。今は実装しない）、VBA、PowerShell 5.1、cmd / `.bat`（ホスト言語。実行・デバッグ対象。VB.NET のデバッグは段階） |
+| IDE が扱う編集専用 | Markdown（`.md`）。ホストではない。実行・デバッグ・csc / vbc しない（フェーズ P8。今は実装しない） |
 
 C# 6 以降の構文は、コンパイラが落とす。書かない。代表例は `.cursor/rules/csharp5.mdc`。
 

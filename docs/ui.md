@@ -40,8 +40,8 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 ### P1 ハイライト
 
 P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。
-言語名は英語（C# / VBA / PowerShell / cmd / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP（全角セルが高ければ extra を足す）。SizingGrip は出さない。
-Ctrl+F は P1 F-FIND。
+言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP（全角セルが高ければ extra を足す）。SizingGrip は出さない。
+Ctrl+F は P1 F-FIND。VB.NET のステータス名はフェーズ P9（今は実装しない）。
 
 ### P1 F-CS-BLD / F-PROB（問題一覧）
 
@@ -72,6 +72,14 @@ P7-A 対括弧は Selection / 不一致は Error。P7-B/C は今は実装しな�
 ### フェーズ P8（今は実装しない）
 
 Markdown プレビューは新しいテーマ色を足さない。見出しは Keyword、フェンスは String。プレビュー方式は採用済み P21（オーナー描画サブセット。同梱フォント。WebBrowser は使わない）。同梱フォント（Cascadia Mono / 源ノ角ゴシック）はプレビューでも破らない。
+
+### F-IG（今は実装しない）
+
+インデント線（F-IG）は既存 LineNumber（`#3b4261`）を再利用する。専用色とアクティブガイドは提案 P29。新しいテーマ色は足さない。P1 の「これ以外の新しい色は足さない」は維持する。フェーズ番号は持たない。P7-A に混ぜない。P9 より先でよい。
+
+### フェーズ P9（今は実装しない）
+
+VB.NET 字句は既存 TokenKind 色だけを使う。新しいテーマ色は足さない。
 
 ## 色（初期）
 

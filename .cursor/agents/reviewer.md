@@ -45,7 +45,7 @@ readonly: true
 3. **UI** — ダーク専用、薄い枠、Cascadia Mono / 源ノ角ゴシック、グリフ切替、オーナー描画。RichTextBox 着色、Cascadia Code、OS へのフォントインストール要求。
 4. **プロセス** — ユーザー EXE は別プロセスか。`[STAThread]`。Excel COM は明示操作時だけか。ワークスペース外書き込みが黙って増えていないか。
 5. **ビルド** — `/noconfig /nostdlib /platform:x64`、基準 BCL バージョン、新しい `/r` が文書化されているか。出力に第三者 DLL が無いか。
-6. **言語ホスト** — C# は指定 csc。PS/cmd は 5.1 / `cmd.exe`。VBA はディレクトリ同期契約（平坦 Excel、`namingMode`、CP932、黙って消さない）。
+6. **言語ホスト** — C# は指定 csc。VB.NET は指定 vbc（フェーズ P9。今は実装しない。`.vb` ≠ `.bas`）。PS/cmd は 5.1 / `cmd.exe`。VBA はディレクトリ同期契約（平坦 Excel、`namingMode`、CP932、黙って消さない）。
 7. **テスト** — 受け入れを証明しているか。Excel 無しで回る範囲と、Excel 必須の未実施が正直か。
 
 ## Severity

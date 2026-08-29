@@ -53,7 +53,7 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 
 `WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する（`IdentifierClassifier.cs` と `Languages/CSharp/` を含む）。Languages は Theme / WinForms を参照しない。BCL 型名は実行時 `Assembly.LoadFrom`（コンパイル `/r` は既存 Framework DLL + SMA）。
 
-ユーザーコードの常時コンパイル（F-LIVE、フェーズ P7。今は実装しない）も同じ Framework `csc.exe` を使う。製品の `/r` は増やさない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。
+ユーザーコードの常時コンパイル（F-LIVE、フェーズ P7。今は実装しない）も同じ Framework `csc.exe` を使う。製品の `/r` は増やさない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。ユーザー VB.NET（F-VB-BLD、フェーズ P9。今は実装しない）は指定 `vbc.exe` を使う。製品 `/r` に `Microsoft.VisualBasic.dll` を足さない。csc に `.vb` を渡さない。
 
 ## ユーザー手動 csc（F-CS-BLD）
 
@@ -69,6 +69,18 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 - 統合ターミナル（F-TERM）は `WindowsIDE.Terminal`（CreatePseudoConsole + CreateProcessW）。ソースは Host の次に列挙する。kernel32 の P/Invoke に追加 `/r` は不要。Host.* と混ぜない。1 ショットの Kill 集合には入れない。MainForm.Dispose で PTY も閉じる（UI で待たない）
 - `WindowsIDE.Vba` のソースは Terminal 9 本の次に列挙する。P2 も PIA `/r` なし。Microsoft.CSharp なし
 - 無題は対象外。csproj は作らない
+
+## ユーザー手動 vbc（F-VB-BLD、フェーズ P9。今は実装しない）
+
+製品の `compile.ps1` とユーザー手動 csc（F-CS-BLD）と混同しない。IDE がユーザー `.vb` を手動ビルドするときだけ、指定 `vbc.exe` を別プロセスで呼ぶ。
+
+- パスは `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\vbc.exe` のみ。VS / Roslyn vbc は使わない
+- フォーカスがディスク上 `.vb` のとき Ctrl+Shift+B は vbc。それ以外は現行どおり csc
+- csc に `.vb` を渡さない。vbc に `.cs` を渡さない。`.vbproj` は作らない
+- `/noconfig` をコマンドライン先頭にするかは実装時に csc と同じ罠（応答ファイル内は無視）を踏まないこと
+- `/r` は提案 P26（確認待ち）。製品 `/r` は増やさない。`Microsoft.VisualBasic.dll` を IDE 本体へ足さない
+- 起動は `WindowsIDE.Host.VbNet`。vbc は `Process.Start` しない
+- 無題は拒否（C# 手動ビルドに合わせる）
 
 ## レスポンスファイル
 

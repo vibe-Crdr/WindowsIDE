@@ -17,7 +17,7 @@
 
 - 製品への NuGet、第三者 DLL、C# 6+、PowerShell 7、Roslyn、`dotnet` ビルド
 - `scripts/` の Python を製品ランタイムにすること
-- 指定パス以外の `csc.exe`
+- 指定パス以外の `csc.exe` / `vbc.exe`
 
 ## 製品コード
 

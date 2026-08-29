@@ -43,8 +43,10 @@ readonly: true
 ## 設計ルール
 
 - 製品コードは C# 5。UI は WinForms + 自前オーナー描画編集器。WPF、RichTextBox 着色、NuGet 編集器は使わない。
-- ホスト言語は C# 5、VBA、PowerShell 5.1、cmd のみ。Roslyn、LSP、拡張ホスト、製品内 AI は初期対象外。
-- ビルドは `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe` のみ。`dotnet` / MSBuild / 別 csc は設計に入れない。
+- ホスト言語は C# 5、VB.NET（指定 Framework `vbc.exe`、フェーズ P9。今は実装しない）、VBA、PowerShell 5.1、cmd。Markdown はホストではない。`.vb` ≠ `.bas` / `.cls`。`.vbs` は Plain。Roslyn、LSP、拡張ホスト、製品内 AI は初期対象外。
+- ビルドは `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe` のみ（製品とユーザー C#）。ユーザー VB.NET は同フォルダの `vbc.exe` のみ。`dotnet` / MSBuild / 別 csc / 別 vbc は設計に入れない。
+- インデント線（F-IG）は `WindowsIDE.Editor`。Languages に入れない。P7-A に混ぜない。今は実装しない。
+- `.cursor/rules/csharp5.mdc` は製品 C# 専用。ユーザー `.vb` 規則をそこに混ぜない。
 - 新しい `/r` は同じ Framework フォルダか、文書化した Office COM。足す前に `docs/build.md` と `docs/decisions.md` を手番に含める。
 - 設定は XML（`System.Xml`）。第三者シリアライザは足さない。
 - ユーザー C# の実行は別プロセス。Excel マクロ実行は明示操作時だけ。

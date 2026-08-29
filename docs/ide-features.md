@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P8。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8）。C = できるとよい（フェーズ P7–P8 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
+凡例: M = 必須（P2 まで）。S = べき（P3–P9。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P9 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
 
 ## P0 スライス
 
@@ -113,6 +113,14 @@ R7 の VBA ディレクトリ ↔ Excel 明示プル／プッシュ。Compile / 
 
 残作業なし。Compile 等は残 P2 に入れない。
 
+## F-IG スライス（インデント線）— 今は実装しない
+
+言語非依存の編集器本文ガイド。P7-A に混ぜない。P9 より先でよい。F-IND / F-SIND と混ぜない。新しい M は作らない。
+
+| ID | F-IG でやる | F-IG でやらない |
+| --- | --- | --- |
+| F-IG | 全ファイル形式（Plain / cmd / Markdown / 無題 / 全ホスト）で、先頭 `' '` と `'\t'` から `tabSize` 列ごとに 1 物理 px の縦線を本文へ描く。色は既存 LineNumber。常時オン。新 XML なし。規則は `WindowsIDE.Editor`（WinForms 非依存の計測 + `TextView` 描画）。`DpiUtil.TextBodyClip` 内。ガターへはみ出さない | F-SIND、F-IND の Enter/Tab 契約変更、Languages、新 Theme 色、アクティブガイド（P29）、XML トグル（P30）、空行継続の確定（P31）、U+3000 を数えること、列 0 の線、P7-A への混入 |
+
 ## フェーズ P7（編集器インテリジェンス）— P7-A 着手
 
 P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「最初の利用可能 IDE」を壊さない。着手時期は採用済み P16（P2 完了の直後。波 C の F-LIVE / F-SQU / F-VBA-BLD は残 P1 の F-CS-BLD / F-PROB 待ち）。**P7-A（波 A）は着手する。波 B / 波 C は今は実装しない。** 設定 XML の新規属性は今増やさない。F-CMP の P5 基本はフェーズ順では P7 の後（P5）に実装される。
@@ -120,7 +128,7 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 | 波 | ID | 内容 | 依存 | 状態 |
 | --- | --- | --- | --- | --- |
 | A 構造 | F-BR、F-AC、F-SIND、F-VBA-CASE | 括弧強調、自動閉じ、スマートインデント、VBA キーワード大文字小文字 | Editor + Languages。Build 不要 | P7-A 着手 |
-| B ナビ | F-GD、F-HOV、F-DOC、F-CMP の P7 拡張、F-SIG（C） | 定義へ移動、ホバー、枠コメント、ワークスペース／メンバー補完、パラメータヒント | 位置付きシンボル。csc 不要 | 今は実装しない |
+| B ナビ | F-GD、F-HOV、F-DOC、F-CMP の P7 拡張、F-SIG（C） | 定義へ移動、ホバー、枠コメント、ワークスペース／メンバー補完、パラメータヒント。対象は C# / VBA / PowerShell / cmd。VB.NET はフェーズ P9 | 位置付きシンボル。csc 不要 | 今は実装しない |
 | C 診断 | F-LIVE、F-SQU、F-VBA-BLD | 常時 csc、波線、VBA Compile 診断 | 残 P1 の F-CS-BLD / F-PROB の後。VBA はプッシュ後 | 今は実装しない |
 
 | ID | P7 で対象 | 今の P1 および P7 でやらない |
@@ -130,7 +138,7 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 | F-AC | C#/PS の対括弧（閉じ方は採用済み P17: `{` 直後に `}`、既対／文字列・コメントでは入れない、直後が既に対応閉じなら入れない）。VBA はブロック開始の Enter で対応終端を 1 回。For / For Each は Next。1 行 If（Then より後ろにコメント以外のトークン）と Then 直後が継続 `_` だけのときは End If を入れない。Then 直後が空白とコメントだけ／行末ならブロック | VBA に `End For` を書く。既存終端があるときの二重挿入。1 行 If に End If。cmd |
 | F-VBA-CASE | トークン境界のみ（空白・演算子・改行。IME 中はしない）。文字列・コメント外のキーワードを表の大文字小文字にする。表外識別子は触らない。Rem 行はコメントのまま（行頭 rem→Rem は可）。インデントは変えない | 識別子の宣言合わせを P7 必須にすること。VBE 全整形。F-SIND と混ぜる。キー 1 文字ごとの書き換え |
 | F-GD | F12 でユーザーソース上の定義へ | Peek、Find All References、BCL / cmd へ F12 |
-| F-HOV | 全ホスト（cmd 含む）。定義直前の F-DOC 枠または従来コメント | Object Browser、COM HelpString、無い XML をエラーにする |
+| F-HOV | 現行ホスト（C# / VBA / PowerShell / cmd。cmd 含む）。定義直前の F-DOC 枠または従来コメント。VB.NET はフェーズ P9 | Object Browser、COM HelpString、無い XML をエラーにする |
 | F-DOC | ショートカット 1 つで言語の枠コメントを定義直前に 1 回入れる | 既存枠の二重挿入。C# の `///` `<summary>` を生成すること。キーを確定すること（提案 P20 は確認待ち） |
 | F-CMP | P7 でワークスペースのユーザーシンボルと `.` 後のメンバー候補（P12 束縛／ヒューリスティック） | Roslyn。オーバーロード解決・変換・definite assignment。Excel 未起動の COM 型。P5 必須の拡大（提案 P8 は未確定） |
 | F-SIG | （C）呼び出し中の粗い引数リスト | P5 必須にすること。完全な型システム |
@@ -169,11 +177,12 @@ COM は STA / UI。VBIDE に診断リストを返す `Compile()` は無い、と
 
 ### 定義へ移動（F-GD）とホバー（F-HOV）
 
-F-HOV は S。全ホスト。cmd を対象外にしない。F12（F-GD）の cmd 対象外は維持。表示順: 定義直前の F-DOC 枠 → 従来の連続コメント → C# BCL は Framework XML（無ければ出さない）。
+F-HOV は S。P7-B の対象は C# / VBA / PowerShell / cmd。cmd を対象外にしない。VB.NET はフェーズ P9。F12（F-GD）の cmd 対象外は維持。表示順: 定義直前の F-DOC 枠 → 従来の連続コメント → C# BCL は Framework XML（無ければ出さない）。
 
 | 言語 | F12（F-GD） | ホバー（F-HOV） |
 | --- | --- | --- |
 | C# | ファイル内 → ワークスペース `.cs`。BCL へは入らない | F-DOC 枠。連続 `///` の `<summary>` をプレーンテキスト（生成はしないが認識する）。BCL は DLL 隣の Framework XML（無ければ出さない、エラーにしない） |
+| VB.NET | ワークスペース `.vb`。BCL へは入らない。フェーズ P9 | F-DOC 枠。直前 `'` / `'''` 認識（生成しない）。フェーズ P9 |
 | VBA | ディスク木の Sub / Function / Property（Excel 平坦名ではない） | F-DOC 枠。直前の連続 `'` / `Rem`。COM HelpString は W |
 | PS | ファイル内 `function`。ドットソース先は初期対象外 | F-DOC 枠。直前 `#`（S） |
 | cmd | 対象外 | F-DOC 枠。直前の連続 `rem` / `::` |
@@ -182,7 +191,7 @@ F-HOV は S。全ホスト。cmd を対象外にしない。F12（F-GD）の cmd
 
 ### 枠コメント（F-DOC）
 
-全ホスト言語。ショートカットは 1 つ（提案 P20 Ctrl+Alt+D は確認待ち）＋ F-PAL から同コマンド。既存の F-DOC 枠が定義の直前にあれば二重挿入しない。シグネチャが取れれば `args` / `returns` を埋める（取れなければ空）。cmd に関数が無ければ空。C# の `///` `<summary>` は生成しない（ホバー認識はする）。変換もしない。
+P7-B の対象は C# / VBA / PowerShell / cmd。VB.NET の枠はフェーズ P9（VBA 例をコピーして流用しない。今は実装しない）。ショートカットは 1 つ（提案 P20 Ctrl+Alt+D は確認待ち）＋ F-PAL から同コマンド。既存の F-DOC 枠が定義の直前にあれば二重挿入しない。シグネチャが取れれば `args` / `returns` を埋める（取れなければ空）。cmd に関数が無ければ空。C# の `///` `<summary>` は生成しない（ホバー認識はする）。変換もしない。
 
 ラベル綴りは採用済み P19（`summary`）。文書の枠例も `summary`。
 
@@ -212,7 +221,7 @@ cmd     rem ------------------------
         rem ------------------------
 ```
 
-Markdown への同じコマンドはフェーズ P8。
+Markdown への同じコマンドはフェーズ P8。VB.NET の `'` 枠はフェーズ P9（VBA 例をコピーして流用しない。今は実装しない）。
 
 ### VBA キャピタライズ（F-VBA-CASE）
 
@@ -244,7 +253,7 @@ VBA の終端は実際の語を使う（**`End For` は禁止**）。既存の�
 
 ### フェーズ P7 の非対象
 
-外部 LSP、Roslyn、NuGet、別 csc、C# 6+、pwsh、常時コンパイルによる EXE 自動起動、Excel の自動 `Application.Run`、Compile と Run の混同、キー入力ごとの同期 Excel Compile、Excel 未起動時のライブ Compile による自動起動、バックグラウンドスレッドの Excel COM、`MakeCompiledFile` / ダミー Run による Compile 代替、自前レキサを VBA コンパイラと呼ぶこと、COM HelpString、Object Browser、虹色括弧、Peek、Find All References、cmd の F12 / 波線 / 自動閉じ / スマートインデント、BCL へ F12、自前パーサを csc 診断と偽ること、今の P1 への混入、設定 XML の新規属性、製品への新しい `/r`、Markdown／VBAProject 参照／マクロ（それらはフェーズ P8）。STA の診断 Compile は対象外にしない。
+外部 LSP、Roslyn、NuGet、別 csc、C# 6+、pwsh、常時コンパイルによる EXE 自動起動、Excel の自動 `Application.Run`、Compile と Run の混同、キー入力ごとの同期 Excel Compile、Excel 未起動時のライブ Compile による自動起動、バックグラウンドスレッドの Excel COM、`MakeCompiledFile` / ダミー Run による Compile 代替、自前レキサを VBA コンパイラと呼ぶこと、COM HelpString、Object Browser、虹色括弧、Peek、Find All References、cmd の F12 / 波線 / 自動閉じ / スマートインデント、BCL へ F12、自前パーサを csc 診断と偽ること、今の P1 への混入、設定 XML の新規属性、製品への新しい `/r`、Markdown／VBAProject 参照／マクロ（それらはフェーズ P8）、VB.NET ホスト（フェーズ P9。今は実装しない）、インデント線（F-IG。P7-A に混ぜない）。STA の診断 Compile は対象外にしない。
 
 ## フェーズ P8（Markdown／参照／マクロ）— 今は実装しない
 
@@ -258,7 +267,7 @@ P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**�
 
 ### Markdown（F-MD）
 
-ホスト言語にしない（D4）。R3 は 4 言語のまま。要件は新 R14。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（Regex 禁止）。実行・デバッグ・csc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。見出し・段落・リスト・インライン強調・フェンス。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可。F-DOC の同じコマンドを足してよい。
+ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（Regex 禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。見出し・段落・リスト・インライン強調・フェンス。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可。F-DOC の同じコマンドを足してよい。
 
 ### VBAProject 参照（F-VBA-REF）
 
@@ -271,6 +280,28 @@ Excel が開きマップ済みブックがあるとき、`VBProject.References` 
 ### フェーズ P8 の非対象
 
 CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown の実行・デバッグ・csc、Markdown を D4 ホストに足すこと、サクラ PPA / JScript / マクロファイル互換、拡張ホスト（F-EXT）、今の `workspace.xml` 新規属性、製品への新しい `/r`。
+
+## フェーズ P9（VB.NET ホスト）— 今は実装しない
+
+P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の新規属性は今増やさない。製品 `/r` は増やさない。`.vb` ≠ `.bas` / `.cls`。`.vbs` は Plain のまま。表示名は `"VB.NET"`。enum は将来 `LanguageKind.VbNet`（`Vb` / `VisualBasic` は使わない）。
+
+着手順の目安（コードを書くとき）: F-HL → F-VB-BLD / F-PROB 再利用 → F-VB-RUN → F-BR / F-SIND / F-AC → F-VB-LIVE / F-SQU。デバッグ（F-DBG-VB）は P9 受け入れに含めない（提案 P32）。
+
+| ID | 優先 | 内容 | 受け入れ |
+| --- | --- | --- | --- |
+| F-HL | S | `.vb` の字句色分け | 拡張子 `.vb` が `LanguageKind.VbNet` になり、ステータスが `VB.NET`。行スキャナ。`.vbs` は Plain |
+| F-VB-BLD | S | 指定 `vbc.exe` の手動ビルド | ディスク上 `.vb` フォーカスで Ctrl+Shift+B が vbc。診断が問題一覧。csc に `.vb` を渡さない |
+| F-VB-RUN | S | vbc 成功後の EXE 起動 | TEMP の EXE が別プロセスで走り、stdout/stderr が出力パネル。Excel しない。1 ショット排他に含める |
+| F-BR | S | `()[]{}` | C#/PS に合わせる。VBA の `()` のみに寄せない。`<>` XML は C |
+| F-SIND | S | VB.NET 専用スマートインデント | Languages の専用規則。`VbaBlockRules` を流用しない |
+| F-AC | S | ブロック終端 | VB.NET 語の終端を 1 回。`End For` 禁止。F-VBA-CASE は使わない。VB.NET 用 CASE は今作らない（W） |
+| F-DOC | S | `'` 枠 | VBA に似ても VB.NET 専用例。`'''` XML 生成はしない |
+| F-GD / F-HOV / F-CMP | S | ナビと補完 | ワークスペース `.vb`。BCL へ F12 しない。P5 実装は今触らない |
+| F-VB-LIVE / F-SQU | S | 常時 vbc と波線 | F-LIVE（csc）に足さない。自前レキサを vbc と偽らない |
+
+### フェーズ P9 の非対象
+
+製品を VB.NET で書き直すこと、製品ビルドを vbc にすること、指定外 vbc、`.vbproj`、`.vbs` を VB.NET にすること、`.bas` / `.cls` を vbc に渡すこと、Excel へ `.vb` を載せること、F-VBA-CASE / Excel Compile の流用、F-LIVE を vbc 対応に拡張すること、`WindowsIDE.Vba` に vbc を置くこと、`Host.VisualBasic` という名前、製品 `/r` への `Microsoft.VisualBasic.dll`、P7-A / P8 への混入、今の `workspace.xml` 新規属性、P9 受け入れへのデバッグ必須化。
 
 ## ワークベンチ
 
@@ -291,12 +322,13 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | F-LN | M | 行番号、現在行 | 行番号はガター内右寄せ、左右 8 DIP。内容が収まるときは編集器バー非表示。全角の長い行でも横バーが出て末尾までスクロールできる。横スクロール時も本文・選択はガターへ描かない |
 | F-FIND | M | ファイル内検索・置換 | 大小無視オプション |
 | F-IND | M | Tab/Shift+Tab、Enter で直前行の先頭空白をコピー | Enter で新行が直前行の先頭空白をコピーする（変換しない。空行の上は見ない）。言語非依存。タブ幅は既存 `tabSize`。複数行選択の Tab は対象行頭へ `tabSize` 個のスペース、Shift+Tab は行頭のタブ 1 個または最大 `tabSize` 個のスペースを削る。スマートインデントは F-SIND |
-| F-HL | M | 字句ハイライト 4 言語 | キーワード・文字列・コメントに加え、ローカル / メンバー / メソッド / 型が区別できる。名前空間色はしない。C# は自前束縛。Roslyn は使わない |
-| F-BR | S | 対応括弧の強調 | キャレット隣接の括弧と対が、文字列・コメント外で強調される。フェーズ P7-A |
-| F-SIND | S | 言語対応スマートインデント | 言語規則で 1 段増減する（C# `{}`、VBA ブロック、PS は C# に準じる）。順は C# → VBA → PS。cmd 対象外。フェーズ P7-A |
+| F-IG | S | インデント線（本文の縦ガイド） | すべてのファイル形式で、`tabSize` 列ごとの縦線が本文に見える。色は LineNumber。常時オン。ガターへはみ出さない。今は実装しない。P7-A に混ぜない |
+| F-HL | M | 字句ハイライト（P1 は 4 言語。P9 で VB.NET） | キーワード・文字列・コメントに加え、ローカル / メンバー / メソッド / 型が区別できる。名前空間色はしない。C# は自前束縛。Roslyn は使わない。VB.NET はフェーズ P9（今は実装しない） |
+| F-BR | S | 対応括弧の強調 | キャレット隣接の括弧と対が、文字列・コメント外で強調される。フェーズ P7-A。VB.NET は P9 で `()[]{}`（VBA の `()` のみに寄せない） |
+| F-SIND | S | 言語対応スマートインデント | 言語規則で 1 段増減する（C# `{}`、VBA ブロック、PS は C# に準じる）。順は C# → VBA → PS。cmd 対象外。フェーズ P7-A。VB.NET は P9 の専用規則（`VbaBlockRules` 流用禁止） |
 | F-AC | S | 自動閉じ | C#/PS は対括弧が条件付きで入り、VBA はブロック開始の Enter で対応終端が 1 回だけ入る。フェーズ P7-A。閉じ方は採用済み P17（`{` 入力直後に `}`） |
 | F-VBA-CASE | S | VBA キーワードの大文字小文字 | 文字列・コメント外のキーワードが表の大文字小文字になり、インデントは変わらない。フェーズ P7-A |
-| F-DOC | S | 枠コメント挿入 | ショートカット 1 つで、言語の枠コメントが定義直前に 1 回入り、既存枠のときは増えない。フェーズ P7-B |
+| F-DOC | S | 枠コメント挿入 | ショートカット 1 つで、言語の枠コメントが定義直前に 1 回入り、既存枠のときは増えない。フェーズ P7-B は C# / VBA / PowerShell / cmd。VB.NET はフェーズ P9 |
 | F-MC | C | マルチカーソル | |
 | F-MM | W | ミニマップ | |
 | F-VIM | W | Vim モーダル | D12 により初期対象外 |
@@ -307,12 +339,15 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | --- | --- | --- | --- |
 | F-CS-BLD | M | `csc.exe` で手動ビルド | エラー行が問題一覧に出る。常時コンパイルは F-LIVE（フェーズ P7） |
 | F-CS-RUN | M | ビルド成功後に EXE 起動 | stdout/stderr が出力パネル。常時コンパイルの生成物は起動しない |
+| F-VB-BLD | S | 指定 `vbc.exe` で手動ビルド | ディスク上 `.vb` のとき Ctrl+Shift+B が vbc になり、エラー行が問題一覧に出る。csc に `.vb` を渡さない。フェーズ P9。今は実装しない |
+| F-VB-RUN | S | vbc 成功後に EXE 起動 | stdout/stderr が出力パネル。Excel しない。フェーズ P9。今は実装しない |
+| F-VB-LIVE | S | VB.NET の常時診断（vbc） | 入力停止後にデバウンスした指定 `vbc.exe` が走り、失敗が問題一覧と波線に出る。生成物は起動されない。F-LIVE（csc）に足さない。フェーズ P9。今は実装しない |
 | F-PS-RUN | M | `.ps1` を PowerShell 5.1 で実行 | `$PSVersionTable.PSVersion.Major -eq 5` |
 | F-CMD-RUN | M | `.cmd` / `.bat` / 選択行を cmd で実行 | ディスク上の `.cmd` / `.bat` を OS 同梱 `cmd.exe` で実行し、stdout/stderr/起動終了が出力パネルに出る。選択テキスト（無ければ現在行）も同じ `cmd.exe` で実行し、stdout/stderr/起動終了が出力パネルに出る。Ctrl+F5 はファイル全体。F8 は選択行。 |
 | F-TERM | M | 統合ターミナル | 下パネルにターミナルがあり、既定は System32 の powershell.exe 5.1（`-NoLogo -NoProfile -ExecutionPolicy Bypass`）、メニューで cmd.exe（`/d`）に切替できる。ConPTY でプロンプト・Read-Host・`dir /p` が対話できる。Ctrl+` で表示／フォーカス（ターミナルフォーカス中なら畳む）。1 ショット実行と共存する |
 | F-VBA-SYNC | M | VBA ディレクトリ ↔ Excel プッシュ / プル | ディスクの `vba/` で `.bas` / `.cls` を管理し、マクロ有効ブックと明示のプル／プッシュができる。Excel 側にフォルダは作らない。両方の namingMode。VBA 既定 CP932 |
 | F-PROB | M | 問題一覧 | クリックでファイル+行。残 P1 の受け入れは手動 `csc` の診断を問題一覧に出すこと。将来の常時 csc（F-LIVE、フェーズ P7）と VBA Compile（F-VBA-BLD、フェーズ P7）も同じ診断モデル。VBA Compile の受け入れは F-VBA-BLD。競合したら新しい方で置き換える |
-| F-LIVE | S | 常時コンパイル（診断のみ） | 入力停止後にデバウンスした Framework `csc.exe` が走り、失敗が問題一覧と波線に出る。生成物は起動されない。フェーズ P7-C。csc 専用（VBA Compile は F-VBA-BLD） |
+| F-LIVE | S | 常時コンパイル（診断のみ） | 入力停止後にデバウンスした Framework `csc.exe` が走り、失敗が問題一覧と波線に出る。生成物は起動されない。フェーズ P7-C。csc 専用（VBA Compile は F-VBA-BLD。VB.NET は F-VB-LIVE） |
 | F-SQU | S | 構文エラーの波線 | C# は csc 診断位置、PS は `ParseInput` エラー位置、VBA は F-VBA-BLD の位置に、エラー色の波線が付く。cmd は波線なし。フェーズ P7-C |
 | F-VBA-BLD | S | VBA Compile 診断 | プッシュ後の Excel Compile 失敗が問題一覧と波線に出る。Run されない。Excel 未起動のライブは走らない。フェーズ P7-C |
 
@@ -322,6 +357,7 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 | --- | --- | --- | --- | --- |
 | F-DBG-PS | S | PowerShell | 行ブレーク、ステップ、ローカル変数 | P3 |
 | F-DBG-CS | S | C# | PDB + ステップ、コールスタック、ローカル | P4。ICorDebug 等インボックス API のみ |
+| F-DBG-VB | S | VB.NET | PDB + ステップ、コールスタック、ローカル | 独立 ID。F-DBG-CS に相乗りしない。P9 の受け入れに含めない。時期は P4 の後（提案 P32） |
 | F-DBG-CMD | S | cmd | エコー実行、失敗行 | 本格ステップは必須にしない |
 | F-DBG-VBA | S | VBA | マクロ指定実行、COM エラー表示。可能なら VBE 連携 | P6 |
 | F-DBG-UI | S | 共通 | ブレークガター、続行/停止、デバッグコンソール | |
@@ -332,9 +368,9 @@ CommonMark 完全、NuGet Markdown パーサ、新しいテーマ色、Markdown 
 
 | ID | 優先 | 内容 | 受け入れ |
 | --- | --- | --- | --- |
-| F-CMP | S | キーワードと開いているファイルの識別子 | P5。全ホスト。キーワード静的表＋開いているファイルの識別子。cmd はキーワード、`%VAR%` / `!VAR!`、ファイル内ラベル。メンバーリストなし。ワークスペースのシンボル名は P5 必須ではない（提案 P8）。P7 でワークスペース／メンバー（S）。Roslyn ではない |
-| F-GD | S | 定義へ移動 | F12 でユーザーソース上の定義へジャンプする。BCL / cmd へは入らない。Peek / 参照検索は W。フェーズ P7-B |
-| F-HOV | S | ホバー / クイックインフォ | 全ホスト（cmd 含む）で、定義直前の F-DOC 枠または従来コメントがホバーに出る。フェーズ P7-B |
+| F-CMP | S | キーワードと開いているファイルの識別子 | P5。全ホスト（P9 以降は VB.NET を含む。今の P5 実装は触らない）。キーワード静的表＋開いているファイルの識別子。cmd はキーワード、`%VAR%` / `!VAR!`、ファイル内ラベル。メンバーリストなし。ワークスペースのシンボル名は P5 必須ではない（提案 P8）。P7 でワークスペース／メンバー（S）。Roslyn ではない |
+| F-GD | S | 定義へ移動 | F12 でユーザーソース上の定義へジャンプする。BCL / cmd へは入らない。Peek / 参照検索は W。フェーズ P7-B は C# / VBA / PowerShell。VB.NET はフェーズ P9 |
+| F-HOV | S | ホバー / クイックインフォ | C# / VBA / PowerShell / cmd（cmd 含む）で、定義直前の F-DOC 枠または従来コメントがホバーに出る。フェーズ P7-B。VB.NET はフェーズ P9 |
 | F-SIG | C | パラメータヒント | 呼び出し中に粗の引数リストが出る。P5 必須ではない。フェーズ P7-B |
 | F-LSP | W | 外部 LSP / Roslyn | 変えない。初期はやらない |
 

@@ -6,11 +6,11 @@
 
 | ID | 内容 |
 | --- | --- |
-| D1 | 実行環境は Windows 11 64-bit、PowerShell 5.1、Microsoft 365 64-bit、Framework `csc.exe` 4.8.9221.0（C# 5）、FW 4.8.1 |
+| D1 | 実行環境は Windows 11 64-bit、PowerShell 5.1、Microsoft 365 64-bit、Framework `csc.exe` 4.8.9221.0（C# 5）、FW 4.8.1。ユーザー VB.NET は同フォルダの `vbc.exe` 14.8.9221.0（Visual Basic 2012）。製品ビルドは指定 `csc.exe` のまま |
 | D2 | BCL の基準はコンパイラと同じフォルダの `mscorlib.dll` / `System.dll`（4.8.9337 / 4.8.9340） |
 | D3 | 外部ライブラリのインストール・同梱は禁止 |
-| D4 | ホスト言語は C# 5、VBA、PowerShell 5.1、cmd のみ。Markdown（`.md`）は編集言語でありホストではない（実行・デバッグ・csc しない） |
-| D5 | それらをデバッグおよび実行できる |
+| D4 | ホスト言語は C# 5、VB.NET（指定 Framework `vbc.exe`）、VBA、PowerShell 5.1、cmd。Markdown（`.md`）は編集言語でありホストではない（実行・デバッグ・csc / vbc しない）。VB.NET の実装はフェーズ P9（D24）。今はコードを書かない |
+| D5 | それらをデバッグおよび実行できる。VB.NET の実行受け入れはフェーズ P9。デバッグ品質はフェーズ表と提案 P32（確認待ち） |
 | D6 | VBA モジュールはディレクトリ管理し Excel と同期する。Excel VBA にディレクトリは反映しない |
 | D7 | VS Code 等の IDE として必要な作業面は必須（自前実装） |
 | D8 | 外観はダーク、neovim のような薄い UI |
@@ -29,6 +29,8 @@
 | D21 | フェーズ P7 で提案 P14 / P16 / P17 をこのチャットで採用する（覆すまで）。P16 / P17 は P7-A で実装する。P14（常時コンパイル単位）は波 C までコードを書かない |
 | D22 | このチャットで提案 P19 / P21 / P22 を採用する（覆すまで）。P19 の実装はフェーズ P7-B、P21 / P22 の実装はフェーズ P8。今はコードを書かない |
 | D23 | ユーザー `.cmd` / `.bat` は新規・0 バイト Open・無題 SaveAs が CP932 BOM なし CRLF。保存時は BOM を書かない。非空 UTF-8 BOM の Open は検出どおり UTF-8 のまま、Save で BOM だけ落とす（本文は再エンコードしない）。TryDecode は変えない。 |
+| D24 | このチャットで D4 を覆し、VB.NET を第5のホストに加える。拡張子は `.vb` のみ（`.vbs` は Plain。`.bas` / `.cls` は VBA）。診断の正は指定 `vbc.exe`。表示名は `VB.NET`。実装はフェーズ P9。今はコードを書かない |
+| D25 | F-IG（編集器本文のインデント線）。言語非依存。全ファイル形式（Plain / cmd / Markdown / 無題を含む）。色は既存 LineNumber。常時オン。新 XML なし。`WindowsIDE.Editor`。P7-A に混ぜない。P9 より先でよい。今は実装しない |
 
 ## P0 で採用した提案
 
@@ -36,7 +38,7 @@
 | --- | --- |
 | P4 | 設定・マップは **XML**（`System.Xml` / `XmlDocument`）。P0 の `{workspace}/.windows-ide/workspace.xml` は `editor/@fontSize` と `editor/@tabSize` のみ。`vba-map` は P2 の同期操作で作る。workspace.xml に namingMode は書かない。フォルダを開いただけでは `.windows-ide` を作らない |
 | P6 | 製品は **単一 WinExe**。`build/out/WindowsIDE.exe` のみ（隣の PDB と `WindowsIDE.exe.config` は可）。クラスライブラリ分割はしない |
-| P7 | 製品 C# ソースと新規ユーザー `.cs` は **UTF-8 BOM**。新規ファイルの改行は CRLF。VBA / CP932 既定は P2。`.cmd` / `.bat` は D23 |
+| P7 | 製品 C# ソースと新規ユーザー `.cs` は **UTF-8 BOM**。新規ファイルの改行は CRLF。VBA / CP932 既定は P2。`.cmd` / `.bat` は D23。新規 `.vb` は同じ UTF-8 BOM（フェーズ P9。今は実装しない） |
 
 ## P1 で採用した提案
 
@@ -72,7 +74,7 @@
 
 [requirements.md](requirements.md) の **フェーズ P8**（Markdown／VBAProject 参照／マクロ）と、下表の **提案 P8**（F-CMP の P5 必須範囲）も別物である。混同しない。
 
-P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。
+P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
 
 | ID | 提案 | 理由 | 代替 |
 | --- | --- | --- | --- |
@@ -86,6 +88,13 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 | P23 | P8 実装時、開いている VBProject 参照の GUID を `vba-map.xml` に残す。**今は XML 要素を足さない** | ディスク `.bas` には参照を書けない | マップに残さず Excel 側だけ |
 | P24 | パラメータヒントは別 ID F-SIG（C、フェーズ P7-B）。F-CMP の P5 受け入れには含めない。P5 必須ではない | F-CMP に含めると P5 受け入れが膨らむ | F-CMP に含める |
 | P25 | VBA のライブ Compile は、マップ済みブックが **既に開いている** ときだけ。Excel を自動起動しない。未保存 VBA は既存同期規則でプッシュしてから Compile | 未起動 Excel の自動起動は COM 寿命と意図しないブック起動 | ライブでも Excel を起動する |
+| P26 | ユーザー vbc の `/r` は当面、C# の P15 に `Microsoft.VisualBasic.dll` を足したセット、を実装既定にしてよい。確定にはしない。製品 `/r` には足さない | 製品 `/r` を増やさずユーザー VB だけ BCL を揃える | P15 と同じ 6 DLL のみ / ユーザー XML |
+| P27 | ユーザー vbc の `Option Strict` / `Option Explicit` の既定はコンパイラ既定のまま（IDE が `/optionstrict+` を足さない） | 言語既定を文書で固定しすぎない | `/optionstrict+` を必須にする |
+| P28 | 同一ワークスペースに `.cs` と `.vb` を置いてよい。1 回の csc / 1 回の vbc には混ぜない。`.cs` は P14、`.vb` は別単位（ワークスペース内すべての `.vb` を 1 単位にする案）。`.vbproj` は作らない | 混在プロジェクトを msbuild 相当にしない | 単一コマンドに C# と VB を混ぜる |
+| P29 | インデント線の専用色とアクティブガイド（現在スコープだけ濃くする）は C。F-IG 必須は LineNumber の縦線のみ | ui.md の新色禁止を今は破らない | 新 Theme 色を確定する |
+| P30 | インデント線の XML トグルは今作らない（D25 どおり常時オン） | P4 の workspace.xml 契約を今増やさない | `editor/@renderIndentGuides` |
+| P31 | 空行をまたぐガイド継続は VS Code 風を実装既定にしてよい。確定にはしない | 空行で線が途切れるとブロックが見えにくい | 非空行の先頭空白だけに線を引く |
+| P32 | VB.NET デバッグは独立 ID `F-DBG-VB`（ICorDebug）。F-DBG-CS に相乗りしない。P9 の受け入れにデバッグを入れない。時期は P4 の後 | C# デバッガ実装を VB で壊さない | F-DBG-CS に `.vb` を足す |
 
 ## まだ聞かないが後で決める
 

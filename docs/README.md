@@ -11,7 +11,7 @@ WindowsIDE の仕様はここに置く。実装よりこの文書を優先する
 | [vba-workspace.md](vba-workspace.md) | VBA のディレクトリ管理と Excel 同期 |
 | [ui.md](ui.md) | ダークテーマ、レイアウト、フォント |
 | [fonts.md](fonts.md) | フォント同梱。OS インストール不要 |
-| [build.md](build.md) | `csc.exe` によるビルド手順 |
+| [build.md](build.md) | 製品は `csc.exe`。ユーザー VB.NET は指定 `vbc.exe`（フェーズ P9。今は実装しない） |
 | [decisions.md](decisions.md) | 確定事項と提案事項 |
 | [glossary.md](glossary.md) | 用語 |
 

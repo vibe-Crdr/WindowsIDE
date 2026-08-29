@@ -11,7 +11,7 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE.Workspace
 {
     /// <summary>
-    /// クリックまたは Enter でファイルを開くツリー。作成は行内 DualFontField。リネーム・削除メニューは持たない。子は展開時に読む。
+    /// クリックまたは Enter でファイルを開くツリー。作成とリネームは行内 DualFontField。F2 と遅延ラベルクリックでリネーム、Delete で削除要求。コンテキストメニューは持たない。子は展開時に読む。
     /// </summary>
     public sealed class FileTreeControl : TreeView
     {
@@ -21,6 +21,13 @@ namespace WindowsIDE.Workspace
         private const int WM_MOUSEWHEEL = 0x020A;
         private const int WM_MOUSEHWHEEL = 0x020E;
         private const int SB_THUMBPOSITION = 4;
+
+        private enum InlineSessionKind
+        {
+            None,
+            Create,
+            Rename
+        }
 
         private static readonly object InlineCreateTag = new object();
 
@@ -37,11 +44,17 @@ namespace WindowsIDE.Workspace
         private TreeNode createNode;
         private bool createIsFolder;
         private string createParentDirectory;
+        private InlineSessionKind inlineKind;
+        private string renameOriginalName;
         private bool suppressBlurCancel;
         private bool ignoreThemedScroll;
         private bool chromeBusy;
         private bool rebuildBusy;
         private int wheelLeftover;
+        private Timer renameClickTimer;
+        private TreeNode pendingRenameNode;
+        private TreeNode lastClickNode;
+        private DateTime lastClickAt;
 
         /// <summary>
         /// オーナー描画のツリーを作る。
@@ -80,6 +93,9 @@ namespace WindowsIDE.Workspace
             this.createField.KeyDown += this.OnCreateFieldKeyDown;
             this.createField.LostFocus += this.OnCreateFieldLostFocus;
             this.Controls.Add(this.createField);
+
+            this.renameClickTimer = new Timer();
+            this.renameClickTimer.Tick += this.OnRenameClickTimerTick;
 
             this.RecreateUiFont();
             this.BeforeExpand += this.OnBeforeExpand;
@@ -134,10 +150,16 @@ namespace WindowsIDE.Workspace
         /// <summary>行内作成の確定。Name は Trim 済み非空。ディスクにはまだ触れない。</summary>
         public event EventHandler<TreeCreateCommitEventArgs> InlineCreateCommit;
 
+        /// <summary>行内リネームの確定。NewName は Trim 済み。ディスクにはまだ触れない。</summary>
+        public event EventHandler<TreeRenameCommitEventArgs> InlineRenameCommit;
+
+        /// <summary>ツリーフォーカス時の Delete。SelectedNode.Tag を読む。</summary>
+        public event EventHandler DeleteRequested;
+
         /// <summary>最後に開く要求を出したファイル。フォルダなら null。</summary>
         public string SelectedFilePath { get; private set; }
 
-        /// <summary>行内作成の番兵と欄が出ているとき true。</summary>
+        /// <summary>行内作成またはリネームの欄が出ているとき true。</summary>
         public bool IsInlineCreateActive
         {
             get
@@ -146,7 +168,7 @@ namespace WindowsIDE.Workspace
             }
         }
 
-        /// <summary>行内作成欄が IME 未確定のとき true。</summary>
+        /// <summary>行内作成／リネーム欄が IME 未確定のとき true。</summary>
         public bool IsInlineCreateComposing
         {
             get
@@ -240,6 +262,8 @@ namespace WindowsIDE.Workspace
             this.createNode = placeholder;
             this.createIsFolder = isFolder;
             this.createParentDirectory = parentFull;
+            this.inlineKind = InlineSessionKind.Create;
+            this.renameOriginalName = null;
             this.createField.SetFonts(this.halfFont, this.fullFont, DpiUtil.UiFontDip);
             this.createField.Text = "";
             this.createField.BorderColor = Theme.Selection;
@@ -251,15 +275,64 @@ namespace WindowsIDE.Workspace
         }
 
         /// <summary>
-        /// 行内作成を破棄する。番兵を外し欄を隠す。ディスクには触れない。
+        /// 指定ノードの行内リネームを始める。根・番兵・lazy・ワークスペース外は false。既存セッションは破棄する。
+        /// </summary>
+        /// <param name="node">対象ノード。</param>
+        /// <returns>欄を出せたら true。</returns>
+        public bool BeginInlineRename(TreeNode node)
+        {
+            this.CancelInlineCreate();
+            this.StopRenameClickTimer();
+            if (node == null || this.createField == null || this.IsCreatePlaceholder(node) || object.Equals(node.Tag, LazyTag))
+            {
+                return false;
+            }
+
+            string path = node.Tag as string;
+            if (string.IsNullOrEmpty(path) || !PathGuard.IsInsideWorkspace(this.rootPath, path)
+                || WorkspaceItemRules.IsWorkspaceRoot(this.rootPath, path))
+            {
+                return false;
+            }
+
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                return false;
+            }
+
+            this.createNode = node;
+            this.createIsFolder = false;
+            this.createParentDirectory = null;
+            this.inlineKind = InlineSessionKind.Rename;
+            this.renameOriginalName = node.Text;
+            this.SelectedNode = node;
+            this.createField.SetFonts(this.halfFont, this.fullFont, DpiUtil.UiFontDip);
+            this.createField.Text = node.Text;
+            this.createField.SelectAll();
+            this.createField.BorderColor = Theme.Selection;
+            this.createField.Visible = true;
+            node.EnsureVisible();
+            this.RefreshChrome();
+            this.createField.Focus();
+            this.createField.SelectAll();
+            this.Invalidate();
+            return true;
+        }
+
+        /// <summary>
+        /// 行内作成の番兵を外し、リネーム欄も隠す。ディスクには触れない。
         /// </summary>
         public void CancelInlineCreate()
         {
+            this.StopRenameClickTimer();
+            InlineSessionKind kind = this.inlineKind;
             TreeNode node = this.createNode;
             TreeNode parent = (node == null) ? null : node.Parent;
             this.createNode = null;
             this.createIsFolder = false;
             this.createParentDirectory = null;
+            this.inlineKind = InlineSessionKind.None;
+            this.renameOriginalName = null;
             if (this.createField != null)
             {
                 this.createField.Visible = false;
@@ -267,7 +340,7 @@ namespace WindowsIDE.Workspace
                 this.createField.BorderColor = Theme.Border;
             }
 
-            if (node != null)
+            if (kind == InlineSessionKind.Create && node != null)
             {
                 if (node.Parent != null)
                 {
@@ -277,16 +350,18 @@ namespace WindowsIDE.Workspace
                 {
                     this.Nodes.Remove(node);
                 }
-            }
 
-            if (parent != null)
-            {
-                this.SelectedNode = parent;
-            }
+                if (parent != null)
+                {
+                    this.SelectedNode = parent;
+                }
 
-            if (node != null)
+                this.RefreshChrome();
+            }
+            else if (kind == InlineSessionKind.Rename)
             {
                 this.RefreshChrome();
+                this.Invalidate();
             }
         }
 
@@ -300,7 +375,7 @@ namespace WindowsIDE.Workspace
         }
 
         /// <summary>
-        /// 行内作成欄へフォーカスする。セッションが無ければ false。
+        /// 行内作成／リネーム欄へフォーカスする。セッションが無ければ false。
         /// </summary>
         /// <returns>欄へ移せたら true。</returns>
         public bool FocusInlineCreate()
@@ -609,6 +684,11 @@ namespace WindowsIDE.Workspace
             }
 
             Rectangle clip = new Rectangle(0, bounds.Y, rowW, rowH);
+            if (this.IsRenameTarget(e.Node))
+            {
+                return;
+            }
+
             using (SolidBrush fg = new SolidBrush(Theme.Foreground))
             {
                 DualFontPainter.Draw(e.Graphics, e.Node.Text, this.halfFont, this.fullFont, clip, x, fg, this.typographic);
@@ -666,7 +746,7 @@ namespace WindowsIDE.Workspace
 
         /// <summary>
         /// 左クリックでファイルを開く。OwnerDraw のため GetNodeAt と行の Y で当てる。
-        /// 行内作成中に番兵以外をクリックしたら先にキャンセルする。番兵は開かない。
+        /// 選択済みラベルの遅延クリックでリネーム。行内中に番兵／リネーム対象以外をクリックしたら先にキャンセルする。
         /// </summary>
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -675,16 +755,10 @@ namespace WindowsIDE.Workspace
                 return;
             }
 
-            if (e.Button != MouseButtons.Left)
-            {
-                base.OnMouseDown(e);
-                return;
-            }
-
-            TreeNode node = this.HitNode(e.X, e.Y);
             if (this.IsInlineCreateActive)
             {
-                if (this.IsCreatePlaceholder(node))
+                TreeNode inlineHit = this.HitNode(e.X, e.Y);
+                if (this.IsCreatePlaceholder(inlineHit) || this.IsRenameTarget(inlineHit))
                 {
                     if (this.createField != null)
                     {
@@ -697,6 +771,94 @@ namespace WindowsIDE.Workspace
                 this.CancelInlineCreate();
             }
 
+            if (e.Button != MouseButtons.Left || Control.ModifierKeys != Keys.None)
+            {
+                this.StopRenameClickTimer();
+                if (e.Button != MouseButtons.Left)
+                {
+                    base.OnMouseDown(e);
+                    return;
+                }
+
+                TreeNode other = this.HitNode(e.X, e.Y);
+                base.OnMouseDown(e);
+                if (other == null)
+                {
+                    this.SelectedFilePath = null;
+                    return;
+                }
+
+                string otherPath = other.Tag as string;
+                if (!string.IsNullOrEmpty(otherPath) && Directory.Exists(otherPath))
+                {
+                    this.SelectedFilePath = null;
+                    Rectangle otherMark;
+                    if (this.expandMarks.TryGetValue(other, out otherMark) && otherMark.Contains(e.Location))
+                    {
+                        if (other.IsExpanded)
+                        {
+                            other.Collapse();
+                        }
+                        else
+                        {
+                            other.Expand();
+                        }
+                    }
+
+                    return;
+                }
+
+                this.TryRequestFileOpen(other);
+                return;
+            }
+
+            TreeNode node = this.HitNode(e.X, e.Y);
+            if (node != null)
+            {
+                string folderPath = node.Tag as string;
+                Rectangle mark;
+                if (!string.IsNullOrEmpty(folderPath) && Directory.Exists(folderPath)
+                    && this.expandMarks.TryGetValue(node, out mark) && mark.Contains(e.Location))
+                {
+                    this.StopRenameClickTimer();
+                    this.RememberClick(node);
+                    base.OnMouseDown(e);
+                    this.SelectedFilePath = null;
+                    if (node.IsExpanded)
+                    {
+                        node.Collapse();
+                    }
+                    else
+                    {
+                        node.Expand();
+                    }
+
+                    return;
+                }
+            }
+
+            if (node != null && this.IsPendingRenameClick(node))
+            {
+                this.StopRenameClickTimer();
+                this.RememberClick(node);
+                base.OnMouseDown(e);
+                this.TryRequestFileOpen(node);
+                return;
+            }
+
+            bool wasSelected = node != null && this.SelectedNode == node;
+            bool labelHit = node != null && this.HitLabel(node, e.Location);
+            bool canRename = node != null && this.CanBeginRename(node);
+            if (wasSelected && labelHit && canRename && !this.IsQuickRepeat(node))
+            {
+                this.StartRenameClickTimer(node);
+                this.RememberClick(node);
+                base.OnMouseDown(e);
+                return;
+            }
+
+            this.StopRenameClickTimer();
+            this.RememberClick(node);
             base.OnMouseDown(e);
             if (node == null)
             {
@@ -708,19 +870,6 @@ namespace WindowsIDE.Workspace
             if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
             {
                 this.SelectedFilePath = null;
-                Rectangle mark;
-                if (this.expandMarks.TryGetValue(node, out mark) && mark.Contains(e.Location))
-                {
-                    if (node.IsExpanded)
-                    {
-                        node.Collapse();
-                    }
-                    else
-                    {
-                        node.Expand();
-                    }
-                }
-
                 return;
             }
 
@@ -728,13 +877,44 @@ namespace WindowsIDE.Workspace
         }
 
         /// <summary>
-        /// 選択中ファイルは Enter で開く。フォルダと修飾付き Enter は base に渡す。
+        /// 選択中ファイルは Enter で開く。F2 でリネーム。Delete で削除要求。フォルダと修飾付き Enter は base に渡す。
         /// </summary>
         protected override void OnKeyDown(KeyEventArgs e)
         {
             if (this.rebuildBusy)
             {
                 base.OnKeyDown(e);
+                return;
+            }
+
+            if (this.IsInlineCreateActive)
+            {
+                if (e.KeyData == Keys.F2 || e.KeyData == Keys.Delete)
+                {
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
+                    return;
+                }
+            }
+
+            if (e.KeyData == Keys.F2)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                this.BeginInlineRename(this.SelectedNode);
+                return;
+            }
+
+            if (e.KeyData == Keys.Delete)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                EventHandler del = this.DeleteRequested;
+                if (del != null)
+                {
+                    del(this, EventArgs.Empty);
+                }
+
                 return;
             }
 
@@ -1281,6 +1461,14 @@ namespace WindowsIDE.Workspace
         {
             if (disposing)
             {
+                this.StopRenameClickTimer();
+                if (this.renameClickTimer != null)
+                {
+                    this.renameClickTimer.Tick -= this.OnRenameClickTimerTick;
+                    this.renameClickTimer.Dispose();
+                    this.renameClickTimer = null;
+                }
+
                 if (this.createField != null)
                 {
                     this.createField.KeyDown -= this.OnCreateFieldKeyDown;
@@ -1317,6 +1505,146 @@ namespace WindowsIDE.Workspace
         private bool IsCreatePlaceholder(TreeNode node)
         {
             return node != null && object.ReferenceEquals(node.Tag, InlineCreateTag);
+        }
+
+        private bool IsRenameTarget(TreeNode node)
+        {
+            return this.inlineKind == InlineSessionKind.Rename && node != null && object.ReferenceEquals(node, this.createNode);
+        }
+
+        private bool CanBeginRename(TreeNode node)
+        {
+            if (node == null || this.IsCreatePlaceholder(node) || object.Equals(node.Tag, LazyTag))
+            {
+                return false;
+            }
+
+            string path = node.Tag as string;
+            if (string.IsNullOrEmpty(path) || !PathGuard.IsInsideWorkspace(this.rootPath, path)
+                || WorkspaceItemRules.IsWorkspaceRoot(this.rootPath, path))
+            {
+                return false;
+            }
+
+            return File.Exists(path) || Directory.Exists(path);
+        }
+
+        private bool HitLabel(TreeNode node, Point location)
+        {
+            if (node == null || this.halfFont == null || this.fullFont == null)
+            {
+                return false;
+            }
+
+            Rectangle row = node.Bounds;
+            int rowH = this.ItemHeight;
+            if (rowH < 1)
+            {
+                rowH = row.Height;
+            }
+
+            if (location.Y < row.Y || location.Y >= row.Y + rowH)
+            {
+                return false;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int indent = DpiUtil.ToPixels(4, dpi);
+            int step = DpiUtil.ToPixels(16, dpi);
+            int markW = DpiUtil.ToPixels(14, dpi);
+            int scrollX = 0;
+            if (this.hScroll != null)
+            {
+                scrollX = this.hScroll.Value;
+            }
+
+            int x = indent + (node.Level * step) - scrollX;
+            string path = node.Tag as string;
+            if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+            {
+                x += markW;
+            }
+
+            int width;
+            using (Graphics g = this.CreateGraphics())
+            {
+                width = (int)Math.Ceiling(DualFontPainter.Measure(g, node.Text, this.halfFont, this.fullFont, this.typographic));
+            }
+
+            if (width < 1)
+            {
+                return false;
+            }
+
+            return location.X >= x && location.X < x + width;
+        }
+
+        private void RememberClick(TreeNode node)
+        {
+            this.lastClickNode = node;
+            this.lastClickAt = DateTime.UtcNow;
+        }
+
+        private bool IsQuickRepeat(TreeNode node)
+        {
+            if (node == null || this.lastClickNode != node)
+            {
+                return false;
+            }
+
+            int limit = SystemInformation.DoubleClickTime;
+            if (limit < 1)
+            {
+                limit = 500;
+            }
+
+            return (DateTime.UtcNow - this.lastClickAt).TotalMilliseconds <= limit;
+        }
+
+        private bool IsPendingRenameClick(TreeNode node)
+        {
+            return node != null && this.renameClickTimer != null && this.renameClickTimer.Enabled && this.pendingRenameNode == node;
+        }
+
+        private void StartRenameClickTimer(TreeNode node)
+        {
+            this.StopRenameClickTimer();
+            if (node == null || this.renameClickTimer == null)
+            {
+                return;
+            }
+
+            int interval = SystemInformation.DoubleClickTime;
+            if (interval < 1)
+            {
+                interval = 500;
+            }
+
+            this.pendingRenameNode = node;
+            this.renameClickTimer.Interval = interval;
+            this.renameClickTimer.Start();
+        }
+
+        private void StopRenameClickTimer()
+        {
+            if (this.renameClickTimer != null)
+            {
+                this.renameClickTimer.Stop();
+            }
+
+            this.pendingRenameNode = null;
+        }
+
+        private void OnRenameClickTimerTick(object sender, EventArgs e)
+        {
+            TreeNode node = this.pendingRenameNode;
+            this.StopRenameClickTimer();
+            if (node == null || node.TreeView != this)
+            {
+                return;
+            }
+
+            this.BeginInlineRename(node);
         }
 
         private void OnCreateFieldKeyDown(object sender, KeyEventArgs e)
@@ -1358,6 +1686,30 @@ namespace WindowsIDE.Workspace
             }
 
             name = name.Trim();
+            if (this.inlineKind == InlineSessionKind.Rename)
+            {
+                string current = this.renameOriginalName;
+                if (current == null)
+                {
+                    current = "";
+                }
+
+                if (name.Length == 0 || string.Equals(name, current, StringComparison.OrdinalIgnoreCase))
+                {
+                    this.CancelInlineCreate();
+                    return;
+                }
+
+                string oldPath = (this.createNode == null) ? null : (this.createNode.Tag as string);
+                EventHandler<TreeRenameCommitEventArgs> rh = this.InlineRenameCommit;
+                if (rh != null && !string.IsNullOrEmpty(oldPath))
+                {
+                    rh(this, new TreeRenameCommitEventArgs(oldPath, name));
+                }
+
+                return;
+            }
+
             if (name.Length == 0)
             {
                 this.CancelInlineCreate();
@@ -1420,6 +1772,7 @@ namespace WindowsIDE.Workspace
             int step = DpiUtil.ToPixels(16, dpi);
             int icon = DpiUtil.ToPixels(16, dpi);
             int gap = DpiUtil.ToPixels(2, dpi);
+            int markW = DpiUtil.ToPixels(14, dpi);
             int rightPad = DpiUtil.ToPixels(4, dpi);
             Rectangle row = this.createNode.Bounds;
             int rowH = this.ItemHeight;
@@ -1428,7 +1781,26 @@ namespace WindowsIDE.Workspace
                 rowH = row.Height;
             }
 
-            int left = indent + (this.createNode.Level * step) + icon + gap;
+            int scrollX = 0;
+            if (this.hScroll != null)
+            {
+                scrollX = this.hScroll.Value;
+            }
+
+            int left;
+            if (this.inlineKind == InlineSessionKind.Rename)
+            {
+                left = indent + (this.createNode.Level * step) - scrollX;
+                string path = this.createNode.Tag as string;
+                if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+                {
+                    left += markW;
+                }
+            }
+            else
+            {
+                left = indent + (this.createNode.Level * step) + icon + gap;
+            }
             int right = this.ClientSize.Width - rightPad;
             if (this.vScroll != null && this.vScroll.Visible)
             {
@@ -1631,5 +2003,28 @@ namespace WindowsIDE.Workspace
 
         /// <summary>Trim 済み名前。</summary>
         public string Name { get; private set; }
+    }
+
+    /// <summary>
+    /// ツリー内インラインリネームの確定。NewName は Trim 済み非空。
+    /// </summary>
+    public sealed class TreeRenameCommitEventArgs : EventArgs
+    {
+        /// <summary>
+        /// 確定内容を保持する。
+        /// </summary>
+        /// <param name="oldPath">リネーム前の絶対パス。</param>
+        /// <param name="newName">Trim 済み新しい名前（1 要素）。</param>
+        public TreeRenameCommitEventArgs(string oldPath, string newName)
+        {
+            this.OldPath = oldPath;
+            this.NewName = newName;
+        }
+
+        /// <summary>リネーム前の絶対パス。</summary>
+        public string OldPath { get; private set; }
+
+        /// <summary>Trim 済み新しい名前。</summary>
+        public string NewName { get; private set; }
     }
 }

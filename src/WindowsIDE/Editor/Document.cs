@@ -199,6 +199,29 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
+        /// 本文を書かずにディスクパスだけ差し替える。無題には使わない。ダーティと Undo は維持する。言語が変わったらハイライトを組み直す。
+        /// </summary>
+        /// <param name="path">新しい絶対パス。</param>
+        /// <returns>差し替えたら true。</returns>
+        public bool Retarget(string path)
+        {
+            if (string.IsNullOrEmpty(this.filePath) || string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            LanguageKind before = this.Language;
+            this.filePath = Path.GetFullPath(path);
+            this.untitledName = null;
+            if (before != this.Language)
+            {
+                this.ResetHighlight();
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// ディスクから本文を再読込する。キャレットは Clamp。Undo は捨てる。ダーティを落とす。
         /// </summary>
         /// <returns>読めたら true。</returns>

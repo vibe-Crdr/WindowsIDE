@@ -325,7 +325,8 @@ namespace WindowsIDE.Ui
                     || keyData == Keys.F12
                     || keyData == (Keys.Control | Keys.Alt | Keys.D)
                     || keyData == (Keys.Control | Keys.K)
-                    || keyData == (Keys.Control | Keys.I))
+                    || keyData == (Keys.Control | Keys.I)
+                    || keyData == (Keys.Control | Keys.Shift | Keys.E))
                 {
                     return false;
                 }
@@ -399,6 +400,12 @@ namespace WindowsIDE.Ui
             if (keyData == (Keys.Control | Keys.Oemtilde))
             {
                 this.OnToggleTerminal();
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Shift | Keys.E))
+            {
+                this.OnFocusExplorer(this, EventArgs.Empty);
                 return true;
             }
 
@@ -595,6 +602,8 @@ namespace WindowsIDE.Ui
             vba.DropDownItems.Add(naming);
 
             ToolStripMenuItem view = this.CreateTop("表示(&V)");
+            view.DropDownItems.Add(this.CreateDisplayCommand("エクスプローラー(&E)", "Ctrl+Shift+E", this.OnFocusExplorer));
+            view.DropDownItems.Add(new ToolStripSeparator());
             this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
             view.DropDownItems.Add(this.viewTerminalItem);
             view.DropDownItems.Add(new ToolStripSeparator());
@@ -898,6 +907,8 @@ namespace WindowsIDE.Ui
             this.tree.ApplyFonts(this.fonts);
             this.tree.FileOpenRequested += this.OnTreeOpen;
             this.tree.InlineCreateCommit += this.OnTreeInlineCreateCommit;
+            this.tree.InlineRenameCommit += this.OnTreeInlineRenameCommit;
+            this.tree.DeleteRequested += this.OnTreeDeleteRequested;
             this.treeCreateBar = new FileTreeCreateBar();
             this.treeCreateBar.Dock = DockStyle.Top;
             this.treeCreateBar.FileCreateRequested += this.OnTreeCreateFile;
@@ -1473,6 +1484,306 @@ namespace WindowsIDE.Ui
             }
 
             this.tree.FocusInlineCreate();
+        }
+
+        /// <summary>
+        /// ツリーへフォーカスする。インライン中は欄へ。作成はキャンセルしない。
+        /// </summary>
+        private void OnFocusExplorer(object sender, EventArgs e)
+        {
+            if (this.tree == null)
+            {
+                return;
+            }
+
+            this.tree.Focus();
+            if (this.tree.IsInlineCreateActive)
+            {
+                this.tree.FocusInlineCreate();
+            }
+        }
+
+        /// <summary>
+        /// 行内リネームの確定。規則は WorkspaceItemRules。失敗時は欄を残して MessageBox。
+        /// </summary>
+        private void OnTreeInlineRenameCommit(object sender, TreeRenameCommitEventArgs e)
+        {
+            if (e == null || this.workspace == null || this.tree == null || string.IsNullOrEmpty(e.OldPath))
+            {
+                return;
+            }
+
+            string newFull;
+            string error;
+            if (!WorkspaceItemRules.TryBuildRenamedPath(this.workspace.RootPath, e.OldPath, e.NewName, out newFull, out error))
+            {
+                this.ShowInlineTreeError(error);
+                return;
+            }
+
+            bool wasDirectory = Directory.Exists(e.OldPath);
+            try
+            {
+                if (wasDirectory)
+                {
+                    Directory.Move(e.OldPath, newFull);
+                }
+                else
+                {
+                    File.Move(e.OldPath, newFull);
+                }
+            }
+            catch (IOException ex)
+            {
+                this.ShowInlineTreeError(ex.Message);
+                return;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                this.ShowInlineTreeError(ex.Message);
+                return;
+            }
+
+            this.tree.CancelInlineCreate();
+            this.RetargetOpenDocuments(e.OldPath, newFull, wasDirectory);
+            this.tabs.RefreshTabs();
+            this.UpdateStatus();
+            this.RefreshWorkspaceTypes();
+            this.ApplyVbaMapAfterDiskChange(e.OldPath, newFull, wasDirectory);
+            this.tree.Rebuild();
+            this.tree.RevealAndSelect(newFull);
+        }
+
+        /// <summary>
+        /// ツリーの Delete。根は無音。確認のうえごみ箱。Cancel ならディスクを触らない。
+        /// </summary>
+        private void OnTreeDeleteRequested(object sender, EventArgs e)
+        {
+            if (this.tree == null || this.workspace == null)
+            {
+                return;
+            }
+
+            TreeNode node = this.tree.SelectedNode;
+            if (node == null)
+            {
+                return;
+            }
+
+            string path = node.Tag as string;
+            if (string.IsNullOrEmpty(path) || WorkspaceItemRules.IsWorkspaceRoot(this.workspace.RootPath, path))
+            {
+                return;
+            }
+
+            if (!PathGuard.IsInsideWorkspace(this.workspace.RootPath, path))
+            {
+                return;
+            }
+
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                return;
+            }
+
+            bool wasDirectory = Directory.Exists(path);
+            string name = Path.GetFileName(path);
+            if (string.IsNullOrEmpty(name))
+            {
+                name = path;
+            }
+
+            string prompt;
+            if (wasDirectory)
+            {
+                prompt = string.Format("フォルダ '{0}' とその中身をごみ箱に移しますか?", name);
+            }
+            else
+            {
+                prompt = string.Format("'{0}' をごみ箱に移しますか?", name);
+            }
+
+            DialogResult confirm = MessageBox.Show(this, prompt, "WindowsIDE", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+
+            if (!this.TryPromptDirtyTabsUnder(path))
+            {
+                return;
+            }
+
+            string error;
+            if (!WorkspaceRecycle.TrySendToRecycleBin(this.Handle, path, out error))
+            {
+                MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            this.RemoveTabsUnder(path);
+            this.ApplyVbaMapAfterDiskChange(path, null, wasDirectory);
+            this.tree.Rebuild();
+            string parent = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(parent))
+            {
+                this.tree.RevealAndSelect(parent);
+            }
+
+            this.RefreshWorkspaceTypes();
+            this.UpdateStatus();
+        }
+
+        private void ShowInlineTreeError(string error)
+        {
+            this.tree.SetInlineBlurCancelSuppressed(true);
+            try
+            {
+                MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                this.tree.SetInlineBlurCancelSuppressed(false);
+            }
+
+            this.tree.FocusInlineCreate();
+        }
+
+        private void RetargetOpenDocuments(string oldPath, string newPath, bool wasDirectory)
+        {
+            if (this.tabs == null || string.IsNullOrEmpty(oldPath) || string.IsNullOrEmpty(newPath))
+            {
+                return;
+            }
+
+            for (int i = 0; i < this.tabs.Tabs.Count; i++)
+            {
+                Document doc = this.tabs.Tabs[i];
+                if (doc == null || string.IsNullOrEmpty(doc.FilePath))
+                {
+                    continue;
+                }
+
+                if (wasDirectory)
+                {
+                    if (WorkspaceItemRules.IsSameOrUnder(oldPath, doc.FilePath))
+                    {
+                        string next = WorkspaceItemRules.ReplacePathPrefix(oldPath, newPath, doc.FilePath);
+                        doc.Retarget(next);
+                    }
+                }
+                else if (string.Equals(doc.FilePath, oldPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    doc.Retarget(newPath);
+                }
+            }
+        }
+
+        private bool TryPromptDirtyTabsUnder(string path)
+        {
+            if (this.tabs == null)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < this.tabs.Tabs.Count; i++)
+            {
+                Document doc = this.tabs.Tabs[i];
+                if (doc == null || string.IsNullOrEmpty(doc.FilePath) || !doc.IsDirty)
+                {
+                    continue;
+                }
+
+                if (!WorkspaceItemRules.IsSameOrUnder(path, doc.FilePath))
+                {
+                    continue;
+                }
+
+                DialogResult r = MessageBox.Show(this, doc.DisplayName + " を保存しますか?", "WindowsIDE", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (r == DialogResult.Cancel)
+                {
+                    return false;
+                }
+
+                if (r == DialogResult.Yes)
+                {
+                    this.tabs.SelectedIndex = i;
+                    if (!this.SaveCurrent(false))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private void RemoveTabsUnder(string path)
+        {
+            if (this.tabs == null)
+            {
+                return;
+            }
+
+            this.suppressNewUntitled = true;
+            this.rebuilding = true;
+            try
+            {
+                int i = this.tabs.Tabs.Count - 1;
+                while (i >= 0)
+                {
+                    Document doc = this.tabs.Tabs[i];
+                    if (doc != null && !string.IsNullOrEmpty(doc.FilePath)
+                        && WorkspaceItemRules.IsSameOrUnder(path, doc.FilePath))
+                    {
+                        this.tabs.RemoveAt(i);
+                    }
+
+                    i--;
+                }
+            }
+            finally
+            {
+                this.rebuilding = false;
+                this.suppressNewUntitled = false;
+            }
+
+            if (this.tabs.Tabs.Count == 0)
+            {
+                this.NewUntitled();
+            }
+            else
+            {
+                this.AttachDocument(this.tabs.SelectedDocument);
+            }
+        }
+
+        private void ApplyVbaMapAfterDiskChange(string oldFull, string newFull, bool wasDirectory)
+        {
+            if (this.workspace == null || string.IsNullOrEmpty(oldFull))
+            {
+                return;
+            }
+
+            VbaMap map;
+            string loadError;
+            VbaMapLoadStatus status = VbaMap.TryLoad(this.workspace.RootPath, out map, out loadError);
+            if (status == VbaMapLoadStatus.Missing || status == VbaMapLoadStatus.Broken || map == null)
+            {
+                return;
+            }
+
+            if (!map.TryApplyDiskChange(this.workspace.RootPath, oldFull, newFull, wasDirectory))
+            {
+                return;
+            }
+
+            string saveError;
+            if (!map.TrySave(this.workspace.RootPath, out saveError))
+            {
+                string message = string.IsNullOrEmpty(saveError) ? "vba-map.xml を保存できませんでした。" : saveError;
+                MessageBox.Show(this, message, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void OnTabChanged(object sender, EventArgs e)

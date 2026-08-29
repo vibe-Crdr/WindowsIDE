@@ -66,6 +66,8 @@ namespace WindowsIDE.Tests
             RunGlyphClassifier();
             RunPathGuard();
             RunWorkspaceCreateRules();
+            RunWorkspaceItemRules();
+            InspectFileTreeRenameDeleteSource();
             RunWorkspaceSettings();
             RunVbaOffline();
             RunDocumentVbaEncoding();
@@ -540,6 +542,195 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void RunWorkspaceItemRules()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "WindowsIDE-item-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                string created;
+                string error;
+                Check("item reject empty", !WorkspaceItemRules.TryBuildRenamedPath(root, Path.Combine(root, "a.txt"), "  ", out created, out error));
+                Check("item reject dotdot", !WorkspaceItemRules.TryBuildRenamedPath(root, Path.Combine(root, "a.txt"), "..", out created, out error));
+                Check("item reject CON", !WorkspaceItemRules.TryBuildRenamedPath(root, Path.Combine(root, "a.txt"), "CON", out created, out error));
+                Check("item reject slash", !WorkspaceItemRules.TryBuildRenamedPath(root, Path.Combine(root, "a.txt"), "a\\b", out created, out error));
+                Check("item reject trailing dot", !WorkspaceItemRules.TryBuildRenamedPath(root, Path.Combine(root, "a.txt"), "foo.", out created, out error));
+
+                string seed = Path.Combine(root, "seed.txt");
+                File.WriteAllText(seed, "x");
+                string clash = Path.Combine(root, "clash.txt");
+                File.WriteAllText(clash, "y");
+                Check("item reject collision", !WorkspaceItemRules.TryBuildRenamedPath(root, seed, "clash.txt", out created, out error));
+                Check("item reject root", !WorkspaceItemRules.TryBuildRenamedPath(root, root, "renamed", out created, out error));
+
+                Check("item rename path", WorkspaceItemRules.TryBuildRenamedPath(root, seed, "renamed.txt", out created, out error));
+                Check("item rename parent", created != null && string.Equals(Path.GetDirectoryName(created), Path.GetDirectoryName(Path.GetFullPath(seed)), StringComparison.OrdinalIgnoreCase));
+                File.Move(seed, created);
+                Check("item move exists", File.Exists(created) && !File.Exists(seed));
+
+                string dirA = Path.Combine(root, "a");
+                string dirAb = Path.Combine(root, "ab");
+                Directory.CreateDirectory(dirA);
+                Directory.CreateDirectory(dirAb);
+                string fileA = Path.Combine(dirA, "f.txt");
+                File.WriteAllText(fileA, "z");
+                Check("same or under self", WorkspaceItemRules.IsSameOrUnder(dirA, dirA));
+                Check("same or under child", WorkspaceItemRules.IsSameOrUnder(dirA, fileA));
+                Check("same or under ab false", !WorkspaceItemRules.IsSameOrUnder(dirA, dirAb));
+
+                string dirB = Path.Combine(root, "b");
+                string replaced = WorkspaceItemRules.ReplacePathPrefix(dirA, dirB, fileA);
+                Check("replace prefix child", string.Equals(replaced, Path.GetFullPath(Path.Combine(dirB, "f.txt")), StringComparison.OrdinalIgnoreCase));
+                string abKept = WorkspaceItemRules.ReplacePathPrefix(dirA, dirB, dirAb);
+                Check("replace prefix boundary", string.Equals(abKept, Path.GetFullPath(dirAb), StringComparison.OrdinalIgnoreCase));
+                string selfReplaced = WorkspaceItemRules.ReplacePathPrefix(dirA, dirB, dirA);
+                Check("replace prefix self", string.Equals(selfReplaced, Path.GetFullPath(dirB), StringComparison.OrdinalIgnoreCase));
+
+                Document opened = Document.Open(created);
+                opened.IsDirty = true;
+                string retarget = Path.Combine(root, "retarget.txt");
+                Check("retarget ok", opened.Retarget(retarget));
+                Check("retarget path", string.Equals(opened.FilePath, Path.GetFullPath(retarget), StringComparison.OrdinalIgnoreCase));
+                Check("retarget display", opened.DisplayName == "retarget.txt");
+                Check("retarget dirty", opened.IsDirty);
+                Check("retarget untitled no", !Document.CreateUntitled().Retarget(retarget));
+
+                VbaMap map = VbaMap.CreateDefault(Path.Combine(root, "Book.xlsm"));
+                map.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("StringUtil", "Lib/StringUtil.bas", VbaComponentKind.Std),
+                    new VbaMapComponent("Keep", "App/Keep.bas", VbaComponentKind.Std)
+                });
+                string saveErr;
+                Check("map save", map.TrySave(root, out saveErr));
+                map.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("StringUtil", "Lib/Util.bas", VbaComponentKind.Std),
+                    new VbaMapComponent("Keep", "App/Keep.bas", VbaComponentKind.Std)
+                });
+                Check("map rename save", map.TrySave(root, out saveErr));
+                VbaMap loaded;
+                string loadErr;
+                Check("map rename load", VbaMap.TryLoad(root, out loaded, out loadErr) == VbaMapLoadStatus.Ok && loaded != null);
+                Check("map relpath updated", loaded.FindByRelPath("Lib/Util.bas") != null
+                    && loaded.FindByRelPath("Lib/Util.bas").Name == "StringUtil");
+                Check("map old rel gone", loaded.FindByRelPath("Lib/StringUtil.bas") == null);
+                Check("map keep other", loaded.FindByRelPath("App/Keep.bas") != null);
+
+                loaded.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("Keep", "App/Keep.bas", VbaComponentKind.Std)
+                });
+                Check("map delete save", loaded.TrySave(root, out saveErr));
+                VbaMap afterDelete;
+                Check("map delete load", VbaMap.TryLoad(root, out afterDelete, out loadErr) == VbaMapLoadStatus.Ok && afterDelete != null);
+                Check("map entry removed", afterDelete.FindByRelPath("Lib/Util.bas") == null
+                    && afterDelete.FindByRelPath("App/Keep.bas") != null);
+
+                string vbaDir = Path.Combine(root, "vba");
+                Directory.CreateDirectory(Path.Combine(vbaDir, "Lib"));
+                File.WriteAllText(Path.Combine(vbaDir, "Lib", "Util.bas"), "Option Explicit");
+                VbaMap diskMap = VbaMap.CreateDefault(Path.Combine(root, "Book.xlsm"));
+                diskMap.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("Util", "Lib/Util.bas", VbaComponentKind.Std)
+                });
+                Check("map disk save", diskMap.TrySave(root, out saveErr));
+                Check("map lib folder rename", diskMap.TryApplyDiskChange(root, Path.Combine(vbaDir, "Lib"), Path.Combine(vbaDir, "NewLib"), true));
+                Check("map lib relpath", diskMap.FindByRelPath("NewLib/Util.bas") != null
+                    && diskMap.RootRelative == "vba");
+                Check("map lib old rel gone", diskMap.FindByRelPath("Lib/Util.bas") == null);
+
+                diskMap.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("Util", "Lib/Util.bas", VbaComponentKind.Std)
+                });
+                Check("map vba root rename", diskMap.TryApplyDiskChange(root, vbaDir, Path.Combine(root, "macros"), true));
+                Check("map root relative macros", string.Equals(diskMap.RootRelative, "macros", StringComparison.OrdinalIgnoreCase));
+                Check("map root keeps relpath", diskMap.FindByRelPath("Lib/Util.bas") != null);
+
+                VbaMap deleteRoot = VbaMap.CreateDefault(Path.Combine(root, "Book.xlsm"));
+                deleteRoot.SetComponents(new VbaMapComponent[]
+                {
+                    new VbaMapComponent("Util", "Lib/Util.bas", VbaComponentKind.Std)
+                });
+                Check("map vba root delete", deleteRoot.TryApplyDiskChange(root, vbaDir, null, true));
+                Check("map root delete empty", deleteRoot.Components != null && deleteRoot.Components.Length == 0);
+
+                byte[] beforeBroken = File.ReadAllBytes(VbaMap.GetFilePath(root));
+                File.WriteAllText(VbaMap.GetFilePath(root), "<not-xml", Encoding.ASCII);
+                VbaMap broken;
+                string brokenErr;
+                VbaMapLoadStatus brokenStatus = VbaMap.TryLoad(root, out broken, out brokenErr);
+                Check("item map broken", brokenStatus == VbaMapLoadStatus.Broken && broken == null);
+                byte[] afterBroken = File.ReadAllBytes(VbaMap.GetFilePath(root));
+                Check("item map broken not saved", afterBroken.Length == 8);
+                File.WriteAllBytes(VbaMap.GetFilePath(root), beforeBroken);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(root, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void InspectFileTreeRenameDeleteSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string mainPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs");
+            string treePath = Path.Combine(repo, "src", "WindowsIDE", "Workspace", "FileTreeControl.cs");
+            string recyclePath = Path.Combine(repo, "src", "WindowsIDE", "Workspace", "WorkspaceRecycle.cs");
+            string barPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "FileTreeCreateBar.cs");
+            if (!File.Exists(mainPath) || !File.Exists(treePath) || !File.Exists(recyclePath) || !File.Exists(barPath))
+            {
+                Check("f-exp source readable", false);
+                return;
+            }
+
+            string main = File.ReadAllText(mainPath);
+            string tree = File.ReadAllText(treePath);
+            string recycle = File.ReadAllText(recyclePath);
+            string bar = File.ReadAllText(barPath);
+
+            Check("f-exp ProcessCmdKey Ctrl+Shift+E", main.IndexOf("Keys.Control | Keys.Shift | Keys.E", StringComparison.Ordinal) >= 0);
+            Check("f-exp display Ctrl+Shift+E", main.IndexOf("CreateDisplayCommand(\"エクスプローラー(&E)\", \"Ctrl+Shift+E\"", StringComparison.Ordinal) >= 0);
+            Check("f-exp explorer menu", main.IndexOf("エクスプローラー(&E)", StringComparison.Ordinal) >= 0);
+
+            int displayAt = main.IndexOf("private ToolStripMenuItem CreateDisplayCommand(", StringComparison.Ordinal);
+            int buildAt = main.IndexOf("private ToolStripMenuItem CreateBuildItem(", StringComparison.Ordinal);
+            Check("f-exp CreateDisplayCommand", displayAt >= 0 && buildAt > displayAt);
+            if (displayAt >= 0 && buildAt > displayAt)
+            {
+                string body = main.Substring(displayAt, buildAt - displayAt);
+                Check("f-exp CreateDisplayCommand no ShortcutKeys", body.IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0);
+            }
+
+            int explorerAt = main.IndexOf("エクスプローラー(&E)", StringComparison.Ordinal);
+            int terminalAt = main.IndexOf("CreateTerminalViewItem(", StringComparison.Ordinal);
+            Check("f-exp explorer before terminal", explorerAt >= 0 && terminalAt > explorerAt);
+            if (explorerAt >= 0 && terminalAt > explorerAt)
+            {
+                string nearby = main.Substring(explorerAt, terminalAt - explorerAt);
+                Check("f-exp explorer nearby no ShortcutKeys", nearby.IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0);
+            }
+
+            Check("f-exp tree F2", tree.IndexOf("Keys.F2", StringComparison.Ordinal) >= 0);
+            Check("f-exp tree Delete", tree.IndexOf("Keys.Delete", StringComparison.Ordinal) >= 0);
+            Check("f-exp ProcessCmdKey no Delete", main.IndexOf("keyData == Keys.Delete", StringComparison.Ordinal) < 0);
+            Check("f-exp ProcessCmdKey no F2", main.IndexOf("keyData == Keys.F2", StringComparison.Ordinal) < 0);
+            Check("f-exp recycle ALLOWUNDO", recycle.IndexOf("FOF_ALLOWUNDO", StringComparison.Ordinal) >= 0);
+            Check("f-exp recycle SHFileOperation", recycle.IndexOf("SHFileOperation", StringComparison.Ordinal) >= 0);
+            Check("f-exp recycle no Shift+Delete", recycle.IndexOf("Keys.Shift", StringComparison.Ordinal) < 0);
+            Check("f-exp bar file event", bar.IndexOf("FileCreateRequested", StringComparison.Ordinal) >= 0);
+            Check("f-exp bar folder event", bar.IndexOf("FolderCreateRequested", StringComparison.Ordinal) >= 0);
+            Check("f-exp bar no rename glyph event", bar.IndexOf("RenameRequested", StringComparison.Ordinal) < 0);
         }
 
         private static void RunWorkspaceSettings()

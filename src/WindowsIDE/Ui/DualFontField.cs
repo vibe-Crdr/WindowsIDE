@@ -9,7 +9,7 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// 単一行の DualFont 入力。FindBar とツリー作成インラインで使う。TextView は継承しない。
+    /// 単一行の DualFont 入力。FindBar とツリー作成／リネームで使う。TextView は継承しない。
     /// </summary>
     public sealed class DualFontField : Control, IImeClient
     {

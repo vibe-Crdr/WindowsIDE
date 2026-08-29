@@ -257,6 +257,177 @@ namespace WindowsIDE.Vba
         }
 
         /// <summary>
+        /// VBA ルートのワークスペース相対を差し替える。絶対・`..`・空・ワークスペース外は失敗する。Excel は触らない。
+        /// </summary>
+        /// <param name="workspaceRoot">ワークスペースルート。</param>
+        /// <param name="relative">新しい root/@relative。</param>
+        /// <param name="error">失敗理由。</param>
+        /// <returns>妥当なら true。</returns>
+        public bool SetRootRelative(string workspaceRoot, string relative, out string error)
+        {
+            error = null;
+            if (string.IsNullOrEmpty(workspaceRoot) || !IsSafeRootRelative(relative))
+            {
+                error = "root がワークスペース内の相対パスではありません。";
+                return false;
+            }
+
+            string n = relative.Replace('\\', '/').Trim('/');
+            try
+            {
+                string full = Path.GetFullPath(Path.Combine(workspaceRoot, n.Replace('/', Path.DirectorySeparatorChar)));
+                if (!PathGuard.IsInsideWorkspace(workspaceRoot, full))
+                {
+                    error = "root がワークスペース内の相対パスではありません。";
+                    return false;
+                }
+            }
+            catch (Exception)
+            {
+                error = "root がワークスペース内の相対パスではありません。";
+                return false;
+            }
+
+            this.rootRelative = n;
+            return true;
+        }
+
+        /// <summary>
+        /// ディスク側のリネーム／削除に合わせてマップを更新する。true なら呼び出し側が TrySave する。Excel COM は呼ばない。
+        /// </summary>
+        /// <param name="workspaceRoot">ワークスペースルート。</param>
+        /// <param name="oldFull">変更前の絶対パス。</param>
+        /// <param name="newFull">変更後の絶対パス。削除なら空。</param>
+        /// <param name="wasDirectory">フォルダなら true。</param>
+        /// <returns>マップを変えたら true。</returns>
+        public bool TryApplyDiskChange(string workspaceRoot, string oldFull, string newFull, bool wasDirectory)
+        {
+            if (string.IsNullOrEmpty(workspaceRoot) || string.IsNullOrEmpty(oldFull))
+            {
+                return false;
+            }
+
+            string oldNorm;
+            try
+            {
+                oldNorm = Path.GetFullPath(oldFull);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            string vbaRoot = this.ResolveRootFullPath(workspaceRoot);
+            if (!string.IsNullOrEmpty(vbaRoot) && string.Equals(vbaRoot, oldNorm, StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrEmpty(newFull))
+                {
+                    this.SetComponents(new VbaMapComponent[0]);
+                    return true;
+                }
+
+                string nextRelative = ToWorkspaceRelative(workspaceRoot, newFull);
+                string setError;
+                if (string.IsNullOrEmpty(nextRelative) || !this.SetRootRelative(workspaceRoot, nextRelative, out setError))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(vbaRoot))
+            {
+                return false;
+            }
+
+            string oldRel = VbaDiskTree.ToRelPath(vbaRoot, oldNorm);
+            if (string.IsNullOrEmpty(oldRel))
+            {
+                return false;
+            }
+
+            List<VbaMapComponent> next = new List<VbaMapComponent>();
+            bool changed = false;
+            VbaMapComponent[] current = this.components;
+            if (current == null)
+            {
+                current = new VbaMapComponent[0];
+            }
+
+            for (int i = 0; i < current.Length; i++)
+            {
+                VbaMapComponent c = current[i];
+                string rel = c.RelPath;
+                bool match;
+                if (wasDirectory)
+                {
+                    match = string.Equals(rel, oldRel, StringComparison.OrdinalIgnoreCase)
+                        || rel.StartsWith(oldRel + "/", StringComparison.OrdinalIgnoreCase);
+                }
+                else
+                {
+                    match = string.Equals(rel, oldRel, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (!match)
+                {
+                    next.Add(c);
+                    continue;
+                }
+
+                changed = true;
+                if (string.IsNullOrEmpty(newFull))
+                {
+                    continue;
+                }
+
+                string newRel;
+                if (wasDirectory)
+                {
+                    string folderRel = VbaDiskTree.ToRelPath(vbaRoot, newFull);
+                    if (string.IsNullOrEmpty(folderRel))
+                    {
+                        continue;
+                    }
+
+                    if (string.Equals(rel, oldRel, StringComparison.OrdinalIgnoreCase))
+                    {
+                        newRel = folderRel;
+                    }
+                    else
+                    {
+                        string suffix = rel.Substring(oldRel.Length).TrimStart('/');
+                        newRel = folderRel + "/" + suffix;
+                    }
+                }
+                else
+                {
+                    if (!FileEncoding.IsVbaModulePath(newFull))
+                    {
+                        continue;
+                    }
+
+                    newRel = VbaDiskTree.ToRelPath(vbaRoot, newFull);
+                    if (string.IsNullOrEmpty(newRel))
+                    {
+                        continue;
+                    }
+                }
+
+                next.Add(new VbaMapComponent(c.Name, newRel, c.Kind));
+            }
+
+            if (!changed)
+            {
+                return false;
+            }
+
+            this.SetComponents(next.ToArray());
+            return true;
+        }
+
+        /// <summary>
         /// 相対パスが一致するコンポーネントを返す。
         /// </summary>
         /// <param name="relPath">root からの相対。</param>
@@ -559,6 +730,38 @@ namespace WindowsIDE.Vba
             }
 
             return full;
+        }
+
+        private static string ToWorkspaceRelative(string workspaceRoot, string fullPath)
+        {
+            if (string.IsNullOrEmpty(workspaceRoot) || string.IsNullOrEmpty(fullPath))
+            {
+                return null;
+            }
+
+            string rootFull;
+            string candFull;
+            try
+            {
+                rootFull = Path.GetFullPath(workspaceRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                candFull = Path.GetFullPath(fullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            if (!PathGuard.IsInsideWorkspace(rootFull, candFull))
+            {
+                return null;
+            }
+
+            if (string.Equals(rootFull, candFull, StringComparison.OrdinalIgnoreCase) || candFull.Length <= rootFull.Length)
+            {
+                return null;
+            }
+
+            return candFull.Substring(rootFull.Length + 1).Replace('\\', '/');
         }
 
         private static bool IsSafeRootRelative(string relative)

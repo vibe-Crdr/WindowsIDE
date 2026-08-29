@@ -73,7 +73,7 @@ folder_prefix:  vba/Lib/Text/Join.bas   →  Lib_Text_Join
 - 壊れた XML は上書きせず MessageBox。
 - 初回プル（relpath 無し）: `{root}/{ExcelName}.bas|.cls` 平坦。folder_prefix でも Excel は平坦なのでフォルダは復元しない。
 
-Excel で名前を変えたら、次のプルでマップを更新する。ディスク側リネームは、マップ relpath が残っているコンポーネントの Name をプッシュで合わせる。切れれば新規＋Excel のみ警告（推測で紐付けない）。マップにあってディスクに無い name は Excel のみ（消さない）。
+Excel で名前を変えたら、次のプルでマップを更新する。ツリーからのディスク側リネーム／削除は、マップが Ok なら relpath を更新するかエントリを削除する。マップの VBA ルートフォルダ自身をリネームしたら `root/@relative` を更新する。削除したらコンポーネントエントリを空にする。Excel は触らない。Excel の Name は変えない。Broken は上書きしない。Excel COM は走らせない。推測紐付けしない。マップ更新できた場合は切れ規則（新規＋Excel のみ警告）は走らない。マップにあってディスクに無い name は Excel のみ（消さない）。
 
 ## 操作
 

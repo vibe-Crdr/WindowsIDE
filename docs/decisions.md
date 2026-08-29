@@ -32,6 +32,7 @@
 | D24 | このチャットで D4 を覆し、VB.NET を第5のホストに加える。拡張子は `.vb` のみ（`.vbs` は Plain。`.bas` / `.cls` は VBA）。診断の正は指定 `vbc.exe`。表示名は `VB.NET`。実装はフェーズ P9。今はコードを書かない |
 | D25 | F-IG（編集器本文のインデント線）。言語非依存。全ファイル形式（Plain / cmd / Markdown / 無題を含む）。色は既存 LineNumber。常時オン。新 XML なし。`WindowsIDE.Editor`。P7-A に混ぜない。P9 より先でよい。今は実装しない |
 | D26 | F-HOV は Visual Studio クイックインフォのサブセット。ユーザー定義が解決できたらシグネチャを常時出し、説明（F-DOC / `///` / 直前コメント / BCL XML）はあればその下。新 Theme 色は足さない（既存 Keyword / Type / Method / Local / Foreground）。ホバー窓は `WS_EX_NOACTIVATE` と `ShowWindow(SW_SHOWNOACTIVATE)`。ツリー再読込（F-EXP）は他プロセスからフォアグラウンドに戻ったときだけ（`WM_ACTIVATEAPP`）。自前ホバーでは `OnActivated` から Rebuild しない。C# 宣言インデックスの正は `CSharpSemantic.Collect`（P12 束縛の延長。新規フルパーサは作らない） |
+| D27 | F-EXP のリネームと削除を実装する（以前の「今は実装しない」を覆す）。ツリーフォーカスは Ctrl+Shift+E（ProcessCmdKey、ShortcutKeys なし、IME 中は奪わない）。削除は SHFileOperation FO_DELETE + FOF_ALLOWUNDO（確認付きごみ箱）。Shift+Delete の完全削除は今やらない。ウォッチとツリーからのワークスペース外オープンはやらない。.bas / .cls のディスクリネーム／削除はマップがあれば relpath 更新またはエントリ削除。Excel COM は走らせない。推測紐付けしない。 |
 
 ## P0 で採用した提案
 

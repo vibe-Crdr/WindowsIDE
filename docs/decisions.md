@@ -28,6 +28,7 @@
 | D20 | 起動引数の既存ファイルは開く（ワークスペース外可）。親フォルダはワークスペースにしない。ディレクトリ引数は OpenFolder と同じ BindWorkspace（複数なら最後が勝つ）。失敗は MessageBox 1 枚で続行。全部失敗または無引数は無題。単一インスタンスは作らない。メニュー「ファイルを開く」とドラッグ＆ドロップは未決 |
 | D21 | フェーズ P7 で提案 P14 / P16 / P17 をこのチャットで採用する（覆すまで）。実装はフェーズ P7。今はコードを書かない |
 | D22 | このチャットで提案 P19 / P21 / P22 を採用する（覆すまで）。P19 の実装はフェーズ P7、P21 / P22 の実装はフェーズ P8。今はコードを書かない |
+| D23 | ユーザー `.cmd` / `.bat` は新規・0 バイト Open・無題 SaveAs が CP932 BOM なし CRLF。保存時は BOM を書かない。非空 UTF-8 BOM の Open は検出どおり UTF-8 のまま、Save で BOM だけ落とす（本文は再エンコードしない）。TryDecode は変えない。 |
 
 ## P0 で採用した提案
 
@@ -35,7 +36,7 @@
 | --- | --- |
 | P4 | 設定・マップは **XML**（`System.Xml` / `XmlDocument`）。P0 の `{workspace}/.windows-ide/workspace.xml` は `editor/@fontSize` と `editor/@tabSize` のみ。`vba-map` は P2 の同期操作で作る。workspace.xml に namingMode は書かない。フォルダを開いただけでは `.windows-ide` を作らない |
 | P6 | 製品は **単一 WinExe**。`build/out/WindowsIDE.exe` のみ（隣の PDB と `WindowsIDE.exe.config` は可）。クラスライブラリ分割はしない |
-| P7 | 製品 C# ソースと新規ユーザー `.cs` は **UTF-8 BOM**。新規ファイルの改行は CRLF。VBA / CP932 既定は P2 |
+| P7 | 製品 C# ソースと新規ユーザー `.cs` は **UTF-8 BOM**。新規ファイルの改行は CRLF。VBA / CP932 既定は P2。`.cmd` / `.bat` は D23 |
 
 ## P1 で採用した提案
 

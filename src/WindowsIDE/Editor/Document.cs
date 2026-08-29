@@ -146,7 +146,7 @@ namespace WindowsIDE.Editor
                 throw new InvalidOperationException(error);
             }
 
-            if (IsBasOrCls(path) && data.Length == 0)
+            if ((FileEncoding.IsVbaModulePath(path) || FileEncoding.IsCmdBatchPath(path)) && data.Length == 0)
             {
                 info = new FileEncodingInfo(932, false, false, "\r\n");
             }
@@ -177,13 +177,14 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
-        /// 名前を付けて保存する。パスを更新する。無題を .bas / .cls にした場合は CP932 BOM なしへ切り替えてから書く。
+        /// 名前を付けて保存する。パスを更新する。無題を .bas / .cls / .cmd / .bat にした場合は CP932 BOM なしへ切り替えてから書く。
         /// </summary>
         /// <param name="path">保存先。</param>
         public void SaveAs(string path)
         {
             LanguageKind before = this.Language;
-            if (string.IsNullOrEmpty(this.filePath) && IsBasOrCls(path))
+            if (string.IsNullOrEmpty(this.filePath)
+                && (FileEncoding.IsVbaModulePath(path) || FileEncoding.IsCmdBatchPath(path)))
             {
                 this.encodingInfo = new FileEncodingInfo(932, false, false, this.encodingInfo.NewLine);
             }
@@ -301,18 +302,12 @@ namespace WindowsIDE.Editor
                 this.encodingInfo.HasBom = true;
             }
 
-            this.isDirty = false;
-        }
-
-        private static bool IsBasOrCls(string path)
-        {
-            if (string.IsNullOrEmpty(path))
+            if (FileEncoding.IsCmdBatchPath(path))
             {
-                return false;
+                this.encodingInfo.HasBom = false;
             }
 
-            return path.EndsWith(".bas", StringComparison.OrdinalIgnoreCase)
-                || path.EndsWith(".cls", StringComparison.OrdinalIgnoreCase);
+            this.isDirty = false;
         }
     }
 }

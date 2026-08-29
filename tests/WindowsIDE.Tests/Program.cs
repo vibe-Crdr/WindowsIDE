@@ -69,6 +69,7 @@ namespace WindowsIDE.Tests
             RunWorkspaceSettings();
             RunVbaOffline();
             RunDocumentVbaEncoding();
+            RunDocumentCmdEncoding();
             RunFontLoaderFallback();
             RunTabSwitchScroll();
             RunDpiUtil();
@@ -347,6 +348,23 @@ namespace WindowsIDE.Tests
             }
 
             Check("cp932 encoder exception", encThrew);
+
+            FileEncodingInfo utf8BomInfo = new FileEncodingInfo(65001, true, false, "\r\n");
+            byte[] savedCmd = FileEncoding.GetBytesToSave("echo off", utf8BomInfo, "C:\\tmp\\a.cmd");
+            Check("cmd utf8 strips bom", savedCmd.Length == 8 && savedCmd[0] == 0x65 && savedCmd[1] == 0x63 && savedCmd[2] == 0x68);
+            byte[] savedBat = FileEncoding.GetBytesToSave("echo off", utf8BomInfo, "C:\\tmp\\a.bat");
+            Check("bat utf8 strips bom", savedBat.Length == 8 && savedBat[0] == 0x65 && savedBat[1] == 0x63 && savedBat[2] == 0x68);
+            byte[] savedCsBom = FileEncoding.GetBytesToSave("echo off", utf8BomInfo, "C:\\tmp\\a.cs");
+            Check("cs utf8 bom still forced", savedCsBom.Length >= 11 && savedCsBom[0] == 0xEF && savedCsBom[1] == 0xBB && savedCsBom[2] == 0xBF);
+            byte[] savedTxtBom = FileEncoding.GetBytesToSave("echo off", utf8BomInfo, "C:\\tmp\\a.txt");
+            Check("txt utf8 keeps bom", savedTxtBom.Length >= 11 && savedTxtBom[0] == 0xEF && savedTxtBom[1] == 0xBB && savedTxtBom[2] == 0xBF);
+
+            Check("vba path bas", FileEncoding.IsVbaModulePath("C:\\tmp\\a.bas"));
+            Check("vba path cls", FileEncoding.IsVbaModulePath("C:\\tmp\\a.CLS"));
+            Check("vba path empty", !FileEncoding.IsVbaModulePath("") && !FileEncoding.IsVbaModulePath(null));
+            Check("cmd path cmd", FileEncoding.IsCmdBatchPath("C:\\tmp\\a.cmd"));
+            Check("cmd path bat", FileEncoding.IsCmdBatchPath("C:\\tmp\\a.BAT"));
+            Check("cmd path empty", !FileEncoding.IsCmdBatchPath("") && !FileEncoding.IsCmdBatchPath(null));
         }
 
         private static void RunDocumentOpen()
@@ -470,6 +488,10 @@ namespace WindowsIDE.Tests
                 Check("new bas empty", basBytes != null && basBytes.Length == 0);
                 byte[] clsBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.cls");
                 Check("new cls empty", clsBytes != null && clsBytes.Length == 0);
+                byte[] cmdNewBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.cmd");
+                Check("new cmd empty", cmdNewBytes != null && cmdNewBytes.Length == 0);
+                byte[] batNewBytes = FileEncoding.GetBytesForNewEmptyFile("C:\\tmp\\New.bat");
+                Check("new bat empty", batNewBytes != null && batNewBytes.Length == 0);
 
                 Check("create cs", WorkspaceCreateRules.TryCreateFile(root, root, "New.cs", out created, out error));
                 byte[] writtenCs = File.ReadAllBytes(created);
@@ -481,6 +503,8 @@ namespace WindowsIDE.Tests
                 Check("created bas empty", File.Exists(created) && File.ReadAllBytes(created).Length == 0);
                 Check("create cls", WorkspaceCreateRules.TryCreateFile(root, root, "New.cls", out created, out error));
                 Check("created cls empty", File.Exists(created) && File.ReadAllBytes(created).Length == 0);
+                Check("create cmd", WorkspaceCreateRules.TryCreateFile(root, root, "New.cmd", out created, out error));
+                Check("created cmd empty", File.Exists(created) && File.ReadAllBytes(created).Length == 0);
 
                 string emptyBas = Path.Combine(root, "empty.bas");
                 File.WriteAllBytes(emptyBas, new byte[0]);
@@ -3243,6 +3267,56 @@ namespace WindowsIDE.Tests
                 reload.Undo.RecordInsert(0, 3, "BBB");
                 File.WriteAllBytes(reloadPath, Encoding.GetEncoding(932).GetBytes("ZZZ"));
                 Check("reload from disk", reload.ReloadFromDisk() && reload.Buffer.GetText() == "ZZZ" && !reload.IsDirty && !reload.Undo.CanUndo);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunDocumentCmdEncoding()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-cmd-doc-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string emptyCmd = Path.Combine(dir, "empty.cmd");
+                File.WriteAllBytes(emptyCmd, new byte[0]);
+                Document openedEmptyCmd = Document.Open(emptyCmd);
+                Check("open empty cmd 932", openedEmptyCmd.EncodingInfo.CodePage == 932 && !openedEmptyCmd.EncodingInfo.HasBom);
+
+                string emptyBat = Path.Combine(dir, "empty.bat");
+                File.WriteAllBytes(emptyBat, new byte[0]);
+                Document openedEmptyBat = Document.Open(emptyBat);
+                Check("open empty bat 932", openedEmptyBat.EncodingInfo.CodePage == 932 && !openedEmptyBat.EncodingInfo.HasBom);
+
+                Document untitledCmd = Document.CreateUntitled();
+                untitledCmd.Buffer.Insert(0, 0, "echo off");
+                string cmdPath = Path.Combine(dir, "New.cmd");
+                untitledCmd.SaveAs(cmdPath);
+                Check("untitled cmd cp932", untitledCmd.EncodingInfo.CodePage == 932 && !untitledCmd.EncodingInfo.HasBom);
+                byte[] untitledBytes = File.ReadAllBytes(cmdPath);
+                Check("untitled cmd no bom", untitledBytes.Length < 3 || untitledBytes[0] != 0xEF);
+
+                string utf8Cmd = Path.Combine(dir, "Utf8.cmd");
+                byte[] bom = new byte[] { 0xEF, 0xBB, 0xBF };
+                byte[] body = Encoding.UTF8.GetBytes("echo off");
+                byte[] all = new byte[bom.Length + body.Length];
+                Buffer.BlockCopy(bom, 0, all, 0, bom.Length);
+                Buffer.BlockCopy(body, 0, all, bom.Length, body.Length);
+                File.WriteAllBytes(utf8Cmd, all);
+                Document opened = Document.Open(utf8Cmd);
+                Check("open utf8 cmd", opened.EncodingInfo.IsUtf8 && opened.EncodingInfo.HasBom);
+                opened.Save();
+                byte[] saved = File.ReadAllBytes(utf8Cmd);
+                Check("save utf8 cmd strips bom", saved.Length == body.Length && saved[0] == 0x65);
+                Check("save utf8 cmd info", opened.EncodingInfo.IsUtf8 && !opened.EncodingInfo.HasBom);
             }
             finally
             {

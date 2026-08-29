@@ -15,6 +15,7 @@
 | プッシュ | ディスクの VBA ファイルを Excel の VBProject へ取り込む。 |
 | namingMode | Excel 側コンポーネント名の付け方。`filename` または `folder_prefix`。 |
 | ホスト言語 | IDE が編集・実行・デバッグする言語。C# 5、VBA、Windows PowerShell 5.1、cmd。Markdown は含めない。 |
+| cmd バッチの UTF-8 BOM | cmd.exe は UTF-8 BOM（EF BB BF）を先頭コマンドの一部として読む。ユーザー `.cmd` / `.bat` は D23 で BOM を書かない。 |
 | 編集言語 | 編集はするが実行・デバッグしない言語。フェーズ P8 の Markdown（`.md`）。 |
 | Framework csc | `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`。Roslyn / VS 付属 csc は使わない。 |
 | 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。今は実装しない。P0–P2 の必須には含めない。 |

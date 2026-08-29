@@ -172,7 +172,7 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
-        /// 保存バイト列を作る。開いた Encoding と BOM を維持する。例外: .cs かつ UTF-8 は必ず BOM。
+        /// 保存バイト列を作る。開いた Encoding と BOM を維持する。例外: .cs かつ UTF-8 は必ず BOM。.cmd / .bat は BOM を書かない。
         /// </summary>
         /// <param name="text">本文。</param>
         /// <param name="info">開いたときの情報。null なら新規扱い。</param>
@@ -190,8 +190,9 @@ namespace WindowsIDE.Editor
                 text = "";
             }
 
-            bool forceBom = info.IsUtf8 && HasCsExtension(filePath);
-            bool bom = forceBom ? true : info.HasBom;
+            bool forceUtf8Bom = info.IsUtf8 && HasCsExtension(filePath);
+            bool forbidBom = IsCmdBatchPath(filePath);
+            bool bom = forceUtf8Bom ? true : (forbidBom ? false : info.HasBom);
             FileEncodingInfo write = new FileEncodingInfo(info.CodePage, bom, info.Utf16BigEndian, info.NewLine);
             string normalized = NormalizeNewLines(text, write.NewLine);
             Encoding enc = write.CreateEncoding();
@@ -209,20 +210,50 @@ namespace WindowsIDE.Editor
         }
 
         /// <summary>
-        /// 新規空ファイルのバイト。`.bas`/`.cls` は CP932 BOM なし CRLF、それ以外は UTF-8 BOM + CRLF。
+        /// 新規空ファイルのバイト。`.bas`/`.cls` と `.cmd`/`.bat` は CP932 BOM なし CRLF（0 バイト）、それ以外は UTF-8 BOM + CRLF。
         /// </summary>
         /// <param name="filePath">作成先。拡張子判定に使う。</param>
         /// <returns>書き込むバイト。</returns>
         public static byte[] GetBytesForNewEmptyFile(string filePath)
         {
-            if (!string.IsNullOrEmpty(filePath)
-                && (filePath.EndsWith(".bas", StringComparison.OrdinalIgnoreCase)
-                    || filePath.EndsWith(".cls", StringComparison.OrdinalIgnoreCase)))
+            if (IsVbaModulePath(filePath) || IsCmdBatchPath(filePath))
             {
                 return GetBytesToSave("", new FileEncodingInfo(932, false, false, "\r\n"), filePath);
             }
 
             return GetBytesToSave("", new FileEncodingInfo(), filePath);
+        }
+
+        /// <summary>
+        /// VBA モジュール（`.bas` / `.cls`）なら true。null / 空は false。
+        /// </summary>
+        /// <param name="path">判定するパス。</param>
+        /// <returns>該当拡張子なら true。</returns>
+        public static bool IsVbaModulePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            return path.EndsWith(".bas", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".cls", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// cmd バッチ（`.cmd` / `.bat`）なら true。null / 空は false。
+        /// </summary>
+        /// <param name="path">判定するパス。</param>
+        /// <returns>該当拡張子なら true。</returns>
+        public static bool IsCmdBatchPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            return path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

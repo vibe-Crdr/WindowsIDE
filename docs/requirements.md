@@ -44,7 +44,7 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | N3 | 製品コードは C# 5。C# 6+ 構文禁止 |
 | N4 | ビルドは PowerShell 5.1 から `csc.exe` を直接呼ぶ |
 | N5 | 64-bit 専用（`/platform:x64`）。Excel COM も x64 |
-| N6 | ソースは C# / PS を UTF-8（csc 向け BOM あり）、VBA は日本語 Excel に合わせ CP932 を既定 |
+| N6 | ソースは C# / PS を UTF-8（csc 向け BOM あり）、VBA は日本語 Excel に合わせ CP932 を既定、cmd（`.cmd` / `.bat`）は CP932・BOM なし（cmd.exe が UTF-8 BOM を先頭コマンドの一部として読むため） |
 | N7 | 未処理例外は黙って消さない。ログと UI に出す |
 | N8 | 設定はワークスペースの XML（`System.Xml`）。第三者シリアライザ禁止 |
 | N9 | DPI 認識（Windows 11 の拡大表示で極端にボケない） |

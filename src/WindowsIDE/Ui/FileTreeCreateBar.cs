@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
-using WindowsIDE.Ui.Fonts;
 
 namespace WindowsIDE.Ui
 {
@@ -10,14 +9,12 @@ namespace WindowsIDE.Ui
     /// </summary>
     public sealed class FileTreeCreateBar : Control
     {
-        private readonly ChromeMark fileMark;
-        private readonly ChromeMark folderMark;
+        private readonly CreateBarGlyph fileGlyph;
+        private readonly CreateBarGlyph folderGlyph;
         private readonly ToolTip toolTip;
-        private Font halfFont;
-        private Font fullFont;
 
         /// <summary>
-        /// 「ファイル」「フォルダ」ボタン付きのバーを組む。
+        /// 線画アイコン2つのバーを組む。
         /// </summary>
         public FileTreeCreateBar()
         {
@@ -26,16 +23,16 @@ namespace WindowsIDE.Ui
             this.BackColor = Theme.Background;
             this.ForeColor = Theme.Foreground;
 
-            this.fileMark = new ChromeMark("ファイル", true, false);
-            this.folderMark = new ChromeMark("フォルダ", true, false);
-            this.fileMark.Click += this.OnFileClick;
-            this.folderMark.Click += this.OnFolderClick;
-            this.Controls.Add(this.fileMark);
-            this.Controls.Add(this.folderMark);
+            this.fileGlyph = new CreateBarGlyph(CreateBarGlyphKind.File);
+            this.folderGlyph = new CreateBarGlyph(CreateBarGlyphKind.Folder);
+            this.fileGlyph.Click += this.OnFileClick;
+            this.folderGlyph.Click += this.OnFolderClick;
+            this.Controls.Add(this.fileGlyph);
+            this.Controls.Add(this.folderGlyph);
 
             this.toolTip = new ToolTip();
-            this.toolTip.SetToolTip(this.fileMark, "ファイルを作成");
-            this.toolTip.SetToolTip(this.folderMark, "フォルダを作成");
+            this.toolTip.SetToolTip(this.fileGlyph, "ファイルを作成");
+            this.toolTip.SetToolTip(this.folderGlyph, "フォルダを作成");
             this.ApplyBarHeight();
         }
 
@@ -46,16 +43,12 @@ namespace WindowsIDE.Ui
         public event EventHandler FolderCreateRequested;
 
         /// <summary>
-        /// 12 DIP 双フォントを参照する。所有権は移さない。本文 fontSize には使わない。
+        /// MainForm が呼ぶ互換入口。フォントは高さに使わない。バー高さと配置を付け直す。
         /// </summary>
-        /// <param name="half">半角。</param>
-        /// <param name="full">全角。</param>
+        /// <param name="half">半角。未使用。</param>
+        /// <param name="full">全角。未使用。</param>
         public void SetFonts(Font half, Font full)
         {
-            this.halfFont = half;
-            this.fullFont = full;
-            this.fileMark.SetFonts(half, full);
-            this.folderMark.SetFonts(half, full);
             this.ApplyBarHeight();
             this.PerformLayout();
             this.Invalidate();
@@ -92,7 +85,7 @@ namespace WindowsIDE.Ui
             }
         }
 
-        /// <summary>左 6 DIP、間隔 4 DIP でボタンを並べる。</summary>
+        /// <summary>左 6 DIP、間隔 4 DIP、ヒット 22 DIP 正方形で線画を並べる。</summary>
         protected override void OnLayout(LayoutEventArgs levent)
         {
             base.OnLayout(levent);
@@ -100,26 +93,16 @@ namespace WindowsIDE.Ui
             int pad = DpiUtil.ToPixels(6, dpi);
             int gap = DpiUtil.ToPixels(4, dpi);
             int vpad = DpiUtil.ToPixels(4, dpi);
-            int markH = this.FontHeightPx();
-            if (markH < 1)
+            int hit = DpiUtil.ToPixels(22, dpi);
+            if (hit < 1)
             {
-                markH = 1;
+                hit = 1;
             }
 
-            Graphics g = this.CreateGraphics();
-            try
-            {
-                int fileW = this.MeasureMark(g, this.fileMark, 36);
-                int folderW = this.MeasureMark(g, this.folderMark, 36);
-                int x = pad;
-                this.fileMark.Bounds = new Rectangle(x, vpad, fileW, markH);
-                x += fileW + gap;
-                this.folderMark.Bounds = new Rectangle(x, vpad, folderW, markH);
-            }
-            finally
-            {
-                g.Dispose();
-            }
+            int x = pad;
+            this.fileGlyph.Bounds = new Rectangle(x, vpad, hit, hit);
+            x += hit + gap;
+            this.folderGlyph.Bounds = new Rectangle(x, vpad, hit, hit);
         }
 
         /// <summary>ツールチップを破棄する。</summary>
@@ -140,47 +123,11 @@ namespace WindowsIDE.Ui
         private void ApplyBarHeight()
         {
             int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            int vpad = DpiUtil.ToPixels(4, dpi);
-            this.Height = this.FontHeightPx() + vpad * 2;
+            this.Height = DpiUtil.ToPixels(22, dpi) + DpiUtil.ToPixels(4, dpi) * 2;
             if (this.Parent != null)
             {
                 this.Parent.PerformLayout();
             }
-        }
-
-        private int FontHeightPx()
-        {
-            int h = 8;
-            if (this.halfFont != null)
-            {
-                h = this.halfFont.Height;
-            }
-
-            if (this.fullFont != null && this.fullFont.Height > h)
-            {
-                h = this.fullFont.Height;
-            }
-
-            return h;
-        }
-
-        private int MeasureMark(Graphics g, ChromeMark mark, int minDip)
-        {
-            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
-            int min = DpiUtil.ToPixels(minDip, dpi);
-            int pad = DpiUtil.ToPixels(10, dpi);
-            if (g == null || this.halfFont == null || this.fullFont == null)
-            {
-                return min;
-            }
-
-            int w = (int)Math.Ceiling((double)DualFontPainter.Measure(g, mark.Caption, this.halfFont, this.fullFont, null)) + pad;
-            if (w < min)
-            {
-                return min;
-            }
-
-            return w;
         }
 
         private void OnFileClick(object sender, EventArgs e)

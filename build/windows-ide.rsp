@@ -29,8 +29,8 @@ src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
 src\WindowsIDE\Ui\ChromeMark.cs
+src\WindowsIDE\Ui\CreateBarGlyph.cs
 src\WindowsIDE\Ui\FileTreeCreateBar.cs
-src\WindowsIDE\Ui\CreateNameForm.cs
 src\WindowsIDE\Ui\ProblemListControl.cs
 src\WindowsIDE\Ui\OutputPanelControl.cs
 src\WindowsIDE\Ui\BottomPane.cs

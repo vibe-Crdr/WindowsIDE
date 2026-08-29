@@ -9,7 +9,7 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// 単一行の DualFont 入力。FindBar と作成ダイアログで使う。TextView は継承しない。
+    /// 単一行の DualFont 入力。FindBar とツリー作成インラインで使う。TextView は継承しない。
     /// </summary>
     public sealed class DualFontField : Control, IImeClient
     {
@@ -29,6 +29,7 @@ namespace WindowsIDE.Ui
         private int undoCaret;
         private int undoAnchor;
         private bool hasUndo;
+        private Color borderColor;
 
         /// <summary>
         /// 空の単一行欄を組む。フォントは所有しない。
@@ -44,6 +45,7 @@ namespace WindowsIDE.Ui
             this.ForeColor = Theme.Foreground;
             this.ImeMode = ImeMode.On;
             this.Cursor = Cursors.IBeam;
+            this.borderColor = Theme.Border;
             this.caretTimer = new Timer();
             this.caretTimer.Interval = 530;
             this.caretTimer.Tick += this.OnCaretTick;
@@ -79,6 +81,20 @@ namespace WindowsIDE.Ui
         public bool IsComposing
         {
             get { return !string.IsNullOrEmpty(this.imeComposition); }
+        }
+
+        /// <summary>外周 1 物理 px の枠色。未設定時は Theme.Border。</summary>
+        public Color BorderColor
+        {
+            get
+            {
+                return this.borderColor;
+            }
+            set
+            {
+                this.borderColor = value;
+                this.Invalidate();
+            }
         }
 
         /// <summary>セル高さ＋外周 1 物理 px 枠。フォント未設定なら 8+2。</summary>
@@ -421,7 +437,7 @@ namespace WindowsIDE.Ui
             Graphics g = e.Graphics;
             g.Clear(this.BackColor);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            using (Pen border = new Pen(Theme.Border))
+            using (Pen border = new Pen(this.borderColor))
             {
                 g.DrawRectangle(border, 0, 0, this.Width - 1, this.Height - 1);
             }

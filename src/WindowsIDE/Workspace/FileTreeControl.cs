@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -10,7 +11,7 @@ using WindowsIDE.Ui.Fonts;
 namespace WindowsIDE.Workspace
 {
     /// <summary>
-    /// クリックまたは Enter でファイルを開くツリー。リネーム・削除メニューは持たない。子は展開時に読む。
+    /// クリックまたは Enter でファイルを開くツリー。作成は行内 DualFontField。リネーム・削除メニューは持たない。子は展開時に読む。
     /// </summary>
     public sealed class FileTreeControl : TreeView
     {
@@ -21,6 +22,8 @@ namespace WindowsIDE.Workspace
         private const int WM_MOUSEHWHEEL = 0x020E;
         private const int SB_THUMBPOSITION = 4;
 
+        private static readonly object InlineCreateTag = new object();
+
         private string rootPath;
         private readonly Dictionary<TreeNode, Rectangle> expandMarks;
         private FontLoadResult fonts;
@@ -30,6 +33,11 @@ namespace WindowsIDE.Workspace
         private int lastDpi;
         private ThemedScrollBar vScroll;
         private ThemedScrollBar hScroll;
+        private DualFontField createField;
+        private TreeNode createNode;
+        private bool createIsFolder;
+        private string createParentDirectory;
+        private bool suppressBlurCancel;
         private bool ignoreThemedScroll;
         private bool chromeBusy;
         private bool rebuildBusy;
@@ -63,6 +71,15 @@ namespace WindowsIDE.Workspace
             this.hScroll.ValueChanged += this.OnThemedScrollChanged;
             this.Controls.Add(this.vScroll);
             this.Controls.Add(this.hScroll);
+
+            this.createField = new DualFontField();
+            this.createField.Visible = false;
+            this.createField.TabStop = true;
+            this.createField.BackColor = Theme.EditorBackground;
+            this.createField.ForeColor = Theme.Foreground;
+            this.createField.KeyDown += this.OnCreateFieldKeyDown;
+            this.createField.LostFocus += this.OnCreateFieldLostFocus;
+            this.Controls.Add(this.createField);
 
             this.RecreateUiFont();
             this.BeforeExpand += this.OnBeforeExpand;
@@ -114,23 +131,46 @@ namespace WindowsIDE.Workspace
         /// <summary>ファイルを開く要求。SelectedPath が対象。</summary>
         public event EventHandler FileOpenRequested;
 
+        /// <summary>行内作成の確定。Name は Trim 済み非空。ディスクにはまだ触れない。</summary>
+        public event EventHandler<TreeCreateCommitEventArgs> InlineCreateCommit;
+
         /// <summary>最後に開く要求を出したファイル。フォルダなら null。</summary>
         public string SelectedFilePath { get; private set; }
+
+        /// <summary>行内作成の番兵と欄が出ているとき true。</summary>
+        public bool IsInlineCreateActive
+        {
+            get
+            {
+                return this.createNode != null && this.createField != null && this.createField.Visible;
+            }
+        }
+
+        /// <summary>行内作成欄が IME 未確定のとき true。</summary>
+        public bool IsInlineCreateComposing
+        {
+            get
+            {
+                return this.IsInlineCreateActive && this.createField.IsComposing;
+            }
+        }
 
         /// <summary>
         /// ワークスペースを結び付けて根から読む。
         /// </summary>
         public void BindWorkspace(string path)
         {
+            this.CancelInlineCreate();
             this.rootPath = path;
             this.Rebuild();
         }
 
         /// <summary>
-        /// フォーカス復帰用に再構築する。展開・選択・スクロールは復元する。
+        /// フォーカス復帰用に再構築する。展開・選択・スクロールは復元する。作成中なら破棄する。
         /// </summary>
         public void Rebuild()
         {
+            this.CancelInlineCreate();
             this.rebuildBusy = true;
             try
             {
@@ -140,6 +180,137 @@ namespace WindowsIDE.Workspace
             {
                 this.rebuildBusy = false;
             }
+        }
+
+        /// <summary>
+        /// 指定親の下で行内作成を始める。既存セッションは破棄する。失敗したら false。
+        /// </summary>
+        /// <param name="isFolder">フォルダ作成なら true。</param>
+        /// <param name="parentDirectory">作成先ディレクトリ。</param>
+        /// <returns>欄を出せたら true。</returns>
+        public bool BeginInlineCreate(bool isFolder, string parentDirectory)
+        {
+            this.CancelInlineCreate();
+            if (string.IsNullOrEmpty(parentDirectory) || this.createField == null)
+            {
+                return false;
+            }
+
+            string parentFull;
+            try
+            {
+                parentFull = Path.GetFullPath(parentDirectory);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            if (!Directory.Exists(parentFull) || !PathGuard.IsInsideWorkspace(this.rootPath, parentFull))
+            {
+                return false;
+            }
+
+            TreeNode parentNode = this.FindNodeByPath(this.Nodes, parentFull);
+            if (parentNode == null)
+            {
+                return false;
+            }
+
+            this.EnsureChildren(parentNode);
+            parentNode.Expand();
+
+            int index = 0;
+            if (!isFolder)
+            {
+                for (int i = 0; i < parentNode.Nodes.Count; i++)
+                {
+                    string tag = parentNode.Nodes[i].Tag as string;
+                    if (!string.IsNullOrEmpty(tag) && Directory.Exists(tag))
+                    {
+                        index = i + 1;
+                    }
+                }
+            }
+
+            TreeNode placeholder = new TreeNode("");
+            placeholder.Tag = InlineCreateTag;
+            parentNode.Nodes.Insert(index, placeholder);
+
+            this.createNode = placeholder;
+            this.createIsFolder = isFolder;
+            this.createParentDirectory = parentFull;
+            this.createField.SetFonts(this.halfFont, this.fullFont, DpiUtil.UiFontDip);
+            this.createField.Text = "";
+            this.createField.BorderColor = Theme.Selection;
+            this.createField.Visible = true;
+            placeholder.EnsureVisible();
+            this.RefreshChrome();
+            this.createField.Focus();
+            return true;
+        }
+
+        /// <summary>
+        /// 行内作成を破棄する。番兵を外し欄を隠す。ディスクには触れない。
+        /// </summary>
+        public void CancelInlineCreate()
+        {
+            TreeNode node = this.createNode;
+            TreeNode parent = (node == null) ? null : node.Parent;
+            this.createNode = null;
+            this.createIsFolder = false;
+            this.createParentDirectory = null;
+            if (this.createField != null)
+            {
+                this.createField.Visible = false;
+                this.createField.Text = "";
+                this.createField.BorderColor = Theme.Border;
+            }
+
+            if (node != null)
+            {
+                if (node.Parent != null)
+                {
+                    node.Parent.Nodes.Remove(node);
+                }
+                else if (this.Nodes.Contains(node))
+                {
+                    this.Nodes.Remove(node);
+                }
+            }
+
+            if (parent != null)
+            {
+                this.SelectedNode = parent;
+            }
+
+            if (node != null)
+            {
+                this.RefreshChrome();
+            }
+        }
+
+        /// <summary>
+        /// MessageBox 中など、欄の LostFocus でキャンセルしない。
+        /// </summary>
+        /// <param name="suppressed">true なら LostFocus キャンセルを止める。</param>
+        public void SetInlineBlurCancelSuppressed(bool suppressed)
+        {
+            this.suppressBlurCancel = suppressed;
+        }
+
+        /// <summary>
+        /// 行内作成欄へフォーカスする。セッションが無ければ false。
+        /// </summary>
+        /// <returns>欄へ移せたら true。</returns>
+        public bool FocusInlineCreate()
+        {
+            if (!this.IsInlineCreateActive)
+            {
+                return false;
+            }
+
+            return this.createField.Focus();
         }
 
         /// <summary>
@@ -369,7 +540,8 @@ namespace WindowsIDE.Workspace
                 hBar = this.hScroll.Height;
             }
 
-            bool selected = (e.State & TreeNodeStates.Selected) != 0;
+            bool placeholder = this.IsCreatePlaceholder(e.Node);
+            bool selected = !placeholder && (e.State & TreeNodeStates.Selected) != 0;
             Color back = selected ? Theme.Selection : Theme.Background;
             int rowW = this.ClientSize.Width - vBar;
             if (rowW < 0)
@@ -404,6 +576,16 @@ namespace WindowsIDE.Workspace
             if (this.hScroll != null)
             {
                 scrollX = this.hScroll.Value;
+            }
+
+            if (placeholder)
+            {
+                int icon = DpiUtil.ToPixels(16, dpi);
+                int iconX = indent + (e.Node.Level * step);
+                int iconY = bounds.Y + (rowH - icon) / 2;
+                this.DrawCreatePlaceholderIcon(e.Graphics, iconX, iconY, dpi, this.createIsFolder);
+                this.expandMarks.Remove(e.Node);
+                return;
             }
 
             int x = indent + (e.Node.Level * step) - scrollX;
@@ -484,6 +666,7 @@ namespace WindowsIDE.Workspace
 
         /// <summary>
         /// 左クリックでファイルを開く。OwnerDraw のため GetNodeAt と行の Y で当てる。
+        /// 行内作成中に番兵以外をクリックしたら先にキャンセルする。番兵は開かない。
         /// </summary>
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -498,8 +681,23 @@ namespace WindowsIDE.Workspace
                 return;
             }
 
-            base.OnMouseDown(e);
             TreeNode node = this.HitNode(e.X, e.Y);
+            if (this.IsInlineCreateActive)
+            {
+                if (this.IsCreatePlaceholder(node))
+                {
+                    if (this.createField != null)
+                    {
+                        this.createField.Focus();
+                    }
+
+                    return;
+                }
+
+                this.CancelInlineCreate();
+            }
+
+            base.OnMouseDown(e);
             if (node == null)
             {
                 this.SelectedFilePath = null;
@@ -560,7 +758,7 @@ namespace WindowsIDE.Workspace
         /// <returns>開く要求を出したら true。</returns>
         private bool TryRequestFileOpen(TreeNode node)
         {
-            if (node == null || object.Equals(node.Tag, LazyTag))
+            if (node == null || object.Equals(node.Tag, LazyTag) || this.IsCreatePlaceholder(node))
             {
                 this.SelectedFilePath = null;
                 return false;
@@ -740,6 +938,10 @@ namespace WindowsIDE.Workspace
             }
 
             this.ApplyItemHeight();
+            if (this.createField != null)
+            {
+                this.createField.SetFonts(this.halfFont, this.fullFont, DpiUtil.UiFontDip);
+            }
         }
 
         private void ApplyItemHeight()
@@ -848,6 +1050,7 @@ namespace WindowsIDE.Workspace
                 this.hScroll.Bounds = new Rectangle(0, this.ClientSize.Height - hH, Math.Max(0, this.ClientSize.Width - vW), hH);
                 this.vScroll.BringToFront();
                 this.hScroll.BringToFront();
+                this.LayoutInlineCreateField();
                 if (!needV)
                 {
                     this.SetNativeScroll(Native.SB_VERT, 0);
@@ -1073,11 +1276,17 @@ namespace WindowsIDE.Workspace
             this.Invalidate();
         }
 
-        /// <summary>所有している 12 DIP Pixel フォントを破棄する。</summary>
+        /// <summary>所有している 12 DIP Pixel フォントを破棄する。作成欄の購読も外す。</summary>
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                if (this.createField != null)
+                {
+                    this.createField.KeyDown -= this.OnCreateFieldKeyDown;
+                    this.createField.LostFocus -= this.OnCreateFieldLostFocus;
+                }
+
                 if (this.halfFont != null)
                 {
                     this.halfFont.Dispose();
@@ -1103,6 +1312,253 @@ namespace WindowsIDE.Workspace
             }
 
             base.Dispose(disposing);
+        }
+
+        private bool IsCreatePlaceholder(TreeNode node)
+        {
+            return node != null && object.ReferenceEquals(node.Tag, InlineCreateTag);
+        }
+
+        private void OnCreateFieldKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e == null || !this.IsInlineCreateActive)
+            {
+                return;
+            }
+
+            if (e.KeyCode == Keys.Escape)
+            {
+                if (this.createField.IsComposing)
+                {
+                    return;
+                }
+
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                this.CancelInlineCreate();
+                return;
+            }
+
+            if (e.KeyCode != Keys.Enter)
+            {
+                return;
+            }
+
+            if (this.createField.IsComposing)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            string name = this.createField.Text;
+            if (name == null)
+            {
+                name = "";
+            }
+
+            name = name.Trim();
+            if (name.Length == 0)
+            {
+                this.CancelInlineCreate();
+                return;
+            }
+
+            EventHandler<TreeCreateCommitEventArgs> h = this.InlineCreateCommit;
+            if (h != null)
+            {
+                h(this, new TreeCreateCommitEventArgs(this.createIsFolder, this.createParentDirectory, name));
+            }
+        }
+
+        private void OnCreateFieldLostFocus(object sender, EventArgs e)
+        {
+            if (!this.IsInlineCreateActive || this.suppressBlurCancel)
+            {
+                return;
+            }
+
+            Form form = this.FindForm();
+            if (form != null && !form.ContainsFocus)
+            {
+                return;
+            }
+
+            this.BeginInvoke(new MethodInvoker(this.CancelInlineCreateIfBlurred));
+        }
+
+        private void CancelInlineCreateIfBlurred()
+        {
+            if (this.IsDisposed || !this.IsInlineCreateActive || this.suppressBlurCancel)
+            {
+                return;
+            }
+
+            if (this.createField != null && this.createField.Focused)
+            {
+                return;
+            }
+
+            Form form = this.FindForm();
+            if (form != null && !form.ContainsFocus)
+            {
+                return;
+            }
+
+            this.CancelInlineCreate();
+        }
+
+        private void LayoutInlineCreateField()
+        {
+            if (!this.IsInlineCreateActive || this.createNode == null || this.createField == null)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int indent = DpiUtil.ToPixels(4, dpi);
+            int step = DpiUtil.ToPixels(16, dpi);
+            int icon = DpiUtil.ToPixels(16, dpi);
+            int gap = DpiUtil.ToPixels(2, dpi);
+            int rightPad = DpiUtil.ToPixels(4, dpi);
+            Rectangle row = this.createNode.Bounds;
+            int rowH = this.ItemHeight;
+            if (rowH < 1)
+            {
+                rowH = row.Height;
+            }
+
+            int left = indent + (this.createNode.Level * step) + icon + gap;
+            int right = this.ClientSize.Width - rightPad;
+            if (this.vScroll != null && this.vScroll.Visible)
+            {
+                right = this.vScroll.Left - rightPad;
+            }
+
+            int height = this.createField.PreferredOuterHeight;
+            int y = row.Y + (rowH - height) / 2;
+            int bottomLimit = this.ClientSize.Height;
+            if (this.hScroll != null && this.hScroll.Visible)
+            {
+                bottomLimit = this.hScroll.Top;
+            }
+
+            if (y + height > bottomLimit)
+            {
+                y = bottomLimit - height;
+            }
+
+            if (y < 0)
+            {
+                y = 0;
+            }
+
+            int minW = DpiUtil.ToPixels(24, dpi);
+            int width = right - left;
+            if (width < minW)
+            {
+                left = right - minW;
+                if (left < 0)
+                {
+                    left = 0;
+                }
+
+                width = right - left;
+            }
+
+            if (width < 1)
+            {
+                width = 1;
+            }
+
+            this.createField.Bounds = new Rectangle(left, y, width, height);
+        }
+
+        private void DrawCreatePlaceholderIcon(Graphics g, int x, int y, int dpi, bool folder)
+        {
+            if (g == null)
+            {
+                return;
+            }
+
+            SmoothingMode previous = g.SmoothingMode;
+            try
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                float width = (float)dpi / 96f;
+                using (Pen pen = new Pen(Theme.Foreground, width))
+                {
+                    pen.LineJoin = LineJoin.Miter;
+                    pen.StartCap = LineCap.Flat;
+                    pen.EndCap = LineCap.Flat;
+                    float originX = (float)x;
+                    float originY = (float)y;
+                    if (folder)
+                    {
+                        DrawCreateFolderIcon(g, pen, originX, originY, dpi);
+                    }
+                    else
+                    {
+                        DrawCreateFileIcon(g, pen, originX, originY, dpi);
+                    }
+                }
+            }
+            finally
+            {
+                g.SmoothingMode = previous;
+            }
+        }
+
+        private static void DrawCreateFileIcon(Graphics g, Pen pen, float originX, float originY, int dpi)
+        {
+            using (GraphicsPath outline = new GraphicsPath())
+            {
+                outline.AddLines(new PointF[]
+                {
+                    CreateIconPt(3f, 2f, originX, originY, dpi),
+                    CreateIconPt(9.2f, 2f, originX, originY, dpi),
+                    CreateIconPt(12f, 4.8f, originX, originY, dpi),
+                    CreateIconPt(12f, 13f, originX, originY, dpi),
+                    CreateIconPt(3f, 13f, originX, originY, dpi)
+                });
+                outline.CloseFigure();
+                g.DrawPath(pen, outline);
+            }
+
+            using (GraphicsPath fold = new GraphicsPath())
+            {
+                fold.AddLines(new PointF[]
+                {
+                    CreateIconPt(9.2f, 2f, originX, originY, dpi),
+                    CreateIconPt(9.2f, 4.8f, originX, originY, dpi),
+                    CreateIconPt(12f, 4.8f, originX, originY, dpi)
+                });
+                g.DrawPath(pen, fold);
+            }
+        }
+
+        private static void DrawCreateFolderIcon(Graphics g, Pen pen, float originX, float originY, int dpi)
+        {
+            using (GraphicsPath outline = new GraphicsPath())
+            {
+                outline.AddLines(new PointF[]
+                {
+                    CreateIconPt(2f, 4.5f, originX, originY, dpi),
+                    CreateIconPt(2f, 3.2f, originX, originY, dpi),
+                    CreateIconPt(6.4f, 3.2f, originX, originY, dpi),
+                    CreateIconPt(7.3f, 4.5f, originX, originY, dpi),
+                    CreateIconPt(14f, 4.5f, originX, originY, dpi),
+                    CreateIconPt(14f, 13f, originX, originY, dpi),
+                    CreateIconPt(2f, 13f, originX, originY, dpi)
+                });
+                outline.CloseFigure();
+                g.DrawPath(pen, outline);
+            }
+        }
+
+        private static PointF CreateIconPt(float xDip, float yDip, float originX, float originY, int dpi)
+        {
+            return new PointF(originX + (xDip * (float)dpi / 96f), originY + (yDip * (float)dpi / 96f));
         }
 
         private static class Native
@@ -1147,5 +1603,33 @@ namespace WindowsIDE.Workspace
                 return GetScrollInfo(hwnd, nBar, ref info);
             }
         }
+    }
+
+    /// <summary>
+    /// ツリー内インライン作成の確定。Name は Trim 済み非空。
+    /// </summary>
+    public sealed class TreeCreateCommitEventArgs : EventArgs
+    {
+        /// <summary>
+        /// 確定内容を保持する。
+        /// </summary>
+        /// <param name="isFolder">フォルダ作成なら true。</param>
+        /// <param name="parentDirectory">作成先ディレクトリ。</param>
+        /// <param name="name">Trim 済み非空の名前。</param>
+        public TreeCreateCommitEventArgs(bool isFolder, string parentDirectory, string name)
+        {
+            this.IsFolder = isFolder;
+            this.ParentDirectory = parentDirectory;
+            this.Name = name;
+        }
+
+        /// <summary>フォルダ作成なら true。</summary>
+        public bool IsFolder { get; private set; }
+
+        /// <summary>作成先ディレクトリ。</summary>
+        public string ParentDirectory { get; private set; }
+
+        /// <summary>Trim 済み名前。</summary>
+        public string Name { get; private set; }
     }
 }

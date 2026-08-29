@@ -187,6 +187,13 @@ namespace WindowsIDE.Ui
 
             this.activatedRebuildMouseDefer = false;
             this.UnhookActivatedRebuildIdle();
+            if (this.tree.IsInlineCreateActive)
+            {
+                this.RefreshWorkspaceTypes();
+                this.BeginInvoke(new MethodInvoker(this.RestoreInlineCreateFocus));
+                return;
+            }
+
             this.tree.Rebuild();
             this.RefreshWorkspaceTypes();
         }
@@ -224,6 +231,13 @@ namespace WindowsIDE.Ui
             this.activatedRebuildMouseDefer = false;
             if (this.IsDisposed || !this.IsHandleCreated || this.workspace == null || this.tree == null)
             {
+                return;
+            }
+
+            if (this.tree.IsInlineCreateActive)
+            {
+                this.RefreshWorkspaceTypes();
+                this.BeginInvoke(new MethodInvoker(this.RestoreInlineCreateFocus));
                 return;
             }
 
@@ -282,7 +296,7 @@ namespace WindowsIDE.Ui
                 return true;
             }
 
-            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing) || (this.bottomPane != null && this.bottomPane.IsTerminalComposing))
+            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing) || (this.bottomPane != null && this.bottomPane.IsTerminalComposing) || (this.tree != null && this.tree.IsInlineCreateComposing))
             {
                 if (keyData == (Keys.Control | Keys.Z)
                     || keyData == (Keys.Control | Keys.Y)
@@ -304,7 +318,7 @@ namespace WindowsIDE.Ui
                 }
             }
 
-            if (this.findBar != null && this.findBar.ContainsFocus)
+            if ((this.findBar != null && this.findBar.ContainsFocus) || (this.tree != null && this.tree.IsInlineCreateActive))
             {
                 if (keyData == (Keys.Control | Keys.Z)
                     || keyData == (Keys.Control | Keys.Y)
@@ -341,9 +355,20 @@ namespace WindowsIDE.Ui
                 return true;
             }
 
+            if (keyData == Keys.Escape && this.tree != null && this.tree.IsInlineCreateActive)
+            {
+                if (this.tree.IsInlineCreateComposing)
+                {
+                    return false;
+                }
+
+                this.tree.CancelInlineCreate();
+                return true;
+            }
+
             if (keyData == Keys.Escape && this.findBar != null && this.findBar.Visible)
             {
-                if ((this.editor != null && this.editor.IsComposing) || this.findBar.IsComposing || (this.bottomPane != null && this.bottomPane.IsTerminalComposing))
+                if ((this.editor != null && this.editor.IsComposing) || this.findBar.IsComposing || (this.bottomPane != null && this.bottomPane.IsTerminalComposing) || (this.tree != null && this.tree.IsInlineCreateComposing))
                 {
                     return false;
                 }
@@ -799,6 +824,7 @@ namespace WindowsIDE.Ui
             this.tree.Dock = DockStyle.Fill;
             this.tree.ApplyFonts(this.fonts);
             this.tree.FileOpenRequested += this.OnTreeOpen;
+            this.tree.InlineCreateCommit += this.OnTreeInlineCreateCommit;
             this.treeCreateBar = new FileTreeCreateBar();
             this.treeCreateBar.Dock = DockStyle.Top;
             this.treeCreateBar.FileCreateRequested += this.OnTreeCreateFile;
@@ -1274,7 +1300,7 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// 作成バーからファイルまたはフォルダを作る。失敗時は同じ名前でダイアログを再表示する。
+        /// 作成バーからファイルまたはフォルダの行内作成を始める。
         /// </summary>
         /// <param name="isFolder">フォルダなら true。</param>
         private void RunTreeCreate(bool isFolder)
@@ -1283,6 +1309,11 @@ namespace WindowsIDE.Ui
             {
                 MessageBox.Show(this, "ワークスペースを開いてください。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
+            }
+
+            if (this.tree != null && this.tree.IsInlineCreateActive)
+            {
+                this.tree.CancelInlineCreate();
             }
 
             string selected = null;
@@ -1298,54 +1329,71 @@ namespace WindowsIDE.Ui
                 return;
             }
 
-            string name = null;
-            while (true)
+            if (this.tree == null || !this.tree.BeginInlineCreate(isFolder, parent))
             {
-                using (CreateNameForm form = new CreateNameForm(isFolder, this.fonts, this.chromeHalfFont, this.chromeFullFont, name))
-                {
-                    if (form.ShowDialog(this) != DialogResult.OK)
-                    {
-                        return;
-                    }
+                MessageBox.Show(this, "作成先を決定できません。", "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
 
-                    name = form.EnteredName;
-                }
-
-                string created;
-                string error;
-                bool ok;
-                if (isFolder)
-                {
-                    ok = WorkspaceCreateRules.TryCreateDirectory(this.workspace.RootPath, parent, name, out created, out error);
-                }
-                else
-                {
-                    ok = WorkspaceCreateRules.TryCreateFile(this.workspace.RootPath, parent, name, out created, out error);
-                }
-
-                if (!ok)
-                {
-                    MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    continue;
-                }
-
-                if (this.tree != null)
-                {
-                    this.tree.Rebuild();
-                    this.tree.RevealAndSelect(created);
-                }
-
-                if (!isFolder)
-                {
-                    string openError;
-                    if (!this.TryOpenFile(created, true, out openError) && !string.IsNullOrEmpty(openError))
-                    {
-                        MessageBox.Show(this, openError, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
-                }
-
+        /// <summary>
+        /// 行内作成の確定。規則は WorkspaceCreateRules。失敗時は欄を残して MessageBox。
+        /// </summary>
+        private void OnTreeInlineCreateCommit(object sender, TreeCreateCommitEventArgs e)
+        {
+            if (e == null || this.workspace == null || this.tree == null)
+            {
                 return;
             }
+
+            string created;
+            string error;
+            bool ok;
+            if (e.IsFolder)
+            {
+                ok = WorkspaceCreateRules.TryCreateDirectory(this.workspace.RootPath, e.ParentDirectory, e.Name, out created, out error);
+            }
+            else
+            {
+                ok = WorkspaceCreateRules.TryCreateFile(this.workspace.RootPath, e.ParentDirectory, e.Name, out created, out error);
+            }
+
+            if (!ok)
+            {
+                this.tree.SetInlineBlurCancelSuppressed(true);
+                try
+                {
+                    MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                finally
+                {
+                    this.tree.SetInlineBlurCancelSuppressed(false);
+                }
+
+                this.tree.FocusInlineCreate();
+                return;
+            }
+
+            this.tree.CancelInlineCreate();
+            this.tree.Rebuild();
+            this.tree.RevealAndSelect(created);
+            if (!e.IsFolder)
+            {
+                string openError;
+                if (!this.TryOpenFile(created, true, out openError) && !string.IsNullOrEmpty(openError))
+                {
+                    MessageBox.Show(this, openError, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
+        private void RestoreInlineCreateFocus()
+        {
+            if (this.IsDisposed || this.tree == null || !this.tree.IsInlineCreateActive)
+            {
+                return;
+            }
+
+            this.tree.FocusInlineCreate();
         }
 
         private void OnTabChanged(object sender, EventArgs e)

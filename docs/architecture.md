@@ -47,7 +47,7 @@ flowchart LR
 | 名前空間 | 責務 |
 | --- | --- |
 | `WindowsIDE` | `Program.Main`、起動引数（`StartupArgs`）、未処理例外 |
-| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、ChromeMark（FindBar と作成バー）、FileTreeCreateBar、CreateNameForm、DualFontField（FindBar と作成ダイアログ）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、ホバーの見た目（既存色。フェーズ P7）、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
+| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成インライン）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、ホバーの見た目（既存色。フェーズ P7）、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）。将来: 括弧描画、波線描画、自動閉じ / F-DOC の挿入、ホバー枠のホスト、キー記録（フェーズ P7–P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML、WorkspaceCreateRules（WinForms 非依存の新規作成規則） |

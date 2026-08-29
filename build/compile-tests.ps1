@@ -2,6 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 $Csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+$Fw = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
@@ -9,6 +10,9 @@ if (-not (Test-Path -LiteralPath $Csc)) {
     Write-Host ("csc not found: " + $Csc)
     exit 1
 }
+
+. (Join-Path $PSScriptRoot "framework-bcl.ps1")
+Assert-FrameworkBclFamily -FrameworkDirectory $Fw
 
 function Add-Utf8Bom {
     param([string]$Path)

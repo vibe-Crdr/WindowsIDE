@@ -28,23 +28,8 @@ if ($bannerText -notlike "*for C# 5*") {
     Fail "csc banner is not Framework C# 5."
 }
 
-function Assert-FileVersion {
-    param(
-        [string]$Path,
-        [string]$ExpectedPrefix
-    )
-    if (-not (Test-Path -LiteralPath $Path)) {
-        Fail ("BCL missing: " + $Path)
-    }
-    $fv = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path).FileVersion
-    Write-Host ("BCL " + (Split-Path -Leaf $Path) + " FileVersion=" + $fv)
-    if ($fv -notlike ($ExpectedPrefix + "*")) {
-        Fail ("BCL version mismatch for " + $Path + ": expected " + $ExpectedPrefix + ", got " + $fv)
-    }
-}
-
-Assert-FileVersion -Path (Join-Path $Fw "mscorlib.dll") -ExpectedPrefix "4.8.9337"
-Assert-FileVersion -Path (Join-Path $Fw "System.dll") -ExpectedPrefix "4.8.9340"
+. (Join-Path $PSScriptRoot "framework-bcl.ps1")
+Assert-FrameworkBclFamily -FrameworkDirectory $Fw
 
 $fontRegular = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Regular.ttf"
 $fontBold = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Bold.ttf"

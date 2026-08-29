@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 
@@ -97,6 +98,106 @@ namespace WindowsIDE.Ui.Fonts
             }
 
             return "...";
+        }
+
+        /// <summary>
+        /// maxWidth に収まるよう空白優先で折り返す。元の改行は残す。省略記号は付けない。
+        /// </summary>
+        /// <param name="g">計測に使う Graphics。</param>
+        /// <param name="text">対象。null は空。</param>
+        /// <param name="half">半角フォント。</param>
+        /// <param name="full">全角フォント。</param>
+        /// <param name="maxWidth">最大幅。</param>
+        /// <param name="format">測り方。null ならタイポグラフィ既定。</param>
+        /// <returns>折り返し後の行。</returns>
+        public static string[] Wrap(Graphics g, string text, Font half, Font full, float maxWidth, StringFormat format)
+        {
+            if (text == null || text.Length == 0)
+            {
+                return new string[0];
+            }
+
+            string[] paras = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            List<string> result = new List<string>();
+            for (int p = 0; p < paras.Length; p++)
+            {
+                WrapParagraph(g, paras[p], half, full, maxWidth, format, result);
+            }
+
+            return result.ToArray();
+        }
+
+        private static void WrapParagraph(Graphics g, string line, Font half, Font full, float maxWidth, StringFormat format, List<string> result)
+        {
+            if (line == null)
+            {
+                result.Add("");
+                return;
+            }
+
+            if (line.Length == 0 || g == null || half == null || full == null || maxWidth <= 1f)
+            {
+                result.Add(line);
+                return;
+            }
+
+            if (Measure(g, line, half, full, format) <= maxWidth)
+            {
+                result.Add(line);
+                return;
+            }
+
+            int start = 0;
+            while (start < line.Length)
+            {
+                int lo = 1;
+                int hi = line.Length - start;
+                int fit = 1;
+                while (lo <= hi)
+                {
+                    int mid = lo + ((hi - lo) / 2);
+                    string slice = line.Substring(start, mid);
+                    if (Measure(g, slice, half, full, format) <= maxWidth)
+                    {
+                        fit = mid;
+                        lo = mid + 1;
+                    }
+                    else
+                    {
+                        hi = mid - 1;
+                    }
+                }
+
+                int breakAt = fit;
+                if (start + fit < line.Length)
+                {
+                    int lastSpace = -1;
+                    int i = 0;
+                    while (i < fit)
+                    {
+                        char c = line[start + i];
+                        if (c == ' ' || c == '\t')
+                        {
+                            lastSpace = i;
+                        }
+
+                        i++;
+                    }
+
+                    if (lastSpace >= 1)
+                    {
+                        breakAt = lastSpace + 1;
+                    }
+                }
+
+                string part = line.Substring(start, breakAt).TrimEnd(' ', '\t');
+                result.Add(part);
+                start += breakAt;
+                while (start < line.Length && (line[start] == ' ' || line[start] == '\t'))
+                {
+                    start++;
+                }
+            }
         }
 
         /// <summary>

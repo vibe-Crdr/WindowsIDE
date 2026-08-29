@@ -28,6 +28,7 @@ src\WindowsIDE\Ui\ThemedScrollBar.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
+src\WindowsIDE\Ui\HoverInfoControl.cs
 src\WindowsIDE\Ui\ChromeMark.cs
 src\WindowsIDE\Ui\CreateBarGlyph.cs
 src\WindowsIDE\Ui\FileTreeCreateBar.cs
@@ -85,7 +86,18 @@ src\WindowsIDE\Languages\AutoCloseRules.cs
 src\WindowsIDE\Languages\SmartIndentRules.cs
 src\WindowsIDE\Languages\VbaBlockRules.cs
 src\WindowsIDE\Languages\VbaKeywordCase.cs
+src\WindowsIDE\Languages\SymbolKind.cs
+src\WindowsIDE\Languages\DeclaredSymbol.cs
+src\WindowsIDE\Languages\IdentifierHit.cs
+src\WindowsIDE\Languages\IdentifierAtCaret.cs
+src\WindowsIDE\Languages\DefinitionResolver.cs
+src\WindowsIDE\Languages\DocCommentRules.cs
+src\WindowsIDE\Languages\HoverText.cs
+src\WindowsIDE\Languages\WorkspaceSymbols.cs
+src\WindowsIDE\Languages\CSharp\CSharpSymbols.cs
+src\WindowsIDE\Languages\CSharp\BclXmlDocs.cs
 src\WindowsIDE\Workspace\CsFileEnumerator.cs
+src\WindowsIDE\Workspace\VbaFileEnumerator.cs
 src\WindowsIDE\Workspace\WorkspaceFolder.cs
 src\WindowsIDE\Workspace\PathGuard.cs
 src\WindowsIDE\Workspace\WorkspaceCreateRules.cs

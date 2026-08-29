@@ -12,6 +12,56 @@ using WindowsIDE.Workspace;
 namespace WindowsIDE.Editor
 {
     /// <summary>
+    /// ホバー遅延後の識別子位置。
+    /// </summary>
+    public sealed class HoverIdleEventArgs : EventArgs
+    {
+        private IdentifierHit hit;
+        private Point belowScreen;
+        private Point aboveScreen;
+        private int minScreenX;
+
+        /// <summary>
+        /// 位置付きで作る。
+        /// </summary>
+        /// <param name="hit">識別子。</param>
+        /// <param name="belowScreen">識別子下端のスクリーン座標。</param>
+        /// <param name="aboveScreen">識別子上端のスクリーン座標。</param>
+        /// <param name="minScreenX">ガター右端のスクリーン X。</param>
+        public HoverIdleEventArgs(IdentifierHit hit, Point belowScreen, Point aboveScreen, int minScreenX)
+        {
+            this.hit = hit;
+            this.belowScreen = belowScreen;
+            this.aboveScreen = aboveScreen;
+            this.minScreenX = minScreenX;
+        }
+
+        /// <summary>識別子。</summary>
+        public IdentifierHit Hit
+        {
+            get { return this.hit; }
+        }
+
+        /// <summary>識別子下端。</summary>
+        public Point BelowScreen
+        {
+            get { return this.belowScreen; }
+        }
+
+        /// <summary>識別子上端。</summary>
+        public Point AboveScreen
+        {
+            get { return this.aboveScreen; }
+        }
+
+        /// <summary>ガターより右の最小 X。</summary>
+        public int MinScreenX
+        {
+            get { return this.minScreenX; }
+        }
+    }
+
+    /// <summary>
     /// Control 継承の行単位編集器。折り返し無し。RichTextBox は使わない。
     /// </summary>
     public sealed class TextView : Control, IImeClient
@@ -30,6 +80,8 @@ namespace WindowsIDE.Editor
         private ThemedScrollBar vScroll;
         private ThemedScrollBar hScroll;
         private Timer caretTimer;
+        private Timer hoverTimer;
+        private Point hoverClientPoint;
         private bool caretVisible;
         private bool selecting;
         private string imeComposition;
@@ -76,6 +128,9 @@ namespace WindowsIDE.Editor
             this.caretTimer.Interval = 530;
             this.caretTimer.Tick += this.OnCaretTick;
             this.caretTimer.Start();
+            this.hoverTimer = new Timer();
+            this.hoverTimer.Interval = HoverInfoControl.ShowDelayMs;
+            this.hoverTimer.Tick += this.OnHoverTick;
         }
 
         /// <summary>キャレットや本文が変わったとき。</summary>
@@ -83,6 +138,12 @@ namespace WindowsIDE.Editor
 
         /// <summary>未保存状態が変わったとき。</summary>
         public event EventHandler DocumentChanged;
+
+        /// <summary>マウス静止後の識別子ホバー。</summary>
+        public event EventHandler<HoverIdleEventArgs> HoverIdle;
+
+        /// <summary>ホバーを閉じるべきとき。</summary>
+        public event EventHandler HoverCancel;
 
         /// <summary>編集中の文書。</summary>
         public Document Document
@@ -99,6 +160,7 @@ namespace WindowsIDE.Editor
                 // SaveViewState → setter → RestoreViewState）。
                 this.UpdateScrollBars();
                 this.Invalidate();
+                this.DismissHover();
                 this.RaiseCaretMoved();
             }
         }
@@ -146,6 +208,83 @@ namespace WindowsIDE.Editor
             get { return !string.IsNullOrEmpty(this.imeComposition); }
         }
 
+        /// <summary>
+        /// クライアント座標からバッファ位置へ。既存 HitTest と同じ。
+        /// </summary>
+        /// <param name="pt">クライアント座標。</param>
+        /// <returns>行と列。</returns>
+        public BufferPoint HitTestClient(Point pt)
+        {
+            return this.HitTest(pt);
+        }
+
+        /// <summary>
+        /// F-DOC 枠を定義直前へ 1 Insert する。重複・対象外は false。
+        /// </summary>
+        /// <returns>挿入したら true。</returns>
+        public bool InsertDocFrame()
+        {
+            if (this.document == null || this.document.Buffer == null)
+            {
+                return false;
+            }
+
+            this.DismissHover();
+            DocInsertPlan plan;
+            if (!DocCommentRules.TryBuildInsert(this.document.Language, this.document.Buffer, this.document.HighlightSession, this.document.FilePath, this.document.CaretLine, this.document.CaretColumn, out plan))
+            {
+                return false;
+            }
+
+            if (plan.IsDuplicate || string.IsNullOrEmpty(plan.Text))
+            {
+                return false;
+            }
+
+            this.document.Undo.BeginCompound();
+            int insertLine = plan.InsertLine;
+            this.document.Buffer.Insert(insertLine, 0, plan.Text);
+            this.document.Undo.RecordInsert(insertLine, 0, plan.Text);
+            this.document.Undo.EndCompound();
+            this.document.CaretLine = insertLine + 1;
+            this.document.CaretColumn = plan.CaretColumn;
+            this.document.CollapseSelection();
+            this.document.MarkDirty();
+            int last = insertLine + 5;
+            this.SyncHighlight(insertLine, last);
+            this.EnsureCaretVisible();
+            this.NotifyChanged();
+            return true;
+        }
+
+        /// <summary>
+        /// キャレット位置のホバー錨。識別子が無ければ false。
+        /// </summary>
+        /// <param name="hit">識別子。</param>
+        /// <param name="belowScreen">下端スクリーン座標。</param>
+        /// <param name="aboveScreen">上端スクリーン座標。</param>
+        /// <param name="minScreenX">ガター右の最小 X。</param>
+        /// <returns>識別子があれば true。</returns>
+        public bool TryGetHoverAnchorAtCaret(out IdentifierHit hit, out Point belowScreen, out Point aboveScreen, out int minScreenX)
+        {
+            hit = null;
+            belowScreen = Point.Empty;
+            aboveScreen = Point.Empty;
+            minScreenX = 0;
+            if (this.document == null || this.document.Buffer == null)
+            {
+                return false;
+            }
+
+            if (!IdentifierAtCaret.TryGet(this.document.Language, this.document.Buffer, this.document.HighlightSession, this.document.CaretLine, this.document.CaretColumn, out hit))
+            {
+                return false;
+            }
+
+            this.GetIdentifierScreen(hit, out belowScreen, out aboveScreen, out minScreenX);
+            return true;
+        }
+
         IntPtr IImeClient.WindowHandle
         {
             get { return this.Handle; }
@@ -154,6 +293,10 @@ namespace WindowsIDE.Editor
         void IImeClient.SetCompositionString(string text)
         {
             this.imeComposition = (text == null) ? "" : text;
+            if (!string.IsNullOrEmpty(this.imeComposition))
+            {
+                this.StopHoverTimer(true);
+            }
         }
 
         void IImeClient.SetCompositionCursor(int rawCursor)
@@ -542,6 +685,7 @@ namespace WindowsIDE.Editor
         /// <summary>文字入力。</summary>
         protected override void OnKeyPress(KeyPressEventArgs e)
         {
+            this.StopHoverTimer(true);
             base.OnKeyPress(e);
             if (this.document == null)
             {
@@ -572,6 +716,7 @@ namespace WindowsIDE.Editor
         /// <summary>編集キー。</summary>
         protected override void OnKeyDown(KeyEventArgs e)
         {
+            this.StopHoverTimer(true);
             base.OnKeyDown(e);
             if (this.document == null)
             {
@@ -636,6 +781,7 @@ namespace WindowsIDE.Editor
         /// <summary>クリックでキャレット。</summary>
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            this.StopHoverTimer(true);
             base.OnMouseDown(e);
             this.Focus();
             if (this.document == null || e.Button != MouseButtons.Left)
@@ -658,21 +804,36 @@ namespace WindowsIDE.Editor
             this.RaiseCaretMoved();
         }
 
-        /// <summary>ドラッグ選択。</summary>
+        /// <summary>ドラッグ選択。非ドラッグではホバー用タイマー。</summary>
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (!this.selecting || this.document == null)
+            if (this.selecting && this.document != null)
             {
+                BufferPoint p = this.HitTest(e.Location);
+                this.document.CaretLine = p.Line;
+                this.document.CaretColumn = p.Column;
+                this.EnsureCaretVisible();
+                this.Invalidate();
+                this.RaiseCaretMoved();
                 return;
             }
 
-            BufferPoint p = this.HitTest(e.Location);
-            this.document.CaretLine = p.Line;
-            this.document.CaretColumn = p.Column;
-            this.EnsureCaretVisible();
-            this.Invalidate();
-            this.RaiseCaretMoved();
+            this.UpdateHoverFromMouse(e.Location);
+        }
+
+        /// <summary>クライアントから出たらホバーを閉じる。</summary>
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            this.StopHoverTimer(true);
+        }
+
+        /// <summary>フォーカス喪失でホバーを閉じる。</summary>
+        protected override void OnLostFocus(EventArgs e)
+        {
+            base.OnLostFocus(e);
+            this.StopHoverTimer(true);
         }
 
         /// <summary>ドラッグ終了。</summary>
@@ -896,6 +1057,11 @@ namespace WindowsIDE.Editor
                 if (this.caretTimer != null)
                 {
                     this.caretTimer.Dispose();
+                }
+
+                if (this.hoverTimer != null)
+                {
+                    this.hoverTimer.Dispose();
                 }
 
                 if (this.typographic != null)
@@ -2219,6 +2385,8 @@ namespace WindowsIDE.Editor
             {
                 this.UpdateImeWindow();
             }
+
+            this.StopHoverTimer(true);
         }
 
         private void OnCaretTick(object sender, EventArgs e)
@@ -2259,6 +2427,122 @@ namespace WindowsIDE.Editor
             {
                 h(this, EventArgs.Empty);
             }
+        }
+
+        private void DismissHover()
+        {
+            this.StopHoverTimer(true);
+        }
+
+        private void StopHoverTimer(bool cancel)
+        {
+            if (this.hoverTimer != null)
+            {
+                this.hoverTimer.Stop();
+            }
+
+            if (cancel)
+            {
+                EventHandler h = this.HoverCancel;
+                if (h != null)
+                {
+                    h(this, EventArgs.Empty);
+                }
+            }
+        }
+
+        private void UpdateHoverFromMouse(Point pt)
+        {
+            if (this.document == null || this.IsComposing)
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            if (pt.X < this.gutterWidth)
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            if (this.vScroll != null && this.vScroll.Visible && this.vScroll.Bounds.Contains(pt))
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            if (this.hScroll != null && this.hScroll.Visible && this.hScroll.Bounds.Contains(pt))
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            BufferPoint p = this.HitTest(pt);
+            IdentifierHit hit;
+            if (!IdentifierAtCaret.TryGet(this.document.Language, this.document.Buffer, this.document.HighlightSession, p.Line, p.Column, out hit))
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            this.hoverClientPoint = pt;
+            if (this.hoverTimer == null)
+            {
+                return;
+            }
+
+            this.hoverTimer.Stop();
+            this.hoverTimer.Start();
+        }
+
+        private void OnHoverTick(object sender, EventArgs e)
+        {
+            if (this.hoverTimer != null)
+            {
+                this.hoverTimer.Stop();
+            }
+
+            if (this.document == null || this.IsComposing)
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            BufferPoint p = this.HitTest(this.hoverClientPoint);
+            IdentifierHit hit;
+            if (!IdentifierAtCaret.TryGet(this.document.Language, this.document.Buffer, this.document.HighlightSession, p.Line, p.Column, out hit))
+            {
+                this.StopHoverTimer(true);
+                return;
+            }
+
+            Point below;
+            Point above;
+            int minX;
+            this.GetIdentifierScreen(hit, out below, out above, out minX);
+            EventHandler<HoverIdleEventArgs> idle = this.HoverIdle;
+            if (idle != null)
+            {
+                idle(this, new HoverIdleEventArgs(hit, below, above, minX));
+            }
+        }
+
+        private void GetIdentifierScreen(IdentifierHit hit, out Point below, out Point above, out int minScreenX)
+        {
+            below = Point.Empty;
+            above = Point.Empty;
+            minScreenX = 0;
+            if (hit == null || !this.IsHandleCreated)
+            {
+                return;
+            }
+
+            float x = this.gutterWidth + this.GetTextInset() + this.ColumnToX(hit.Line, hit.Column) - this.hScroll.Value;
+            int y = (hit.Line - this.vScroll.Value) * Math.Max(1, this.lineHeight);
+            Point clientTop = new Point((int)x, y);
+            above = this.PointToScreen(clientTop);
+            below = this.PointToScreen(new Point((int)x, y + this.lineHeight));
+            minScreenX = this.PointToScreen(new Point(this.gutterWidth, 0)).X;
         }
 
         private void UpdateImeWindow()

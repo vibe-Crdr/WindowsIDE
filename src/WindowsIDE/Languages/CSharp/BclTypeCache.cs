@@ -23,6 +23,7 @@ namespace WindowsIDE.Languages.CSharp
         };
 
         private static HashSet<string> names;
+        private static Dictionary<string, string> qualified;
         private static readonly object Gate = new object();
 
         /// <summary>
@@ -39,6 +40,24 @@ namespace WindowsIDE.Languages.CSharp
 
             EnsureLoaded();
             return names.Contains(simpleName);
+        }
+
+        /// <summary>
+        /// 単純名に対する first-wins の FullName。バッククォート以降は切る。Contains / Names は維持する。
+        /// </summary>
+        /// <param name="simpleName">型の単純名。</param>
+        /// <param name="qualifiedName">見つかれば FullName（切ったもの）。</param>
+        /// <returns>載っていれば true。</returns>
+        public static bool TryGetQualifiedName(string simpleName, out string qualifiedName)
+        {
+            qualifiedName = null;
+            if (string.IsNullOrEmpty(simpleName))
+            {
+                return false;
+            }
+
+            EnsureLoaded();
+            return qualified.TryGetValue(simpleName, out qualifiedName);
         }
 
         /// <summary>
@@ -66,17 +85,19 @@ namespace WindowsIDE.Languages.CSharp
                 }
 
                 HashSet<string> set = new HashSet<string>(StringComparer.Ordinal);
+                Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.Ordinal);
                 for (int i = 0; i < AssemblyFiles.Length; i++)
                 {
                     string path = Path.Combine(FrameworkDir, AssemblyFiles[i]);
-                    LoadAssemblyTypes(path, set);
+                    LoadAssemblyTypes(path, set, map);
                 }
 
                 names = set;
+                qualified = map;
             }
         }
 
-        private static void LoadAssemblyTypes(string path, HashSet<string> set)
+        private static void LoadAssemblyTypes(string path, HashSet<string> set, Dictionary<string, string> map)
         {
             if (!File.Exists(path))
             {
@@ -134,6 +155,22 @@ namespace WindowsIDE.Languages.CSharp
                 }
 
                 set.Add(name);
+                if (!map.ContainsKey(name))
+                {
+                    string full = type.FullName;
+                    if (string.IsNullOrEmpty(full))
+                    {
+                        full = name;
+                    }
+
+                    int fullTick = full.IndexOf('`');
+                    if (fullTick > 0)
+                    {
+                        full = full.Substring(0, fullTick);
+                    }
+
+                    map[name] = full;
+                }
             }
         }
     }

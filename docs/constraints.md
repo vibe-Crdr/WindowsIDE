@@ -56,12 +56,14 @@ Visual Studio / Build Tools / Roslyn の `vbc.exe` は、PATH にあっても使
 
 ## 参照する BCL（識別）
 
-コンパイラと同じフォルダの次を、バージョン固定の基準にする。
+コンパイラと同じフォルダの次を、同じフォルダの識別にする。
 
-| ファイル | ファイルバージョン | 意味 |
-| --- | --- | --- |
-| `mscorlib.dll` | 4.8.9337 | 4.8.1 |
-| `System.dll` | 4.8.9340 | 4.8.1 |
+| ファイル | 識別 |
+| --- | --- |
+| `mscorlib.dll` | 指定 csc と同じ `v4.0.30319`。ゲートは 4.8.x（FileMajorPart=4 かつ FileMinorPart=8）。サービス更新可 |
+| `System.dll` | 同上 |
+
+観測例: 当時 4.8.9337 / 4.8.9340。この PC（2026-08-29）は mscorlib 4.8.9345.0 / System 4.8.9340。パッチ FileVersion はピンにしない。
 
 ビルドは `/noconfig /nostdlib` とし、上記フォルダの DLL を明示参照する。詳細は [build.md](build.md)。
 

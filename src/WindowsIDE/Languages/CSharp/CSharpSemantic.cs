@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using WindowsIDE.Editor;
 
 namespace WindowsIDE.Languages.CSharp
 {
     /// <summary>
-    /// ハイライト用の C# 5 再帰下降。コード生成はしない。
+    /// ハイライト用の C# 5 再帰下降。コード生成はしない。宣言収集も同じ下降。
     /// </summary>
     public sealed class CSharpSemantic
     {
@@ -19,6 +20,10 @@ namespace WindowsIDE.Languages.CSharp
         private List<ClassifySpan>[] overlay;
         private bool muteMarks;
         private int lineCount;
+        private List<DeclaredSymbol> collected;
+        private string collectPath;
+        private bool includeLocals;
+        private List<string> typeStack;
 
         private sealed class CSharpTok
         {
@@ -75,6 +80,30 @@ namespace WindowsIDE.Languages.CSharp
         {
             CSharpSemantic semantic = new CSharpSemantic();
             semantic.Run(buffer, workspaceRoot, overlay);
+        }
+
+        /// <summary>
+        /// 同じ再帰下降から位置付き宣言を集める。ハイライトの Classify は変えない。
+        /// </summary>
+        /// <param name="buffer">本文。</param>
+        /// <param name="filePath">ディスクパス。無題は null。</param>
+        /// <param name="includeLocals">フィールドとローカルと仮引数も含める。</param>
+        /// <returns>出現順の宣言。</returns>
+        public static List<DeclaredSymbol> Collect(TextBuffer buffer, string filePath, bool includeLocals)
+        {
+            CSharpSemantic semantic = new CSharpSemantic();
+            semantic.collected = new List<DeclaredSymbol>();
+            semantic.collectPath = filePath;
+            semantic.includeLocals = includeLocals;
+            int lines = 1;
+            if (buffer != null && buffer.LineCount > 0)
+            {
+                lines = buffer.LineCount;
+            }
+
+            List<ClassifySpan>[] overlay = NewOverlay(lines);
+            semantic.Run(buffer, null, overlay);
+            return semantic.collected;
         }
 
         /// <summary>
@@ -139,6 +168,7 @@ namespace WindowsIDE.Languages.CSharp
             this.methods = new HashSet<string>(StringComparer.Ordinal);
             this.fields = new HashSet<string>(StringComparer.Ordinal);
             this.scope = new Scope(null);
+            this.typeStack = new List<string>();
             AddKnownTypes(workspaceRoot);
             CollectDeclaredTypes();
             this.pos = 0;
@@ -433,6 +463,144 @@ namespace WindowsIDE.Languages.CSharp
             this.overlay[tok.Line].Add(new ClassifySpan(tok.Start, tok.Length, kind));
         }
 
+        private void AddDecl(CSharpTok tok, SymbolKind kind, string containing, string signature)
+        {
+            if (this.collected == null || tok == null)
+            {
+                return;
+            }
+
+            if (!this.includeLocals && (kind == SymbolKind.Local || kind == SymbolKind.Field))
+            {
+                return;
+            }
+
+            string name = this.IdentName(tok);
+            if (string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            this.collected.Add(new DeclaredSymbol(
+                name,
+                kind,
+                LanguageKind.CSharp,
+                this.collectPath,
+                tok.Line,
+                tok.Start,
+                tok.Length,
+                containing,
+                signature));
+        }
+
+        private string IdentName(CSharpTok tok)
+        {
+            if (tok == null || string.IsNullOrEmpty(tok.Text))
+            {
+                return "";
+            }
+
+            if (tok.Text.Length >= 2 && tok.Text[0] == '@')
+            {
+                return tok.Text.Substring(1);
+            }
+
+            return tok.Text;
+        }
+
+        private string CurrentType()
+        {
+            if (this.typeStack == null || this.typeStack.Count == 0)
+            {
+                return null;
+            }
+
+            return this.typeStack[this.typeStack.Count - 1];
+        }
+
+        private void PushType(string name)
+        {
+            if (this.typeStack == null)
+            {
+                this.typeStack = new List<string>();
+            }
+
+            this.typeStack.Add(name == null ? "" : name);
+        }
+
+        private void PopType()
+        {
+            if (this.typeStack != null && this.typeStack.Count > 0)
+            {
+                this.typeStack.RemoveAt(this.typeStack.Count - 1);
+            }
+        }
+
+        private string CompactSlice(int from, int toExclusive)
+        {
+            if (this.tokens == null || from < 0)
+            {
+                return "";
+            }
+
+            if (toExclusive > this.tokens.Count)
+            {
+                toExclusive = this.tokens.Count;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            CSharpTok prev = null;
+            int i = from;
+            while (i < toExclusive)
+            {
+                CSharpTok tok = this.tokens[i];
+                i++;
+                if (tok == null || tok.Kind == TokenKind.Comment)
+                {
+                    continue;
+                }
+
+                if (sb.Length > 0 && this.NeedsSpace(prev, tok))
+                {
+                    sb.Append(' ');
+                }
+
+                sb.Append(tok.Text);
+                prev = tok;
+            }
+
+            return sb.ToString();
+        }
+
+        private bool NeedsSpace(CSharpTok left, CSharpTok right)
+        {
+            if (left == null || right == null)
+            {
+                return false;
+            }
+
+            if (this.IsSingle(right, '(') || this.IsSingle(right, '[') || this.IsSingle(right, '<') ||
+                this.IsSingle(right, ')') || this.IsSingle(right, ']') || this.IsSingle(right, '>') ||
+                this.IsSingle(right, ',') || this.IsSingle(right, '.') || this.IsSingle(right, ';') ||
+                this.IsSingle(right, '?') || this.IsSingle(right, '*'))
+            {
+                return false;
+            }
+
+            if (this.IsSingle(left, '(') || this.IsSingle(left, '[') || this.IsSingle(left, '<') ||
+                this.IsSingle(left, '.') || this.IsSingle(left, '~'))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool IsSingle(CSharpTok tok, char c)
+        {
+            return tok != null && tok.Text != null && tok.Text.Length == 1 && tok.Text[0] == c;
+        }
+
         private void ParseStatementList()
         {
             int guard = 0;
@@ -467,6 +635,7 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.PeekIdent())
                 {
                     this.Take();
+                    this.SkipGenerics();
                     ok = this.PeekChar('(');
                 }
             }
@@ -479,12 +648,19 @@ namespace WindowsIDE.Languages.CSharp
         private void ParseLocalMethod()
         {
             this.SkipModifiers();
+            int typeStart = this.pos;
             this.ParseType();
             if (this.PeekIdent())
             {
                 CSharpTok name = this.Take();
-                this.methods.Add(name.Text);
+                this.methods.Add(this.IdentName(name));
                 this.Mark(name, TokenKind.Method);
+                this.SkipGenerics();
+                if (this.MatchChar('('))
+                {
+                    this.ParseParameterListAndBody(name, SymbolKind.Method, typeStart);
+                    return;
+                }
             }
 
             this.ParseMethodRest();
@@ -595,57 +771,73 @@ namespace WindowsIDE.Languages.CSharp
         {
             bool isDelegate = this.PeekKeyword("delegate");
             bool isEnum = this.PeekKeyword("enum");
+            CSharpTok intro = this.Peek();
+            string introWord = (intro == null) ? "type" : intro.Text;
             this.Take();
+            CSharpTok name = null;
             if (this.PeekIdent())
             {
-                CSharpTok name = this.Take();
-                this.types.Add(name.Text);
+                name = this.Take();
+                string ident = this.IdentName(name);
+                this.types.Add(ident);
                 this.Mark(name, TokenKind.Type);
+                this.AddDecl(name, SymbolKind.Type, this.CurrentType(), introWord + " " + ident);
+                this.PushType(ident);
             }
 
-            this.SkipGenerics();
-            if (this.MatchChar(':'))
+            try
             {
-                this.ParseBaseList();
-            }
+                this.SkipGenerics();
+                if (this.MatchChar(':'))
+                {
+                    this.ParseBaseList();
+                }
 
-            this.SkipWhereClauses();
-            if (isDelegate)
-            {
-                this.PushScope();
-                this.MatchChar('(');
-                this.ParseParameterList();
-                this.MatchChar(')');
-                this.PopScope();
-                this.MatchChar(';');
-                return;
-            }
+                this.SkipWhereClauses();
+                if (isDelegate)
+                {
+                    this.PushScope();
+                    this.MatchChar('(');
+                    this.ParseParameterList();
+                    this.MatchChar(')');
+                    this.PopScope();
+                    this.MatchChar(';');
+                    return;
+                }
 
-            if (!this.MatchChar('{'))
-            {
-                this.RecoverStatement();
-                return;
-            }
+                if (!this.MatchChar('{'))
+                {
+                    this.RecoverStatement();
+                    return;
+                }
 
-            if (isEnum)
-            {
-                this.ParseEnumBody();
+                if (isEnum)
+                {
+                    this.ParseEnumBody();
+                    this.MatchChar('}');
+                    return;
+                }
+
+                HashSet<string> savedMethods = this.methods;
+                HashSet<string> savedFields = this.fields;
+                this.methods = new HashSet<string>(StringComparer.Ordinal);
+                this.fields = new HashSet<string>(StringComparer.Ordinal);
+                while (this.Peek() != null && !this.PeekChar('}'))
+                {
+                    this.ParseMember();
+                }
+
                 this.MatchChar('}');
-                return;
+                this.methods = savedMethods;
+                this.fields = savedFields;
             }
-
-            HashSet<string> savedMethods = this.methods;
-            HashSet<string> savedFields = this.fields;
-            this.methods = new HashSet<string>(StringComparer.Ordinal);
-            this.fields = new HashSet<string>(StringComparer.Ordinal);
-            while (this.Peek() != null && !this.PeekChar('}'))
+            finally
             {
-                this.ParseMember();
+                if (name != null)
+                {
+                    this.PopType();
+                }
             }
-
-            this.MatchChar('}');
-            this.methods = savedMethods;
-            this.fields = savedFields;
         }
 
         private void ParseEnumBody()
@@ -655,7 +847,9 @@ namespace WindowsIDE.Languages.CSharp
                 this.SkipAttributes();
                 if (this.PeekIdent())
                 {
-                    this.Mark(this.Take(), TokenKind.Instance);
+                    CSharpTok member = this.Take();
+                    this.Mark(member, TokenKind.Instance);
+                    this.AddDecl(member, SymbolKind.Field, this.CurrentType(), this.IdentName(member));
                 }
 
                 if (this.MatchChar('='))
@@ -687,9 +881,17 @@ namespace WindowsIDE.Languages.CSharp
 
             if (this.MatchChar('~'))
             {
+                int sigStart = this.pos - 1;
                 if (this.PeekIdent())
                 {
-                    this.Mark(this.Take(), TokenKind.Method);
+                    CSharpTok dtor = this.Take();
+                    this.Mark(dtor, TokenKind.Method);
+                    this.SkipGenerics();
+                    if (this.MatchChar('('))
+                    {
+                        this.ParseParameterListAndBody(dtor, SymbolKind.Method, sigStart);
+                        return;
+                    }
                 }
 
                 this.ParseMethodRest();
@@ -702,8 +904,9 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.PeekIdent())
                 {
                     CSharpTok name = this.Take();
-                    this.fields.Add(name.Text);
+                    this.fields.Add(this.IdentName(name));
                     this.Mark(name, TokenKind.Instance);
+                    this.AddDecl(name, SymbolKind.Field, this.CurrentType(), "event " + this.IdentName(name));
                 }
 
                 if (this.MatchChar('{'))
@@ -719,10 +922,18 @@ namespace WindowsIDE.Languages.CSharp
             }
 
             int start = this.pos;
+            CSharpTok ctorPeek = this.Peek();
             this.ParseType();
             if (this.MatchChar('('))
             {
-                this.ParseParameterListAndBody();
+                if (ctorPeek != null)
+                {
+                    string ctorName = this.IdentName(ctorPeek);
+                    this.methods.Add(ctorName);
+                    this.Mark(ctorPeek, TokenKind.Method);
+                }
+
+                this.ParseParameterListAndBody(ctorPeek, SymbolKind.Constructor, start);
                 return;
             }
 
@@ -741,18 +952,20 @@ namespace WindowsIDE.Languages.CSharp
             }
 
             CSharpTok ident = this.Take();
+            this.SkipGenerics();
             if (this.MatchChar('('))
             {
-                this.methods.Add(ident.Text);
+                this.methods.Add(this.IdentName(ident));
                 this.Mark(ident, TokenKind.Method);
-                this.ParseParameterListAndBody();
+                this.ParseParameterListAndBody(ident, SymbolKind.Method, start);
                 return;
             }
 
             if (this.MatchChar('{'))
             {
-                this.fields.Add(ident.Text);
+                this.fields.Add(this.IdentName(ident));
                 this.Mark(ident, TokenKind.Instance);
+                this.AddDecl(ident, SymbolKind.Property, this.CurrentType(), this.CompactSlice(start, this.pos - 1));
                 this.ParseAccessors();
                 return;
             }
@@ -764,13 +977,15 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.MatchChar('{'))
                 {
                     this.Mark(ident, TokenKind.Instance);
+                    this.AddDecl(ident, SymbolKind.Property, this.CurrentType(), this.IdentName(ident));
                     this.ParseAccessors();
                     return;
                 }
             }
 
-            this.fields.Add(ident.Text);
+            this.fields.Add(this.IdentName(ident));
             this.Mark(ident, TokenKind.Instance);
+            this.AddDecl(ident, SymbolKind.Field, this.CurrentType(), this.CompactSlice(start, this.pos));
             if (this.MatchChar('='))
             {
                 this.ParseExpression();
@@ -781,8 +996,9 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.PeekIdent())
                 {
                     CSharpTok more = this.Take();
-                    this.fields.Add(more.Text);
+                    this.fields.Add(this.IdentName(more));
                     this.Mark(more, TokenKind.Instance);
+                    this.AddDecl(more, SymbolKind.Field, this.CurrentType(), this.IdentName(more));
                     if (this.MatchChar('='))
                     {
                         this.ParseExpression();
@@ -805,9 +1021,26 @@ namespace WindowsIDE.Languages.CSharp
 
         private void ParseParameterListAndBody()
         {
+            this.ParseParameterListAndBody(null, SymbolKind.Method, -1);
+        }
+
+        private void ParseParameterListAndBody(CSharpTok name, SymbolKind kind, int sigStart)
+        {
             this.PushScope();
             this.ParseParameterList();
             this.MatchChar(')');
+            if (name != null && sigStart >= 0)
+            {
+                string sig = this.CompactSlice(sigStart, this.pos);
+                if (kind == SymbolKind.Constructor && !string.IsNullOrEmpty(this.CurrentType()) &&
+                    sig.IndexOf('.') < 0)
+                {
+                    sig = this.CurrentType() + "." + sig;
+                }
+
+                this.AddDecl(name, kind, this.CurrentType(), sig);
+            }
+
             this.SkipWhereClauses();
             this.ParseMethodBodyOrSemi();
             this.PopScope();
@@ -878,8 +1111,9 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.PeekIdent())
                 {
                     CSharpTok name = this.Take();
-                    this.scope.Add(name.Text);
+                    this.scope.Add(this.IdentName(name));
                     this.Mark(name, TokenKind.Local);
+                    this.AddDecl(name, SymbolKind.Local, this.CurrentType(), this.IdentName(name));
                 }
 
                 if (this.MatchChar('='))
@@ -983,8 +1217,9 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.PeekIdent())
                 {
                     CSharpTok name = this.Take();
-                    this.scope.Add(name.Text);
+                    this.scope.Add(this.IdentName(name));
                     this.Mark(name, TokenKind.Local);
+                    this.AddDecl(name, SymbolKind.Local, this.CurrentType(), this.IdentName(name));
                 }
 
                 this.MatchKeyword("in");
@@ -1021,8 +1256,9 @@ namespace WindowsIDE.Languages.CSharp
                         if (this.PeekIdent())
                         {
                             CSharpTok name = this.Take();
-                            this.scope.Add(name.Text);
+                            this.scope.Add(this.IdentName(name));
                             this.Mark(name, TokenKind.Local);
+                            this.AddDecl(name, SymbolKind.Local, this.CurrentType(), this.IdentName(name));
                         }
 
                         this.MatchChar(')');
@@ -1143,8 +1379,9 @@ namespace WindowsIDE.Languages.CSharp
                 if (this.PeekIdent())
                 {
                     CSharpTok name = this.Take();
-                    this.scope.Add(name.Text);
+                    this.scope.Add(this.IdentName(name));
                     this.Mark(name, TokenKind.Local);
+                    this.AddDecl(name, SymbolKind.Local, this.CurrentType(), this.IdentName(name));
                 }
 
                 if (this.MatchChar('='))

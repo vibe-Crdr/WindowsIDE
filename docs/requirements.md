@@ -32,7 +32,7 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | R10 | 外観・フォント要件を満たす（[ui.md](ui.md)、[fonts.md](fonts.md)） |
 | R11 | コマンドパレットとファイル名クイックオープン（VS Code の Ctrl+P / Ctrl+Shift+P 相当） |
 | R12 | 入力停止後、Framework `csc.exe` で診断のみ再コンパイルし、問題一覧と波線に出す。生成物は起動しない（フェーズ P7。今は実装しない） |
-| R13 | ユーザーソース上の定義へ移動と、ホバー（F-DOC 枠 / `///` / 直前コメント / Framework XML）。枠コメント挿入（F-DOC）。P7 の対象は C# / VBA / PowerShell / cmd。VB.NET の F-GD / F-HOV / F-DOC はフェーズ P9（今は実装しない） |
+| R13 | ユーザーソース上の定義へ移動と、ホバー（解決できた定義のシグネチャ常時 + F-DOC 枠 / `///` / 直前コメント / Framework XML）。枠コメント挿入（F-DOC）。P7 の対象は C# / VBA / PowerShell / cmd。VB.NET の F-GD / F-HOV / F-DOC はフェーズ P9（今は実装しない） |
 | R14 | Markdown（`.md`）の字句色分けとプレビュー。ホスト言語ではない。実行・デバッグしない（フェーズ P8。今は実装しない） |
 | R15 | VB.NET をホストとして扱う（`.vb`、指定 Framework `vbc.exe` でビルド、実行。デバッグは段階）。VBA / VBScript ではない。フェーズ P9。今は実装しない |
 | R16 | 編集器本文のインデント線（F-IG）。すべてのファイル形式（Plain / 無題を含む）。言語非依存。今は実装しない |
@@ -76,7 +76,7 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | P4 | C# デバッグ（PDB + CLR デバッグ API）。cmd は行単位実行または出力トレース |
 | P5 | コマンドパレット、クイックオープン、簡易補完（C# / VBA / PowerShell / cmd。キーワード + ファイル内シンボル。VB.NET の F-CMP はフェーズ P9） |
 | P6 | VBA デバッグ（Excel VBE 連携 / `Application.Run` と実行時エラー） |
-| P7 | 編集器インテリジェンス（対応括弧、スマートインデント、自動閉じ、定義へ移動、ホバー、枠コメント、VBA キーワード大文字小文字、常時 csc、波線、VBA Compile 診断）。対象ホストは C# / VBA / PowerShell / cmd。VB.NET の同系統はフェーズ P9。P7-A 着手。B/C は今は実装しない。着手時期は採用済み P16（P2 完了の直後） |
+| P7 | 編集器インテリジェンス（対応括弧、スマートインデント、自動閉じ、定義へ移動、ホバー、枠コメント、VBA キーワード大文字小文字、常時 csc、波線、VBA Compile 診断）。対象ホストは C# / VBA / PowerShell / cmd。VB.NET の同系統はフェーズ P9。P7-B 着手（F-GD / F-HOV / F-DOC）。波 C は今は実装しない。着手時期は採用済み P16（P2 完了の直後） |
 | P8 | Markdown 字句とプレビュー、VBAProject 参照、キー記録マクロ。今は実装しない。P5（F-PAL）と P7 の後 |
 | P9 | VB.NET ホスト（`.vb`、指定 Framework `vbc.exe` でビルドと実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない |
 

@@ -30,7 +30,7 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\mscorlib.dll
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.dll
 ```
 
-ファイルバージョンが 4.8.9337 / 4.8.9340 からずれたら、ビルドを失敗させて理由を出す（サイレント継続しない）。
+ビルドは欠如と 4.8 ファミリー（FileMajorPart=4 かつ FileMinorPart=8）だけを Fail する。パッチ FileVersion は Windows Update の 4.8.1 サービス更新で変わりうるためピンにしない。観測値はログする。サイレントに別 csc / 別フォルダは使わない。
 
 ## P0 の `/r`（これだけ）
 
@@ -52,6 +52,8 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 ```
 
 `WindowsIDE.Languages` のソースを `build/windows-ide.rsp` と `build/windows-ide-tests.rsp` に列挙する（`IdentifierClassifier.cs` と `Languages/CSharp/` を含む）。Languages は Theme / WinForms を参照しない。BCL 型名は実行時 `Assembly.LoadFrom`（コンパイル `/r` は既存 Framework DLL + SMA）。
+
+P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.cs` の次（`SymbolKind` / `DeclaredSymbol` / `IdentifierHit` / `IdentifierAtCaret` / `DefinitionResolver` / `DocCommentRules` / `HoverText` / `WorkspaceSymbols` / `CSharp/CSharpSymbols` / `CSharp/BclXmlDocs`）。`HoverInfoControl.cs` は `FindBar.cs` の次（製品 rsp のみ。テスト rsp には足さない）。`VbaFileEnumerator.cs` は `CsFileEnumerator.cs` の次。製品 `/r` は増やさない。
 
 ユーザーコードの常時コンパイル（F-LIVE、フェーズ P7。今は実装しない）も同じ Framework `csc.exe` を使う。製品の `/r` は増やさない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。ユーザー VB.NET（F-VB-BLD、フェーズ P9。今は実装しない）は指定 `vbc.exe` を使う。製品 `/r` に `Microsoft.VisualBasic.dll` を足さない。csc に `.vb` を渡さない。
 
@@ -113,11 +115,11 @@ powershell.exe -NoProfile -File .\build\compile-tests.ps1
 `compile.ps1` は次を行う。
 
 1. 固定パスの csc を使い、バナー（`for C# 5`）をログする
-2. BCL ファイルバージョンを検査する
+2. BCL が 4.8 ファミリーであることを検査し FileVersion をログする
 3. 同梱フォント 3 ファイルが無ければ失敗する
 4. 出力が x64 PE である（スクリプトが PE ヘッダを読む）
 5. 出力フォルダに第三者 DLL が増えていない
 6. 埋め込みリソース名 `WindowsIDE.Fonts.CascadiaMonoRegular` / `CascadiaMonoBold` / `SourceHanSansJpRegular` がある
 7. `app.config` を `WindowsIDE.exe.config` としてコピーする
 
-製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 3 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL ファイルバージョン、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。
+製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 3 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL の 4.8 ファミリー検査と FileVersion ログ、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。

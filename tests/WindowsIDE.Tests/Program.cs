@@ -89,6 +89,11 @@ namespace WindowsIDE.Tests
             RunVbaBlock();
             RunVbaKeywordCase();
             InspectP7ASource();
+            RunGotoDefinition();
+            RunHoverText();
+            RunDocComment();
+            InspectP7BSource();
+            InspectCompilePs1();
             RunDiagnosticParser();
             RunCsFileEnumerator();
             RunCompileUnit();
@@ -1548,6 +1553,599 @@ namespace WindowsIDE.Tests
 
             string indent = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Editor", "IndentRules.cs"));
             Check("p7a IndentRules no Smart", indent.IndexOf("Smart", StringComparison.Ordinal) < 0);
+        }
+
+        private static void RunGotoDefinition()
+        {
+            string src = "class C\r\n{\r\n    void Foo()\r\n    {\r\n    }\r\n    void Bar()\r\n    {\r\n        Foo();\r\n    }\r\n}\r\n";
+            TextBuffer buf = new TextBuffer();
+            buf.SetText(src);
+            HighlightSession session = MakeP7Session(LanguageKind.CSharp, buf);
+            int callLine;
+            int callCol;
+            Check("gd-cs-file loc", TryNthIdent(buf, "Foo", 2, out callLine, out callCol));
+            DeclaredSymbol sym;
+            bool hit = DefinitionResolver.TryResolve(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", null, callLine, callCol, out sym);
+            Check("gd-cs-file", hit && sym != null && sym.Kind == SymbolKind.Method && sym.Name == "Foo" && sym.Line == 2);
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-ws-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string other = Path.Combine(dir, "Other.cs");
+                string mine = Path.Combine(dir, "Mine.cs");
+                WriteUtf8Bom(other, "class Other\r\n{\r\n}\r\n");
+                WriteUtf8Bom(mine, "class Mine\r\n{\r\n    Other x;\r\n}\r\n");
+                WorkspaceSymbols.Invalidate();
+                TextBuffer mineBuf = new TextBuffer();
+                mineBuf.SetText("class Mine\r\n{\r\n    Other x;\r\n}\r\n");
+                HighlightSession mineSession = MakeP7Session(LanguageKind.CSharp, mineBuf);
+                int otherLine;
+                int otherCol;
+                Check("gd-cs-ws loc", TryNthIdent(mineBuf, "Other", 1, out otherLine, out otherCol));
+                DeclaredSymbol wsSym;
+                bool wsHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, mineBuf, mineSession, mine, dir, otherLine, otherCol, out wsSym);
+                Check("gd-cs-ws", wsHit && wsSym != null && wsSym.Kind == SymbolKind.Type && wsSym.Line == 0 && ContainsPath(new string[] { wsSym.FilePath }, other));
+            }
+            finally
+            {
+                WorkspaceSymbols.Invalidate();
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            TextBuffer bclBuf = new TextBuffer();
+            bclBuf.SetText("class C { void M() { String s; } }");
+            HighlightSession bclSession = MakeP7Session(LanguageKind.CSharp, bclBuf);
+            int bclLine;
+            int bclCol;
+            Check("gd-cs-bcl loc", TryNthIdent(bclBuf, "String", 1, out bclLine, out bclCol));
+            DeclaredSymbol bclSym;
+            Check("gd-cs-bcl", !DefinitionResolver.TryResolve(LanguageKind.CSharp, bclBuf, bclSession, "C:\\tmp\\C.cs", null, bclLine, bclCol, out bclSym));
+
+            string vbaDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-vba-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(vbaDir);
+            try
+            {
+                string bas = Path.Combine(vbaDir, "Mod.bas");
+                WriteUtf8Bom(bas, "Sub Foo()\r\nEnd Sub\r\n");
+                WorkspaceSymbols.Invalidate();
+                TextBuffer vbaBuf = new TextBuffer();
+                vbaBuf.SetText("Sub Bar()\r\nFoo\r\nEnd Sub\r\n");
+                HighlightSession vbaSession = MakeP7Session(LanguageKind.Vba, vbaBuf);
+                int vbaLine;
+                int vbaCol;
+                Check("gd-vba loc", TryNthIdent(vbaBuf, "Foo", 1, out vbaLine, out vbaCol));
+                DeclaredSymbol vbaSym;
+                bool vbaHit = DefinitionResolver.TryResolve(LanguageKind.Vba, vbaBuf, vbaSession, Path.Combine(vbaDir, "Caller.bas"), vbaDir, vbaLine, vbaCol, out vbaSym);
+                Check("gd-vba", vbaHit && vbaSym != null && string.Equals(vbaSym.Name, "Foo", StringComparison.OrdinalIgnoreCase) && vbaSym.Line == 0 && ContainsPath(new string[] { vbaSym.FilePath }, bas));
+            }
+            finally
+            {
+                WorkspaceSymbols.Invalidate();
+                try
+                {
+                    Directory.Delete(vbaDir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            TextBuffer psBuf = new TextBuffer();
+            psBuf.SetText("function Foo {\r\n}\r\nFoo\r\n");
+            HighlightSession psSession = MakeP7Session(LanguageKind.PowerShell, psBuf);
+            int psLine;
+            int psCol;
+            Check("gd-ps loc", TryNthIdent(psBuf, "Foo", 2, out psLine, out psCol));
+            DeclaredSymbol psSym;
+            bool psHit = DefinitionResolver.TryResolve(LanguageKind.PowerShell, psBuf, psSession, "C:\\tmp\\a.ps1", null, psLine, psCol, out psSym);
+            Check("gd-ps", psHit && psSym != null && string.Equals(psSym.Name, "Foo", StringComparison.OrdinalIgnoreCase) && psSym.Line == 0);
+
+            TextBuffer cmdBuf = new TextBuffer();
+            cmdBuf.SetText(":Foo\r\ngoto Foo\r\n");
+            HighlightSession cmdSession = MakeP7Session(LanguageKind.Cmd, cmdBuf);
+            int cmdLine;
+            int cmdCol;
+            Check("gd-cmd loc", TryNthIdent(cmdBuf, "Foo", 2, out cmdLine, out cmdCol));
+            DeclaredSymbol cmdSym;
+            Check("gd-cmd", !DefinitionResolver.TryResolve(LanguageKind.Cmd, cmdBuf, cmdSession, "C:\\tmp\\a.cmd", null, cmdLine, cmdCol, out cmdSym));
+
+            TextBuffer strBuf = new TextBuffer();
+            strBuf.SetText("class C { string x = \"Foo\"; }\r\n");
+            HighlightSession strSession = MakeP7Session(LanguageKind.CSharp, strBuf);
+            string strLine = strBuf.GetLine(0);
+            int strCol = strLine.IndexOf("Foo", StringComparison.Ordinal);
+            DeclaredSymbol strSym;
+            Check("gd-string", strCol >= 0 && !DefinitionResolver.TryResolve(LanguageKind.CSharp, strBuf, strSession, "C:\\tmp\\C.cs", null, 0, strCol, out strSym));
+
+            string ctorSrc = "/// <summary>\r\n/// class docs\r\n/// </summary>\r\nclass Foo\r\n{\r\n    /// <summary>\r\n    /// ctor docs\r\n    /// </summary>\r\n    public Foo()\r\n    {\r\n    }\r\n    void M()\r\n    {\r\n        new Foo();\r\n    }\r\n}\r\n";
+            TextBuffer ctorBuf = new TextBuffer();
+            ctorBuf.SetText(ctorSrc);
+            HighlightSession ctorSession = MakeP7Session(LanguageKind.CSharp, ctorBuf);
+            int ctorLine;
+            int ctorCol;
+            Check("gd-ctor loc", TryNthIdent(ctorBuf, "Foo", 3, out ctorLine, out ctorCol));
+            DeclaredSymbol ctorSym;
+            bool ctorHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, ctorBuf, ctorSession, "C:\\tmp\\Foo.cs", null, ctorLine, ctorCol, out ctorSym);
+            Check("gd-ctor-new", ctorHit && ctorSym != null && ctorSym.Kind == SymbolKind.Constructor && ctorSym.Line == 8);
+
+            Check("gd-ctor-decl loc", TryNthIdent(ctorBuf, "Foo", 2, out ctorLine, out ctorCol));
+            ctorHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, ctorBuf, ctorSession, "C:\\tmp\\Foo.cs", null, ctorLine, ctorCol, out ctorSym);
+            Check("gd-ctor-decl", ctorHit && ctorSym != null && ctorSym.Kind == SymbolKind.Constructor);
+
+            Check("gd-ctor-class loc", TryNthIdent(ctorBuf, "Foo", 1, out ctorLine, out ctorCol));
+            ctorHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, ctorBuf, ctorSession, "C:\\tmp\\Foo.cs", null, ctorLine, ctorCol, out ctorSym);
+            Check("gd-ctor-class", ctorHit && ctorSym != null && ctorSym.Kind == SymbolKind.Type);
+
+            string genSrc = "class C\r\n{\r\n    void Foo<T>(T x)\r\n    {\r\n    }\r\n}\r\n";
+            TextBuffer genBuf = new TextBuffer();
+            genBuf.SetText(genSrc);
+            List<DeclaredSymbol> genList = CSharpSymbols.Collect(genBuf, "C:\\tmp\\G.cs", false);
+            bool genMethod = false;
+            int gi = 0;
+            while (gi < genList.Count)
+            {
+                DeclaredSymbol gs = genList[gi];
+                gi++;
+                if (gs != null && gs.Kind == SymbolKind.Method && gs.Name == "Foo")
+                {
+                    genMethod = true;
+                }
+            }
+
+            Check("gd-generic-method", genMethod);
+
+            string wsDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-ws-m-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(wsDir);
+            try
+            {
+                string other = Path.Combine(wsDir, "Other.cs");
+                string mine = Path.Combine(wsDir, "Mine.cs");
+                WriteUtf8Bom(other, "class Other\r\n{\r\n    public void Run()\r\n    {\r\n    }\r\n}\r\n");
+                WriteUtf8Bom(mine, "class Mine\r\n{\r\n    void M()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                WorkspaceSymbols.Invalidate();
+                TextBuffer mineBuf2 = new TextBuffer();
+                mineBuf2.SetText("class Mine\r\n{\r\n    void M()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                HighlightSession mineSession2 = MakeP7Session(LanguageKind.CSharp, mineBuf2);
+                int runLine;
+                int runCol;
+                Check("gd-cs-ws-m loc", TryNthIdent(mineBuf2, "Run", 1, out runLine, out runCol));
+                DeclaredSymbol runSym;
+                bool runHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, mineBuf2, mineSession2, mine, wsDir, runLine, runCol, out runSym);
+                Check("gd-cs-ws-method", runHit && runSym != null && runSym.Kind == SymbolKind.Method && runSym.Name == "Run" && ContainsPath(new string[] { runSym.FilePath }, other));
+            }
+            finally
+            {
+                WorkspaceSymbols.Invalidate();
+                try
+                {
+                    Directory.Delete(wsDir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            string clashDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-ws-clash-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(clashDir);
+            try
+            {
+                string other = Path.Combine(clashDir, "Other.cs");
+                string mine = Path.Combine(clashDir, "Mine.cs");
+                WriteUtf8Bom(other, "class Other\r\n{\r\n    public void Run()\r\n    {\r\n    }\r\n}\r\n");
+                WriteUtf8Bom(mine, "class Mine\r\n{\r\n    void Run()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                WorkspaceSymbols.Invalidate();
+                TextBuffer clashBuf = new TextBuffer();
+                clashBuf.SetText("class Mine\r\n{\r\n    void Run()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                HighlightSession clashSession = MakeP7Session(LanguageKind.CSharp, clashBuf);
+                int clashLine;
+                int clashCol;
+                Check("gd-cs-ws-clash loc", TryNthIdent(clashBuf, "Run", 2, out clashLine, out clashCol));
+                DeclaredSymbol clashSym;
+                bool clashHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, clashBuf, clashSession, mine, clashDir, clashLine, clashCol, out clashSym);
+                Check("gd-cs-ws-clash", clashHit && clashSym != null && clashSym.Kind == SymbolKind.Method && clashSym.Name == "Run" && clashSym.ContainingType == "Other" && ContainsPath(new string[] { clashSym.FilePath }, other));
+            }
+            finally
+            {
+                WorkspaceSymbols.Invalidate();
+                try
+                {
+                    Directory.Delete(clashDir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            string genCtorSrc = "class Foo<T>\r\n{\r\n    public Foo()\r\n    {\r\n    }\r\n    void M()\r\n    {\r\n        new Foo<int>();\r\n    }\r\n}\r\n";
+            TextBuffer genCtorBuf = new TextBuffer();
+            genCtorBuf.SetText(genCtorSrc);
+            HighlightSession genCtorSession = MakeP7Session(LanguageKind.CSharp, genCtorBuf);
+            int genCtorLine;
+            int genCtorCol;
+            Check("gd-generic-new loc", TryNthIdent(genCtorBuf, "Foo", 3, out genCtorLine, out genCtorCol));
+            DeclaredSymbol genCtorSym;
+            bool genCtorHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, genCtorBuf, genCtorSession, "C:\\tmp\\Foo.cs", null, genCtorLine, genCtorCol, out genCtorSym);
+            Check("gd-generic-new", genCtorHit && genCtorSym != null && genCtorSym.Kind == SymbolKind.Constructor);
+
+            string overlayDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-overlay-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(overlayDir);
+            try
+            {
+                string other = Path.Combine(overlayDir, "Other.cs");
+                string mine = Path.Combine(overlayDir, "Mine.cs");
+                WriteUtf8Bom(other, "class Other\r\n{\r\n}\r\n");
+                WriteUtf8Bom(mine, "class Mine\r\n{\r\n    void M()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                WorkspaceSymbols.Invalidate();
+                TextBuffer otherOpen = new TextBuffer();
+                otherOpen.SetText("class Other\r\n{\r\n    public void Run()\r\n    {\r\n    }\r\n}\r\n");
+                TextBuffer overlayMine = new TextBuffer();
+                overlayMine.SetText("class Mine\r\n{\r\n    void M()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                Dictionary<string, TextBuffer> open = new Dictionary<string, TextBuffer>(StringComparer.OrdinalIgnoreCase);
+                open.Add(other, otherOpen);
+                HighlightSession overlaySession = MakeP7Session(LanguageKind.CSharp, overlayMine);
+                int overlayLine;
+                int overlayCol;
+                Check("gd-cs-overlay loc", TryNthIdent(overlayMine, "Run", 1, out overlayLine, out overlayCol));
+                DeclaredSymbol overlaySym;
+                bool overlayHit = DefinitionResolver.TryResolve(LanguageKind.CSharp, overlayMine, overlaySession, mine, overlayDir, overlayLine, overlayCol, open, out overlaySym);
+                Check("gd-cs-overlay", overlayHit && overlaySym != null && overlaySym.Kind == SymbolKind.Method && overlaySym.Name == "Run" && overlaySym.ContainingType == "Other");
+            }
+            finally
+            {
+                WorkspaceSymbols.Invalidate();
+                try
+                {
+                    Directory.Delete(overlayDir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunHoverText()
+        {
+            string framed = "//------------------------\r\n//summary : hi\r\n//args    :\r\n//returns :\r\n//------------------------\r\nvoid Foo()\r\n{\r\n}\r\n";
+            TextBuffer buf = new TextBuffer();
+            buf.SetText(framed);
+            HighlightSession session = MakeP7Session(LanguageKind.CSharp, buf);
+            int line;
+            int col;
+            Check("hov-frame loc", TryNthIdent(buf, "Foo", 1, out line, out col));
+            string text;
+            bool ok = HoverText.TryGet(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", null, line, col, out text);
+            Check("hov-frame", ok && text != null && text.IndexOf("summary", StringComparison.Ordinal) >= 0 && text.IndexOf("hi", StringComparison.Ordinal) >= 0);
+
+            string slash = "/// <summary>\r\n/// Hello hover\r\n/// </summary>\r\nvoid Bar()\r\n{\r\n}\r\n";
+            buf.SetText(slash);
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("hov-slash loc", TryNthIdent(buf, "Bar", 1, out line, out col));
+            ok = HoverText.TryGet(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", null, line, col, out text);
+            Check("hov-slash", ok && text != null && text.IndexOf("Hello hover", StringComparison.Ordinal) >= 0 && text.IndexOf("<summary>", StringComparison.Ordinal) < 0);
+
+            buf.SetText("class C\r\n{\r\n    void Bare()\r\n    {\r\n    }\r\n}\r\n");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("hov-sig loc", TryNthIdent(buf, "Bare", 1, out line, out col));
+            ok = HoverText.TryGet(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", null, line, col, out text);
+            Check("hov-sig-no-xml", ok && text != null && text.IndexOf("Bare", StringComparison.Ordinal) >= 0);
+
+            string ctorHov = "/// <summary>\r\n/// class docs\r\n/// </summary>\r\nclass Foo\r\n{\r\n    /// <summary>\r\n    /// ctor docs\r\n    /// </summary>\r\n    public Foo()\r\n    {\r\n    }\r\n}\r\n";
+            buf.SetText(ctorHov);
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("hov-class loc", TryNthIdent(buf, "Foo", 1, out line, out col));
+            ok = HoverText.TryGet(LanguageKind.CSharp, buf, session, "C:\\tmp\\Foo.cs", null, line, col, out text);
+            Check("hov-class-docs", ok && text != null && text.IndexOf("class docs", StringComparison.Ordinal) >= 0 && text.IndexOf("ctor docs", StringComparison.Ordinal) < 0);
+            Check("hov-ctor loc", TryNthIdent(buf, "Foo", 2, out line, out col));
+            ok = HoverText.TryGet(LanguageKind.CSharp, buf, session, "C:\\tmp\\Foo.cs", null, line, col, out text);
+            Check("hov-ctor-docs", ok && text != null && text.IndexOf("ctor docs", StringComparison.Ordinal) >= 0 && text.IndexOf("class docs", StringComparison.Ordinal) < 0);
+
+            string hovClashDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-hov-clash-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(hovClashDir);
+            try
+            {
+                string other = Path.Combine(hovClashDir, "Other.cs");
+                string mine = Path.Combine(hovClashDir, "Mine.cs");
+                WriteUtf8Bom(other, "class Other\r\n{\r\n    /// <summary>\r\n    /// other run\r\n    /// </summary>\r\n    public void Run()\r\n    {\r\n    }\r\n}\r\n");
+                WriteUtf8Bom(mine, "class Mine\r\n{\r\n    /// <summary>\r\n    /// mine run\r\n    /// </summary>\r\n    void Run()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                WorkspaceSymbols.Invalidate();
+                TextBuffer clashBuf = new TextBuffer();
+                clashBuf.SetText("class Mine\r\n{\r\n    /// <summary>\r\n    /// mine run\r\n    /// </summary>\r\n    void Run()\r\n    {\r\n        Other.Run();\r\n    }\r\n}\r\n");
+                HighlightSession clashSession = MakeP7Session(LanguageKind.CSharp, clashBuf);
+                Check("hov-cs-ws-clash loc", TryNthIdent(clashBuf, "Run", 2, out line, out col));
+                ok = HoverText.TryGet(LanguageKind.CSharp, clashBuf, clashSession, mine, hovClashDir, line, col, out text);
+                Check("hov-cs-ws-clash", ok && text != null && text.IndexOf("other run", StringComparison.Ordinal) >= 0 && text.IndexOf("mine run", StringComparison.Ordinal) < 0);
+            }
+            finally
+            {
+                WorkspaceSymbols.Invalidate();
+                try
+                {
+                    Directory.Delete(hovClashDir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            StringBuilder longSb = new StringBuilder();
+            longSb.Append("/// <summary>\r\n/// ");
+            int li = 0;
+            while (li < 80)
+            {
+                longSb.Append("word");
+                longSb.Append(li.ToString());
+                longSb.Append(" ");
+                li++;
+            }
+
+            longSb.Append("\r\n/// </summary>\r\nvoid LongDoc()\r\n{\r\n}\r\n");
+            buf.SetText(longSb.ToString());
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("hov-long loc", TryNthIdent(buf, "LongDoc", 1, out line, out col));
+            ok = HoverText.TryGet(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", null, line, col, out text);
+            Check("hov-long-full", ok && text != null && text.IndexOf("word0", StringComparison.Ordinal) >= 0 && text.IndexOf("word79", StringComparison.Ordinal) >= 0);
+
+            using (Bitmap bmp = new Bitmap(8, 8))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    using (Font half = new Font("Consolas", 12f, GraphicsUnit.Pixel))
+                    {
+                        using (Font full = new Font("Yu Gothic", 12f, GraphicsUnit.Pixel))
+                        {
+                            string wrappedSrc = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+                            string[] wrapped = DualFontPainter.Wrap(g, wrappedSrc, half, full, 80f, null);
+                            Check("hov-wrap-lines", wrapped != null && wrapped.Length >= 2);
+                            StringBuilder joined = new StringBuilder();
+                            int w = 0;
+                            while (w < wrapped.Length)
+                            {
+                                joined.Append(wrapped[w]);
+                                w++;
+                            }
+
+                            Check("hov-wrap-keep", joined.ToString().Replace(" ", "") == wrappedSrc);
+                        }
+                    }
+                }
+            }
+
+            string missingDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-xml-missing-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(missingDir);
+            string brokenDir = Path.Combine(Path.GetTempPath(), "WindowsIDE-p7b-xml-broken-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(brokenDir);
+            try
+            {
+                File.WriteAllText(Path.Combine(brokenDir, "mscorlib.xml"), "<not-xml", Encoding.UTF8);
+                string missingText;
+                bool missingThrew = false;
+                try
+                {
+                    BclXmlDocs.TryGetTypeSummaryFromDirectory(missingDir, "System.String", out missingText);
+                }
+                catch (Exception)
+                {
+                    missingThrew = true;
+                }
+
+                string brokenText;
+                bool brokenThrew = false;
+                try
+                {
+                    BclXmlDocs.TryGetTypeSummaryFromDirectory(brokenDir, "System.String", out brokenText);
+                }
+                catch (Exception)
+                {
+                    brokenThrew = true;
+                }
+
+                Check("hov-bcl-missing", !missingThrew && !brokenThrew);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(missingDir, true);
+                }
+                catch (IOException)
+                {
+                }
+
+                try
+                {
+                    Directory.Delete(brokenDir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunDocComment()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("void Foo()\r\n{\r\n}\r\n");
+            HighlightSession session = MakeP7Session(LanguageKind.CSharp, buf);
+            DocInsertPlan plan;
+            bool built = DocCommentRules.TryBuildInsert(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", 0, 5, out plan);
+            Check("doc-cs", built && plan != null && !plan.IsDuplicate && plan.Text.IndexOf("//summary", StringComparison.Ordinal) >= 0 && plan.Text.IndexOf("///", StringComparison.Ordinal) < 0);
+
+            string framed = "//------------------------\r\n//summary :\r\n//args    :\r\n//returns :\r\n//------------------------\r\nvoid Foo()\r\n{\r\n}\r\n";
+            buf.SetText(framed);
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            string before = buf.GetText();
+            built = DocCommentRules.TryBuildInsert(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", 5, 5, out plan);
+            Check("doc-dup", built && plan != null && plan.IsDuplicate && buf.GetText() == before);
+
+            buf.SetText("void Foo(int a)\r\n{\r\n}\r\n");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            built = DocCommentRules.TryBuildInsert(LanguageKind.CSharp, buf, session, "C:\\tmp\\C.cs", 0, 5, out plan);
+            Check("doc-args", built && plan != null && !plan.IsDuplicate && plan.Text.IndexOf("args    : a", StringComparison.Ordinal) >= 0);
+
+            buf.SetText("echo hi\r\n");
+            session = MakeP7Session(LanguageKind.Cmd, buf);
+            built = DocCommentRules.TryBuildInsert(LanguageKind.Cmd, buf, session, "C:\\tmp\\a.cmd", 0, 0, out plan);
+            Check("doc-cmd", built && plan != null && !plan.IsDuplicate && plan.Text.IndexOf("rem ", StringComparison.Ordinal) >= 0 && plan.Text.IndexOf("args    :\r\n", StringComparison.Ordinal) >= 0 && plan.Text.IndexOf("returns :\r\n", StringComparison.Ordinal) >= 0);
+
+            buf.SetText("hello\r\n");
+            session = MakeP7Session(LanguageKind.Plain, buf);
+            Check("doc-plain", !DocCommentRules.TryBuildInsert(LanguageKind.Plain, buf, session, "C:\\tmp\\a.txt", 0, 0, out plan));
+        }
+
+        private static void InspectP7BSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string langDir = Path.Combine(repo, "src", "WindowsIDE", "Languages");
+            string[] langFiles = Directory.GetFiles(langDir, "*.cs", SearchOption.AllDirectories);
+            bool uiRef = false;
+            bool formsRef = false;
+            bool summery = false;
+            bool endFor = false;
+            int i = 0;
+            while (i < langFiles.Length)
+            {
+                string src = File.ReadAllText(langFiles[i]);
+                if (src.IndexOf("using WindowsIDE.Ui", StringComparison.Ordinal) >= 0)
+                {
+                    uiRef = true;
+                }
+
+                if (src.IndexOf("using System.Windows.Forms", StringComparison.Ordinal) >= 0)
+                {
+                    formsRef = true;
+                }
+
+                if (src.IndexOf("summery", StringComparison.Ordinal) >= 0)
+                {
+                    summery = true;
+                }
+
+                if (src.IndexOf("End For", StringComparison.Ordinal) >= 0)
+                {
+                    endFor = true;
+                }
+
+                i++;
+            }
+
+            Check("p7b Languages no Ui", !uiRef);
+            Check("p7b Languages no WinForms", !formsRef);
+            Check("p7b Languages no summery", !summery);
+            Check("p7b Languages no End For", !endFor);
+
+            string theme = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Theme.cs"));
+            Check("p7b Theme no Hover color", theme.IndexOf("Hover", StringComparison.Ordinal) < 0);
+
+            string main = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs"));
+            Check("p7b MainForm no F12 ShortcutKeys", main.IndexOf("ShortcutKeys = Keys.F12", StringComparison.Ordinal) < 0);
+            Check("p7b MainForm no summery", main.IndexOf("summery", StringComparison.Ordinal) < 0);
+
+            string hover = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "HoverInfoControl.cs"));
+            Check("p7b no ToolTip control", hover.IndexOf("ToolTip", StringComparison.Ordinal) < 0);
+            Check("p7b HoverInfo no summery", hover.IndexOf("summery", StringComparison.Ordinal) < 0);
+            Check("p7b HoverInfo SW_SHOWNOACTIVATE", hover.IndexOf("SW_SHOWNOACTIVATE", StringComparison.Ordinal) >= 0);
+            Check("p7b HoverInfo ThemedScrollBar", hover.IndexOf("ThemedScrollBar", StringComparison.Ordinal) >= 0);
+
+            Check("p7b MainForm WM_ACTIVATEAPP", main.IndexOf("WM_ACTIVATEAPP", StringComparison.Ordinal) >= 0);
+            Check("p7b MainForm no OnActivated rebuild", main.IndexOf("override void OnActivated", StringComparison.Ordinal) < 0);
+
+            string productRsp = File.ReadAllText(Path.Combine(repo, "build", "windows-ide.rsp"));
+            string testsRsp = File.ReadAllText(Path.Combine(repo, "build", "windows-ide-tests.rsp"));
+            Check("p7b product rsp no extra r", CountRspRefs(productRsp) == 7);
+            Check("p7b tests rsp no extra r", CountRspRefs(testsRsp) == 7);
+        }
+
+        /// <summary>
+        /// 製品ビルドの BCL ゲートがパッチ FileVersion ピンではなく 4.8 ファミリー検査であること。
+        /// </summary>
+        private static void InspectCompilePs1()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string compile = File.ReadAllText(Path.Combine(repo, "build", "compile.ps1"));
+            string tests = File.ReadAllText(Path.Combine(repo, "build", "compile-tests.ps1"));
+            string bclPath = Path.Combine(repo, "build", "framework-bcl.ps1");
+            Check("compile.ps1 framework-bcl exists", File.Exists(bclPath));
+            string bcl = "";
+            if (File.Exists(bclPath))
+            {
+                bcl = File.ReadAllText(bclPath);
+            }
+
+            Check("compile.ps1 no 4.8.9337", compile.IndexOf("4.8.9337", StringComparison.Ordinal) < 0);
+            Check("compile.ps1 no 4.8.9340", compile.IndexOf("4.8.9340", StringComparison.Ordinal) < 0);
+            Check("bcl FileMajorPart", compile.IndexOf("FileMajorPart", StringComparison.Ordinal) >= 0 || bcl.IndexOf("FileMajorPart", StringComparison.Ordinal) >= 0);
+            Check("bcl FileMinorPart", compile.IndexOf("FileMinorPart", StringComparison.Ordinal) >= 0 || bcl.IndexOf("FileMinorPart", StringComparison.Ordinal) >= 0);
+            Check("compile.ps1 C# 5 banner", compile.IndexOf("for C# 5", StringComparison.Ordinal) >= 0);
+            Check("compile.ps1 specified csc", compile.IndexOf(@"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe", StringComparison.Ordinal) >= 0);
+            Check("framework-bcl.ps1 no 4.8.9337", bcl.IndexOf("4.8.9337", StringComparison.Ordinal) < 0);
+            Check("framework-bcl.ps1 missing or exit", bcl.IndexOf("BCL missing", StringComparison.Ordinal) >= 0 || bcl.IndexOf("exit 1", StringComparison.Ordinal) >= 0);
+            Check("compile-tests dotsource framework-bcl", tests.IndexOf("framework-bcl.ps1", StringComparison.Ordinal) >= 0 && tests.IndexOf(". ", StringComparison.Ordinal) >= 0);
+        }
+
+        private static int CountRspRefs(string rsp)
+        {
+            int n = 0;
+            string[] lines = rsp.Replace("\r\n", "\n").Split('\n');
+            int i = 0;
+            while (i < lines.Length)
+            {
+                string line = lines[i].Trim();
+                if (line.StartsWith("/r:", StringComparison.Ordinal))
+                {
+                    n++;
+                }
+
+                i++;
+            }
+
+            return n;
+        }
+
+        private static bool TryNthIdent(TextBuffer buffer, string name, int nth, out int line, out int column)
+        {
+            line = 0;
+            column = 0;
+            if (buffer == null || string.IsNullOrEmpty(name) || nth < 1)
+            {
+                return false;
+            }
+
+            int seen = 0;
+            int l = 0;
+            while (l < buffer.LineCount)
+            {
+                string text = buffer.GetLine(l);
+                int from = 0;
+                while (from < text.Length)
+                {
+                    int at = text.IndexOf(name, from, StringComparison.Ordinal);
+                    if (at < 0)
+                    {
+                        break;
+                    }
+
+                    seen++;
+                    if (seen == nth)
+                    {
+                        line = l;
+                        column = at;
+                        return true;
+                    }
+
+                    from = at + name.Length;
+                }
+
+                l++;
+            }
+
+            return false;
         }
 
         private static HighlightSession MakeP7Session(LanguageKind language, TextBuffer buf)

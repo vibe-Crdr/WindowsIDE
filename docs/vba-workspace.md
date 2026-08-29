@@ -115,7 +115,7 @@ IDE プロセスは STA。Excel ダイアログをユーザーの前に出すと
 
 ## フェーズ P7
 
-波 A（終端語・CASE）は着手する。Compile（F-VBA-BLD）は今は実装しない。定義へ移動とホバーはディスク上の宣言と直前コメント（F-DOC 枠を含む）を見る。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
+波 A（終端語・CASE）は完了。F-GD / F-HOV はディスク上の宣言と、解決できた定義のシグネチャおよび直前コメント（F-DOC 枠を含む）を見る。Compile（F-VBA-BLD）は今は実装しない。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
 
 診断 Compile は F-VBA-BLD（今は実装しない）。プッシュ後に Excel VBA コンパイラを使う。Run は明示のまま。ライブは既に開いているマップ済みブックだけ（提案 P25 は確認待ち）。Excel 未起動のライブは走らない。
 

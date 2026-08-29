@@ -50,11 +50,11 @@ flowchart LR
 | 名前空間 | 責務 |
 | --- | --- |
 | `WindowsIDE` | `Program.Main`、起動引数（`StartupArgs`）、未処理例外 |
-| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成インライン）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、ホバーの見た目（既存色。フェーズ P7）、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
+| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、HoverInfoControl（F-HOV。既存色。`SW_SHOWNOACTIVATE` / `WS_EX_NOACTIVATE`。折返しと ThemedScrollBar）、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成インライン）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
-| `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）、対括弧の FillRectangle（F-BR。Selection / Error）、自動閉じと F-SIND / VBA 終端の挿入。将来: インデント線（F-IG。LineNumber。TextBodyClip 内。今は実装しない）、波線描画、F-DOC の挿入、ホバー枠のホスト、キー記録（P7-B/C・P8。今は実装しない） |
+| `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）、対括弧の FillRectangle（F-BR。Selection / Error）、自動閉じと F-SIND / VBA 終端の挿入、F-DOC の挿入、ホバー枠のホスト。将来: インデント線（F-IG。LineNumber。TextBodyClip 内。今は実装しない）、波線描画、キー記録（P7-C・P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML、WorkspaceCreateRules（WinForms 非依存の新規作成規則） |
-| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード、対括弧照合（`BraceMatch`）、自動閉じ規則（`AutoCloseRules`）、F-SIND デルタ（`SmartIndentRules`）、VBA ブロック終端（`VbaBlockRules`）、F-VBA-CASE（`VbaKeywordCase`）。Theme / WinForms は参照しない。将来: `VbNetLexer`（P9。今は実装しない）、波線位置、F-DOC 規則、位置付きシンボル、F-HOV 抽出、PS `ParseInput` エラー位置、`MarkdownLexer`（P7-B/C・P8。今は実装しない） |
+| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名。宣言は `CSharpSemantic.Collect`）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード、対括弧照合（`BraceMatch`）、自動閉じ規則（`AutoCloseRules`）、F-SIND デルタ（`SmartIndentRules`）、VBA ブロック終端（`VbaBlockRules`）、F-VBA-CASE（`VbaKeywordCase`）、位置付きシンボル（`DeclaredSymbol` / `CSharpSymbols` / `WorkspaceSymbols` / `DefinitionResolver`）、F-DOC 規則（`DocCommentRules`）、F-HOV 抽出（`HoverText` / `BclXmlDocs`。シグネチャ常時）。Theme / WinForms は参照しない。将来: `VbNetLexer`（P9。今は実装しない）、波線位置、PS `ParseInput` エラー位置、`MarkdownLexer`（P8。今は実装しない） |
 | `WindowsIDE.Build` | 手動 csc（指定 Framework パス、6 DLL、rsp、`CscRunner`、診断パース）。生成 EXE は TEMP に出す。`Process.Start` しない。起動は持たない。VBA Compile は置かない。将来の常時コンパイル（デバウンス、前回 csc の Kill、一時出力）もここ。将来の手動 vbc（`VbcRunner`。F-VB-BLD。P9。今は実装しない）もここ。csc に `.vb` を渡さない |
 | `WindowsIDE.Debug` | セッション、ブレーク、出力 |
 | `WindowsIDE.Host.PowerShell` | P1 は `powershell.exe` 5.1 子プロセスでユーザー `.ps1` を実行する。同一プロセス Runspace は P3 F-DBG-PS の余地。波線のために Runspace を増やさない。Parse は Languages |

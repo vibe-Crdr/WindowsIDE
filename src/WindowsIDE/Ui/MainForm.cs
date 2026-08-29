@@ -66,6 +66,9 @@ namespace WindowsIDE.Ui
         private bool activatedRebuildQueued;
         private bool activatedRebuildMouseDefer;
         private bool activatedRebuildIdleHooked;
+        private HoverInfoControl hoverInfo;
+        private bool ctrlKPending;
+        private DateTime ctrlKAt;
 
         /// <summary>
         /// フォント読み込み結果を受け取ってシェルを組む。末尾で起動引数を開く。
@@ -134,14 +137,20 @@ namespace WindowsIDE.Ui
             this.RecreateChromeFonts();
         }
 
-        /// <summary>フォルダ再読込（フォーカス復帰）。クリックより後に遅延する。</summary>
-        protected override void OnActivated(EventArgs e)
+        private const int WM_ACTIVATEAPP = 0x001C;
+
+        /// <summary>他プロセスから戻ったときだけフォルダ再読込。自前ホバーでは走らない。</summary>
+        protected override void WndProc(ref Message m)
         {
-            base.OnActivated(e);
-            if (this.workspace != null && this.tree != null)
+            if (m.Msg == WM_ACTIVATEAPP && m.WParam != IntPtr.Zero)
             {
-                this.QueueActivatedRebuild();
+                if (this.workspace != null && this.tree != null)
+                {
+                    this.QueueActivatedRebuild();
+                }
             }
+
+            base.WndProc(ref m);
         }
 
         /// <summary>破棄後に遅延 Rebuild が走らないよう Idle を外す。</summary>
@@ -312,7 +321,11 @@ namespace WindowsIDE.Ui
                     || keyData == Keys.F8
                     || keyData == (Keys.Control | Keys.Oemtilde)
                     || keyData == (Keys.Control | Keys.Alt | Keys.P)
-                    || keyData == (Keys.Control | Keys.Alt | Keys.H))
+                    || keyData == (Keys.Control | Keys.Alt | Keys.H)
+                    || keyData == Keys.F12
+                    || keyData == (Keys.Control | Keys.Alt | Keys.D)
+                    || keyData == (Keys.Control | Keys.K)
+                    || keyData == (Keys.Control | Keys.I))
                 {
                     return false;
                 }
@@ -363,6 +376,12 @@ namespace WindowsIDE.Ui
                 }
 
                 this.tree.CancelInlineCreate();
+                return true;
+            }
+
+            if (keyData == Keys.Escape && this.IsHoverVisible())
+            {
+                this.HideHover();
                 return true;
             }
 
@@ -431,10 +450,50 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.X)
                     || keyData == (Keys.Control | Keys.C)
                     || keyData == (Keys.Control | Keys.V)
-                    || keyData == (Keys.Control | Keys.A))
+                    || keyData == (Keys.Control | Keys.A)
+                    || keyData == Keys.F12
+                    || keyData == (Keys.Control | Keys.K)
+                    || keyData == (Keys.Control | Keys.I)
+                    || keyData == (Keys.Control | Keys.Alt | Keys.D))
                 {
                     return false;
                 }
+            }
+
+            if (this.ctrlKPending && keyData != (Keys.Control | Keys.K) && keyData != (Keys.Control | Keys.I))
+            {
+                this.ctrlKPending = false;
+            }
+
+            if (keyData == Keys.F12)
+            {
+                this.OnGotoDefinition(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Alt | Keys.D))
+            {
+                this.OnInsertDocFrame(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.K))
+            {
+                this.ctrlKPending = true;
+                this.ctrlKAt = DateTime.UtcNow;
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.I))
+            {
+                if (this.ctrlKPending && (DateTime.UtcNow - this.ctrlKAt).TotalMilliseconds <= 1000)
+                {
+                    this.ctrlKPending = false;
+                    this.OnQuickInfo(this, EventArgs.Empty);
+                    return true;
+                }
+
+                this.ctrlKPending = false;
             }
 
             if (keyData == (Keys.Control | Keys.Z))
@@ -510,6 +569,10 @@ namespace WindowsIDE.Ui
             edit.DropDownItems.Add(this.CreateItem("置換(&H)", Keys.Control | Keys.H, this.OnReplace));
             edit.DropDownItems.Add(this.CreateFindNavItem("次を検索(&N)", Keys.F3, "F3", this.OnFindNext));
             edit.DropDownItems.Add(this.CreateFindNavItem("前を検索(&B)", Keys.Shift | Keys.F3, "Shift+F3", this.OnFindPrevious));
+            edit.DropDownItems.Add(new ToolStripSeparator());
+            edit.DropDownItems.Add(this.CreateDisplayCommand("定義へ移動(&G)", "F12", this.OnGotoDefinition));
+            edit.DropDownItems.Add(this.CreateDisplayCommand("クイック インフォ(&I)", "Ctrl+K Ctrl+I", this.OnQuickInfo));
+            edit.DropDownItems.Add(this.CreateDisplayCommand("枠コメントを挿入(&D)", "Ctrl+Alt+D", this.OnInsertDocFrame));
 
             ToolStripMenuItem build = this.CreateTop("ビルド(&B)");
             build.DropDownItems.Add(this.CreateBuildItem("ビルド(&B)", this.OnBuild));
@@ -598,6 +661,16 @@ namespace WindowsIDE.Ui
                 item.ShortcutKeyDisplayString = display;
             }
 
+            item.Click += handler;
+            return item;
+        }
+
+        private ToolStripMenuItem CreateDisplayCommand(string text, string display, EventHandler handler)
+        {
+            DualFontMenuItem item = new DualFontMenuItem(text);
+            item.ForeColor = Theme.Foreground;
+            item.BackColor = Theme.Background;
+            item.ShortcutKeyDisplayString = display;
             item.Click += handler;
             return item;
         }
@@ -860,6 +933,8 @@ namespace WindowsIDE.Ui
             this.editor.Dock = DockStyle.Fill;
             this.editor.CaretMoved += this.OnEditorCaret;
             this.editor.DocumentChanged += this.OnEditorChanged;
+            this.editor.HoverIdle += this.OnEditorHoverIdle;
+            this.editor.HoverCancel += this.OnEditorHoverCancel;
 
             editorColumn.Controls.Add(this.editor);
             editorColumn.Controls.Add(this.findBar);
@@ -1047,6 +1122,7 @@ namespace WindowsIDE.Ui
         private void RefreshWorkspaceTypes()
         {
             WorkspaceTypeNames.Invalidate();
+            WorkspaceSymbols.Invalidate();
             if (this.tabs == null)
             {
                 return;
@@ -1065,7 +1141,9 @@ namespace WindowsIDE.Ui
                 return;
             }
 
-            if (!string.Equals(Path.GetExtension(doc.FilePath), ".cs", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(Path.GetExtension(doc.FilePath), ".cs", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(Path.GetExtension(doc.FilePath), ".bas", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(Path.GetExtension(doc.FilePath), ".cls", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -1182,6 +1260,7 @@ namespace WindowsIDE.Ui
                 this.ApplyEditorSettings(this.workspace.Settings.FontSize, this.workspace.Settings.TabSize);
                 this.Text = "WindowsIDE - " + this.workspace.RootPath;
                 WorkspaceTypeNames.Invalidate();
+                WorkspaceSymbols.Invalidate();
                 if (this.bottomPane != null)
                 {
                     this.bottomPane.Terminal.SetWorkspaceRoot(this.workspace.RootPath);
@@ -3298,8 +3377,176 @@ namespace WindowsIDE.Ui
             this.bottomPane.Output.Append(e.Message, true);
         }
 
+        private void OnGotoDefinition(object sender, EventArgs e)
+        {
+            this.HideHover();
+            if (this.editor == null || this.editor.Document == null || this.editor.Document.Buffer == null)
+            {
+                return;
+            }
+
+            Document doc = this.editor.Document;
+            string root = (this.workspace == null) ? null : this.workspace.RootPath;
+            DeclaredSymbol symbol;
+            if (!DefinitionResolver.TryResolve(doc.Language, doc.Buffer, doc.HighlightSession, doc.FilePath, root, doc.CaretLine, doc.CaretColumn, this.CollectOpenBuffers(), out symbol) || symbol == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(symbol.FilePath))
+            {
+                bool same = false;
+                if (!string.IsNullOrEmpty(doc.FilePath))
+                {
+                    try
+                    {
+                        same = string.Equals(Path.GetFullPath(symbol.FilePath), Path.GetFullPath(doc.FilePath), StringComparison.OrdinalIgnoreCase);
+                    }
+                    catch (Exception)
+                    {
+                        same = string.Equals(symbol.FilePath, doc.FilePath, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+
+                if (!same)
+                {
+                    string openError;
+                    if (!this.TryOpenFile(symbol.FilePath, false, out openError))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            if (this.editor == null)
+            {
+                return;
+            }
+
+            BufferPoint start = new BufferPoint(symbol.Line, symbol.Column);
+            BufferPoint end = new BufferPoint(symbol.Line, symbol.Column + symbol.Length);
+            this.editor.SelectRange(start, end);
+            this.editor.Focus();
+        }
+
+        private void OnQuickInfo(object sender, EventArgs e)
+        {
+            if (this.editor == null || this.editor.Document == null)
+            {
+                return;
+            }
+
+            IdentifierHit hit;
+            Point below;
+            Point above;
+            int minX;
+            if (!this.editor.TryGetHoverAnchorAtCaret(out hit, out below, out above, out minX))
+            {
+                this.HideHover();
+                return;
+            }
+
+            this.ShowHoverAt(hit.Line, hit.Column, below, above, minX);
+        }
+
+        private void OnInsertDocFrame(object sender, EventArgs e)
+        {
+            this.HideHover();
+            if (this.editor == null)
+            {
+                return;
+            }
+
+            this.editor.InsertDocFrame();
+            this.editor.Focus();
+        }
+
+        private void OnEditorHoverIdle(object sender, HoverIdleEventArgs e)
+        {
+            if (e == null || e.Hit == null)
+            {
+                this.HideHover();
+                return;
+            }
+
+            this.ShowHoverAt(e.Hit.Line, e.Hit.Column, e.BelowScreen, e.AboveScreen, e.MinScreenX);
+        }
+
+        private void OnEditorHoverCancel(object sender, EventArgs e)
+        {
+            if (this.hoverInfo != null && this.hoverInfo.IsMouseOverPopup)
+            {
+                return;
+            }
+
+            this.HideHover();
+        }
+
+        private void ShowHoverAt(int line, int column, Point below, Point above, int minX)
+        {
+            if (this.editor == null || this.editor.Document == null)
+            {
+                return;
+            }
+
+            Document doc = this.editor.Document;
+            string root = (this.workspace == null) ? null : this.workspace.RootPath;
+            string text;
+            if (!HoverText.TryGet(doc.Language, doc.Buffer, doc.HighlightSession, doc.FilePath, root, line, column, this.CollectOpenBuffers(), out text) || string.IsNullOrEmpty(text))
+            {
+                this.HideHover();
+                return;
+            }
+
+            if (this.hoverInfo == null)
+            {
+                this.hoverInfo = new HoverInfoControl(this.fonts);
+                this.hoverInfo.Owner = this;
+            }
+
+            this.hoverInfo.ShowText(text, doc.Language, below, above, minX);
+        }
+
+        private Dictionary<string, TextBuffer> CollectOpenBuffers()
+        {
+            Dictionary<string, TextBuffer> map = new Dictionary<string, TextBuffer>(StringComparer.OrdinalIgnoreCase);
+            if (this.tabs == null)
+            {
+                return map;
+            }
+
+            int i = 0;
+            while (i < this.tabs.Tabs.Count)
+            {
+                Document d = this.tabs.Tabs[i];
+                i++;
+                if (d == null || string.IsNullOrEmpty(d.FilePath) || d.Buffer == null)
+                {
+                    continue;
+                }
+
+                map[d.FilePath] = d.Buffer;
+            }
+
+            return map;
+        }
+
+        private bool IsHoverVisible()
+        {
+            return this.hoverInfo != null && this.hoverInfo.Visible;
+        }
+
+        private void HideHover()
+        {
+            if (this.hoverInfo != null)
+            {
+                this.hoverInfo.Hide();
+            }
+        }
+
         private void OnEditorCaret(object sender, EventArgs e)
         {
+            this.HideHover();
             this.UpdateStatus();
         }
 
@@ -3347,6 +3594,12 @@ namespace WindowsIDE.Ui
                 if (this.bottomPane != null)
                 {
                     this.bottomPane.Terminal.CloseSession();
+                }
+
+                if (this.hoverInfo != null)
+                {
+                    this.hoverInfo.Dispose();
+                    this.hoverInfo = null;
                 }
 
                 if (this.menu != null)

@@ -251,6 +251,23 @@ namespace WindowsIDE.Languages
             return false;
         }
 
+        /// <summary>
+        /// トークンが識別子の形なら true。Apply は変えない。Keyword でも形だけ見る。
+        /// </summary>
+        /// <param name="language">言語。</param>
+        /// <param name="line">行本文。</param>
+        /// <param name="token">対象。</param>
+        /// <returns>識別子形なら true。</returns>
+        public static bool LooksLikeIdentifier(LanguageKind language, string line, Token token)
+        {
+            if (line == null)
+            {
+                line = "";
+            }
+
+            return IsIdentShape(language, line, token);
+        }
+
         private static bool IsIdentifier(LanguageKind language, string line, Token token)
         {
             return token.Kind == TokenKind.Text && IsIdentShape(language, line, token);

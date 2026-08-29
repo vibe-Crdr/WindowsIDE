@@ -58,6 +58,7 @@ src\WindowsIDE\Languages\VbaSemantic.cs
 src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
 src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
 src\WindowsIDE\Workspace\CsFileEnumerator.cs
+src\WindowsIDE\Workspace\VbaFileEnumerator.cs
 src\WindowsIDE\Build\FrameworkCsc.cs
 src\WindowsIDE\Build\Diagnostic.cs
 src\WindowsIDE\Build\DiagnosticParser.cs
@@ -95,6 +96,16 @@ src\WindowsIDE\Languages\AutoCloseRules.cs
 src\WindowsIDE\Languages\SmartIndentRules.cs
 src\WindowsIDE\Languages\VbaBlockRules.cs
 src\WindowsIDE\Languages\VbaKeywordCase.cs
+src\WindowsIDE\Languages\SymbolKind.cs
+src\WindowsIDE\Languages\DeclaredSymbol.cs
+src\WindowsIDE\Languages\IdentifierHit.cs
+src\WindowsIDE\Languages\IdentifierAtCaret.cs
+src\WindowsIDE\Languages\DefinitionResolver.cs
+src\WindowsIDE\Languages\DocCommentRules.cs
+src\WindowsIDE\Languages\HoverText.cs
+src\WindowsIDE\Languages\WorkspaceSymbols.cs
+src\WindowsIDE\Languages\CSharp\CSharpSymbols.cs
+src\WindowsIDE\Languages\CSharp\BclXmlDocs.cs
 src\WindowsIDE\Workspace\PathGuard.cs
 src\WindowsIDE\Workspace\WorkspaceCreateRules.cs
 src\WindowsIDE\Workspace\WorkspaceSettings.cs

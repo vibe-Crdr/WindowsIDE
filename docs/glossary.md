@@ -18,7 +18,7 @@
 | cmd バッチの UTF-8 BOM | cmd.exe は UTF-8 BOM（EF BB BF）を先頭コマンドの一部として読む。ユーザー `.cmd` / `.bat` は D23 で BOM を書かない。 |
 | 編集言語 | 編集はするが実行・デバッグしない言語。フェーズ P8 の Markdown（`.md`）。 |
 | Framework csc | `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`。Roslyn / VS 付属 csc は使わない。 |
-| 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。今は実装しない。P0–P2 の必須には含めない。 |
+| 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。波 A（F-BR / F-AC / F-SIND / F-VBA-CASE）は着手。波 B/C は今は実装しない。P0–P2 の必須には含めない。 |
 | フェーズ P8 | Markdown 字句とプレビュー、VBAProject 参照、キー記録マクロ。今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
 | 提案 P8 | F-CMP を P5 でキーワードと開いているファイルに限ること。ワークスペース拡張を P5 必須にしない。確定していない。フェーズ P8 ではない。 |
 | VBA Compile | Excel VBA コンパイラによる診断（F-VBA-BLD）。プッシュ後。Run しない。`WindowsIDE.Vba`。csc ではない。 |

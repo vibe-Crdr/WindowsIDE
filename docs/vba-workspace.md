@@ -112,11 +112,11 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 
 IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。診断 Compile も UI/STA。バックグラウンドスレッドで Excel を触らない。
 
-## フェーズ P7（今は実装しない）
+## フェーズ P7
 
-定義へ移動とホバーはディスク上の宣言と直前コメント（F-DOC 枠を含む）を見る。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
+波 A（終端語・CASE）は着手する。Compile（F-VBA-BLD）は今は実装しない。定義へ移動とホバーはディスク上の宣言と直前コメント（F-DOC 枠を含む）を見る。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
 
-診断 Compile は F-VBA-BLD。プッシュ後に Excel VBA コンパイラを使う。Run は明示のまま。ライブは既に開いているマップ済みブックだけ（提案 P25 は確認待ち）。Excel 未起動のライブは走らない。
+診断 Compile は F-VBA-BLD（今は実装しない）。プッシュ後に Excel VBA コンパイラを使う。Run は明示のまま。ライブは既に開いているマップ済みブックだけ（提案 P25 は確認待ち）。Excel 未起動のライブは走らない。
 
 ## フェーズ P8（今は実装しない）
 

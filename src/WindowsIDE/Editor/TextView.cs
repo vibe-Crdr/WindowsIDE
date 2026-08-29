@@ -565,7 +565,7 @@ namespace WindowsIDE.Editor
                 return;
             }
 
-            this.InsertText(e.KeyChar.ToString());
+            this.InsertTypedChar(e.KeyChar);
             e.Handled = true;
         }
 
@@ -761,6 +761,7 @@ namespace WindowsIDE.Editor
                 }
 
                 this.PaintSelection(g, first, last, textArea);
+                this.PaintBraceMatch(g, first, last, textArea);
 
                 using (SolidBrush fg = new SolidBrush(Theme.Foreground))
                 using (SolidBrush keywordBrush = new SolidBrush(Theme.Keyword))
@@ -940,20 +941,147 @@ namespace WindowsIDE.Editor
 
         private void InsertNewlineWithIndent()
         {
-            bool hadSelection = this.document.HasSelection();
-            if (hadSelection)
+            bool opened = false;
+            if (this.document.HasSelection())
             {
                 this.document.Undo.BeginCompound();
+                opened = true;
                 this.DeleteSelectionCore();
+                this.SyncHighlight(this.document.CaretLine);
             }
 
-            string line = this.document.Buffer.GetLine(this.document.CaretLine);
-            string prefix = IndentRules.LeadingWhitespace(line);
-            this.InsertText("\n" + prefix);
-            if (hadSelection)
+            int line = this.document.CaretLine;
+            int col = this.document.CaretColumn;
+            LanguageKind language = this.document.Language;
+            HighlightSession session = this.document.HighlightSession;
+            TextBuffer buffer = this.document.Buffer;
+            int startCol;
+            string canonical;
+            if (VbaKeywordCase.TryCanonicalBeforeSeparator(language, buffer, session, line, col, '\n', out startCol, out canonical))
+            {
+                if (!opened)
+                {
+                    this.document.Undo.BeginCompound();
+                    opened = true;
+                }
+
+                this.ReplaceRange(line, startCol, col, canonical);
+                this.SyncHighlight(line);
+                line = this.document.CaretLine;
+                col = this.document.CaretColumn;
+            }
+
+            int tabSize = this.EffectiveTabSize();
+            string current = buffer.GetLine(line);
+            string prefix = IndentRules.LeadingWhitespace(current);
+            SmartIndentPlan plan = SmartIndentRules.Plan(language, buffer, session, line, col, tabSize);
+            string extra = new string(' ', tabSize);
+            string text = "\n" + prefix;
+            bool middleCaret = false;
+            if (plan.Kind == SmartIndentKind.Increase)
+            {
+                text = "\n" + prefix + extra;
+            }
+            else if (plan.Kind == SmartIndentKind.SplitPair)
+            {
+                text = "\n" + prefix + extra + "\n" + prefix;
+                middleCaret = true;
+            }
+            else if (plan.Kind == SmartIndentKind.InsertBlockClose)
+            {
+                string close = plan.CloseText == null ? "" : plan.CloseText;
+                text = "\n" + prefix + extra + "\n" + prefix + close;
+                middleCaret = true;
+            }
+
+            int originLine = this.document.CaretLine;
+            this.ApplyInsertAtCaret(text);
+            if (middleCaret)
+            {
+                this.document.CaretLine = originLine + 1;
+                this.document.CaretColumn = prefix.Length + extra.Length;
+                this.document.CollapseSelection();
+                this.EnsureCaretVisible();
+                this.Invalidate();
+            }
+
+            if (opened)
             {
                 this.document.Undo.EndCompound();
             }
+        }
+
+        private void InsertTypedChar(char ch)
+        {
+            bool opened = false;
+            if (this.document.HasSelection())
+            {
+                this.document.Undo.BeginCompound();
+                opened = true;
+                this.DeleteSelectionCore();
+                this.SyncHighlight(this.document.CaretLine);
+            }
+
+            int line = this.document.CaretLine;
+            int col = this.document.CaretColumn;
+            LanguageKind language = this.document.Language;
+            HighlightSession session = this.document.HighlightSession;
+            TextBuffer buffer = this.document.Buffer;
+            int startCol;
+            string canonical;
+            if (VbaKeywordCase.TryCanonicalBeforeSeparator(language, buffer, session, line, col, ch, out startCol, out canonical))
+            {
+                if (!opened)
+                {
+                    this.document.Undo.BeginCompound();
+                    opened = true;
+                }
+
+                this.ReplaceRange(line, startCol, col, canonical);
+                this.SyncHighlight(line);
+                line = this.document.CaretLine;
+                col = this.document.CaretColumn;
+            }
+
+            char closer;
+            bool autoClose = AutoCloseRules.ShouldInsertCloser(language, buffer, session, line, col, ch, out closer);
+            string insert = ch.ToString();
+            if (autoClose)
+            {
+                insert = ch.ToString() + closer.ToString();
+                if (!opened)
+                {
+                    this.document.Undo.BeginCompound();
+                    opened = true;
+                }
+            }
+
+            this.ApplyInsertAtCaret(insert);
+            if (autoClose && this.document.CaretColumn > 0)
+            {
+                this.document.CaretColumn = this.document.CaretColumn - 1;
+                this.document.CollapseSelection();
+                this.EnsureCaretVisible();
+                this.Invalidate();
+            }
+
+            if (opened)
+            {
+                this.document.Undo.EndCompound();
+            }
+        }
+
+        private void ReplaceRange(int line, int startCol, int endCol, string text)
+        {
+            BufferPoint a = new BufferPoint(line, startCol);
+            BufferPoint b = new BufferPoint(line, endCol);
+            string deleted = this.document.Buffer.Delete(a, b);
+            this.document.Undo.RecordDelete(line, startCol, deleted);
+            BufferPoint end = this.document.Buffer.Insert(line, startCol, text);
+            this.document.Undo.RecordInsert(line, startCol, text);
+            this.document.CaretLine = end.Line;
+            this.document.CaretColumn = end.Column;
+            this.document.CollapseSelection();
         }
 
         private void UnindentCurrentLine()
@@ -1071,27 +1199,32 @@ namespace WindowsIDE.Editor
                 return;
             }
 
-            int editLine = this.document.CaretLine;
             bool compound = this.document.HasSelection();
             if (compound)
             {
-                BufferPoint selStart;
-                BufferPoint selEnd;
-                this.document.GetSelection(out selStart, out selEnd);
-                editLine = selStart.Line;
                 this.document.Undo.BeginCompound();
                 this.DeleteSelectionCore();
             }
 
-            int line = this.document.CaretLine;
-            int col = this.document.CaretColumn;
-            BufferPoint end = this.document.Buffer.Insert(line, col, text);
-            this.document.Undo.RecordInsert(line, col, text);
+            this.ApplyInsertAtCaret(text);
             if (compound)
             {
                 this.document.Undo.EndCompound();
             }
+        }
 
+        private void ApplyInsertAtCaret(string text)
+        {
+            if (this.document == null || text == null || text.Length == 0)
+            {
+                return;
+            }
+
+            int editLine = this.document.CaretLine;
+            int line = this.document.CaretLine;
+            int col = this.document.CaretColumn;
+            BufferPoint end = this.document.Buffer.Insert(line, col, text);
+            this.document.Undo.RecordInsert(line, col, text);
             this.document.CaretLine = end.Line;
             this.document.CaretColumn = end.Column;
             this.document.CollapseSelection();
@@ -1679,6 +1812,59 @@ namespace WindowsIDE.Editor
             }
 
             return x;
+        }
+
+        private void PaintBraceMatch(Graphics g, int first, int last, Rectangle textArea)
+        {
+            if (this.document == null)
+            {
+                return;
+            }
+
+            BraceMatchResult hit = BraceMatch.Find(
+                this.document.Language,
+                this.document.Buffer,
+                this.document.HighlightSession,
+                this.document.CaretLine,
+                this.document.CaretColumn);
+            if (!hit.Found)
+            {
+                return;
+            }
+
+            Color color = hit.Matched ? Theme.Selection : Theme.Error;
+            using (SolidBrush brush = new SolidBrush(color))
+            {
+                this.FillBraceCell(g, brush, hit.AnchorLine, hit.AnchorColumn, first, last);
+                if (hit.PairLine >= 0)
+                {
+                    this.FillBraceCell(g, brush, hit.PairLine, hit.PairColumn, first, last);
+                }
+            }
+        }
+
+        private void FillBraceCell(Graphics g, Brush brush, int line, int column, int first, int last)
+        {
+            if (line < first || line > last || line < 0 || line >= this.document.Buffer.LineCount)
+            {
+                return;
+            }
+
+            string text = this.document.Buffer.GetLine(line);
+            if (column < 0 || column >= text.Length)
+            {
+                return;
+            }
+
+            float x0 = this.ColumnToX(line, column) - this.hScroll.Value;
+            float x1 = this.ColumnToX(line, column + 1) - this.hScroll.Value;
+            if (x1 <= x0)
+            {
+                x1 = x0 + 4f;
+            }
+
+            int y = (line - first) * this.lineHeight;
+            g.FillRectangle(brush, this.gutterWidth + this.GetTextInset() + x0, y, x1 - x0, this.lineHeight);
         }
 
         private void PaintSelection(Graphics g, int first, int last, Rectangle textArea)

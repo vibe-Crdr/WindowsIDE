@@ -79,6 +79,12 @@ src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
 src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
+src\WindowsIDE\Languages\BracePairs.cs
+src\WindowsIDE\Languages\BraceMatch.cs
+src\WindowsIDE\Languages\AutoCloseRules.cs
+src\WindowsIDE\Languages\SmartIndentRules.cs
+src\WindowsIDE\Languages\VbaBlockRules.cs
+src\WindowsIDE\Languages\VbaKeywordCase.cs
 src\WindowsIDE\Workspace\CsFileEnumerator.cs
 src\WindowsIDE\Workspace\WorkspaceFolder.cs
 src\WindowsIDE\Workspace\PathGuard.cs

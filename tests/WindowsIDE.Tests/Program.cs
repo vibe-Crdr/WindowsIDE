@@ -83,6 +83,12 @@ namespace WindowsIDE.Tests
             RunLexers();
             RunCSharpBind();
             RunHighlightSession();
+            RunBraceMatch();
+            RunAutoClose();
+            RunSmartIndent();
+            RunVbaBlock();
+            RunVbaKeywordCase();
+            InspectP7ASource();
             RunDiagnosticParser();
             RunCsFileEnumerator();
             RunCompileUnit();
@@ -1260,6 +1266,352 @@ namespace WindowsIDE.Tests
                 catch (IOException)
                 {
                 }
+            }
+        }
+
+        private static void RunBraceMatch()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("foo(bar)");
+            HighlightSession session = MakeP7Session(LanguageKind.CSharp, buf);
+            BraceMatchResult hit = BraceMatch.Find(LanguageKind.CSharp, buf, session, 0, 7);
+            Check("br foo(bar|) found", hit.Found && hit.Matched);
+            Check("br foo(bar|) anchor", hit.Found && hit.AnchorLine == 0 && hit.AnchorColumn == 7);
+            Check("br foo(bar|) pair", hit.Found && hit.PairLine == 0 && hit.PairColumn == 3);
+
+            buf.SetText("\"( )\"");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            hit = BraceMatch.Find(LanguageKind.CSharp, buf, session, 0, 2);
+            Check("br string no match", !hit.Found);
+
+            buf.SetText("// (");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            hit = BraceMatch.Find(LanguageKind.CSharp, buf, session, 0, 4);
+            Check("br comment no match", !hit.Found);
+
+            buf.SetText("(]");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            hit = BraceMatch.Find(LanguageKind.CSharp, buf, session, 0, 1);
+            Check("br mismatch found", hit.Found && !hit.Matched);
+            Check("br mismatch pair", hit.Found && hit.PairLine == 0 && hit.PairColumn == 1);
+
+            buf.SetText("a[0]");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            hit = BraceMatch.Find(LanguageKind.Vba, buf, session, 0, 2);
+            Check("br vba [] not brace", !hit.Found);
+
+            buf.SetText("foo()");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            hit = BraceMatch.Find(LanguageKind.Vba, buf, session, 0, 5);
+            Check("br vba () match", hit.Found && hit.Matched);
+
+            buf.SetText("{ }");
+            session = MakeP7Session(LanguageKind.Cmd, buf);
+            hit = BraceMatch.Find(LanguageKind.Cmd, buf, session, 0, 1);
+            Check("br cmd empty", !hit.Found);
+
+            buf.SetText("{ }");
+            session = MakeP7Session(LanguageKind.PowerShell, buf);
+            hit = BraceMatch.Find(LanguageKind.PowerShell, buf, session, 0, 1);
+            Check("br ps {} match", hit.Found && hit.Matched);
+        }
+
+        private static void RunAutoClose()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("");
+            HighlightSession session = MakeP7Session(LanguageKind.CSharp, buf);
+            char closer;
+            bool insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 0, '{', out closer);
+            Check("ac empty {", insert && closer == '}');
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 0, '(', out closer);
+            Check("ac empty (", insert && closer == ')');
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 0, '[', out closer);
+            Check("ac empty [", insert && closer == ']');
+
+            buf.SetText("");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.Vba, buf, session, 0, 0, '(', out closer);
+            Check("ac vba no paren", !insert);
+
+            buf.SetText("}");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 0, '{', out closer);
+            Check("ac next } no double", !insert);
+
+            buf.SetText("{  }");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 2, '{', out closer);
+            Check("ac already pair { only", !insert);
+
+            buf.SetText("\"\"");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 1, '{', out closer);
+            Check("ac string no close", !insert);
+
+            buf.SetText("");
+            session = MakeP7Session(LanguageKind.Cmd, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.Cmd, buf, session, 0, 0, '{', out closer);
+            Check("ac cmd no close", !insert);
+
+            buf.SetText("");
+            session = MakeP7Session(LanguageKind.PowerShell, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.PowerShell, buf, session, 0, 0, '{', out closer);
+            Check("ac ps {}", insert && closer == '}');
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.PowerShell, buf, session, 0, 0, '(', out closer);
+            Check("ac ps (", insert && closer == ')');
+
+            buf.SetText("");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            UndoStack undo = new UndoStack();
+            undo.BeginCompound();
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 0, 0, '{', out closer);
+            string pair = insert ? "{}" : "{";
+            buf.Insert(0, 0, pair);
+            undo.RecordInsert(0, 0, pair);
+            undo.EndCompound();
+            Check("ac compound inserted", buf.GetText() == "{}");
+            undo.Undo(buf);
+            Check("ac compound undo both", buf.GetText() == "");
+        }
+
+        private static void RunSmartIndent()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("    {}");
+            HighlightSession session = MakeP7Session(LanguageKind.CSharp, buf);
+            SmartIndentPlan plan = SmartIndentRules.Plan(LanguageKind.CSharp, buf, session, 0, 5, 4);
+            Check("si split kind", plan.Kind == SmartIndentKind.SplitPair);
+            ApplySmartEnter(LanguageKind.CSharp, buf, session, null, 0, 5, 4);
+            Check("si split mid 8", buf.LineCount == 3 && buf.GetLine(1) == "        ");
+            Check("si split close 4", buf.GetLine(2) == "    }");
+            Check("si split open", buf.GetLine(0) == "    {");
+
+            buf.SetText("\tfoo");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.CSharp, buf, session, 0, 4, 4);
+            Check("si copy only", plan.Kind == SmartIndentKind.CopyOnly);
+            ApplySmartEnter(LanguageKind.CSharp, buf, session, null, 0, 4, 4);
+            Check("si copy tab", buf.LineCount == 2 && buf.GetLine(1) == "\t");
+
+            buf.SetText("    {}");
+            session = MakeP7Session(LanguageKind.PowerShell, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.PowerShell, buf, session, 0, 5, 4);
+            Check("si ps split", plan.Kind == SmartIndentKind.SplitPair);
+
+            buf.SetText("    {");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.CSharp, buf, session, 0, 5, 4);
+            Check("si increase {", plan.Kind == SmartIndentKind.Increase);
+
+            buf.SetText("\tfoo");
+            session = MakeP7Session(LanguageKind.Cmd, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.Cmd, buf, session, 0, 4, 4);
+            Check("si cmd copy", plan.Kind == SmartIndentKind.CopyOnly);
+            ApplySmartEnter(LanguageKind.Cmd, buf, session, null, 0, 4, 4);
+            Check("si cmd find only", buf.LineCount == 2 && buf.GetLine(1) == "\t" && buf.GetLine(0) == "\tfoo");
+        }
+
+        private static void RunVbaBlock()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("For i = 1 To 3");
+            HighlightSession session = MakeP7Session(LanguageKind.Vba, buf);
+            SmartIndentPlan plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 0, buf.GetLine(0).Length, 4);
+            Check("vba for next kind", plan.Kind == SmartIndentKind.InsertBlockClose && plan.CloseText == "Next");
+            Check("vba no End For plan", plan.CloseText != null && plan.CloseText.IndexOf("End For", StringComparison.Ordinal) < 0);
+            UndoStack undo = new UndoStack();
+            ApplySmartEnter(LanguageKind.Vba, buf, session, undo, 0, buf.GetLine(0).Length, 4);
+            string text = buf.GetText().Replace("\r\n", "\n");
+            Check("vba for next text", text.IndexOf("Next", StringComparison.Ordinal) >= 0);
+            Check("vba no End For result", text.IndexOf("End For", StringComparison.Ordinal) < 0);
+            Check("vba for lines", buf.LineCount == 3 && buf.GetLine(1) == "    " && buf.GetLine(2) == "Next");
+            undo.Undo(buf);
+            Check("vba enter next one undo", buf.GetText().Replace("\r\n", "\n") == "For i = 1 To 3");
+
+            buf.SetText("Sub Foo()\nEnd Sub");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 0, buf.GetLine(0).Length, 4);
+            Check("vba existing end sub", plan.Kind == SmartIndentKind.Increase);
+            ApplySmartEnter(LanguageKind.Vba, buf, session, null, 0, buf.GetLine(0).Length, 4);
+            Check("vba no second end sub", CountToken(buf.GetText(), "End Sub") == 1);
+
+            buf.SetText("If x Then y");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 0, buf.GetLine(0).Length, 4);
+            Check("vba one line if", plan.Kind == SmartIndentKind.CopyOnly);
+            ApplySmartEnter(LanguageKind.Vba, buf, session, null, 0, buf.GetLine(0).Length, 4);
+            Check("vba one line no endif", buf.GetText().IndexOf("End If", StringComparison.Ordinal) < 0);
+
+            buf.SetText("If x Then");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 0, buf.GetLine(0).Length, 4);
+            Check("vba block if", plan.Kind == SmartIndentKind.InsertBlockClose && plan.CloseText == "End If");
+
+            buf.SetText("For Each x In xs");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 0, buf.GetLine(0).Length, 4);
+            Check("vba for each next", plan.Kind == SmartIndentKind.InsertBlockClose && plan.CloseText == "Next");
+
+            buf.SetText("For i = 1 To 3\n    For j = 1 To 3\nNext");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            int innerCol = buf.GetLine(1).Length;
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 1, innerCol, 4);
+            Check("vba nested for insert", plan.Kind == SmartIndentKind.InsertBlockClose && plan.CloseText == "Next");
+            ApplySmartEnter(LanguageKind.Vba, buf, session, null, 1, innerCol, 4);
+            Check("vba nested for two next", CountToken(buf.GetText(), "Next") == 2);
+            Check("vba nested for inner prefix", buf.GetLine(3) == "    Next");
+            Check("vba nested for outer next", buf.GetLine(4) == "Next");
+
+            buf.SetText("If a Then\n    If b Then\nEnd If");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            innerCol = buf.GetLine(1).Length;
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 1, innerCol, 4);
+            Check("vba nested if insert", plan.Kind == SmartIndentKind.InsertBlockClose && plan.CloseText == "End If");
+            ApplySmartEnter(LanguageKind.Vba, buf, session, null, 1, innerCol, 4);
+            Check("vba nested if two endif", CountToken(buf.GetText(), "End If") == 2);
+            Check("vba nested if inner prefix", buf.GetLine(3) == "    End If");
+            Check("vba nested if outer endif", buf.GetLine(4) == "End If");
+
+            buf.SetText("For i = 1 To 3\nNext");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            plan = SmartIndentRules.Plan(LanguageKind.Vba, buf, session, 0, buf.GetLine(0).Length, 4);
+            Check("vba outer next no double", plan.Kind == SmartIndentKind.Increase);
+            ApplySmartEnter(LanguageKind.Vba, buf, session, null, 0, buf.GetLine(0).Length, 4);
+            Check("vba outer next stays one", CountToken(buf.GetText(), "Next") == 1);
+        }
+
+        private static void RunVbaKeywordCase()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("dim");
+            HighlightSession session = MakeP7Session(LanguageKind.Vba, buf);
+            int start;
+            string canonical;
+            bool hit = VbaKeywordCase.TryCanonicalBeforeSeparator(LanguageKind.Vba, buf, session, 0, 3, ' ', out start, out canonical);
+            Check("case dim", hit && canonical == "Dim" && start == 0);
+
+            buf.SetText("\"dim\"");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            hit = VbaKeywordCase.TryCanonicalBeforeSeparator(LanguageKind.Vba, buf, session, 0, 4, ' ', out start, out canonical);
+            Check("case string dim", !hit);
+
+            buf.SetText("' dim");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            hit = VbaKeywordCase.TryCanonicalBeforeSeparator(LanguageKind.Vba, buf, session, 0, 5, ' ', out start, out canonical);
+            Check("case comment dim", !hit);
+
+            buf.SetText("foo");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            hit = VbaKeywordCase.TryCanonicalBeforeSeparator(LanguageKind.Vba, buf, session, 0, 3, ' ', out start, out canonical);
+            Check("case foo", !hit);
+
+            string mapped;
+            Check("case TryCanonical dim", VbaKeywords.TryCanonical("dim", out mapped) && mapped == "Dim");
+            Check("case Contains bool", VbaKeywords.Set.Contains("dim"));
+        }
+
+        private static void InspectP7ASource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string view = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Editor", "TextView.cs"));
+            Check("p7a no End For in TextView", view.IndexOf("End For", StringComparison.Ordinal) < 0);
+
+            string langDir = Path.Combine(repo, "src", "WindowsIDE", "Languages");
+            string[] langFiles = Directory.GetFiles(langDir, "*.cs", SearchOption.AllDirectories);
+            bool uiRef = false;
+            bool langEndFor = false;
+            int i = 0;
+            while (i < langFiles.Length)
+            {
+                string src = File.ReadAllText(langFiles[i]);
+                if (src.IndexOf("using WindowsIDE.Ui", StringComparison.Ordinal) >= 0)
+                {
+                    uiRef = true;
+                }
+
+                if (src.IndexOf("End For", StringComparison.Ordinal) >= 0)
+                {
+                    langEndFor = true;
+                }
+
+                i++;
+            }
+
+            Check("p7a Languages no Ui", !uiRef);
+            Check("p7a Languages no End For", !langEndFor);
+
+            string theme = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Theme.cs"));
+            Check("p7a no Theme brace color", theme.IndexOf("Brace", StringComparison.Ordinal) < 0);
+            Check("p7a Theme Selection stays", theme.IndexOf("Selection", StringComparison.Ordinal) >= 0);
+            Check("p7a Theme Error stays", theme.IndexOf("Error", StringComparison.Ordinal) >= 0);
+
+            string indent = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Editor", "IndentRules.cs"));
+            Check("p7a IndentRules no Smart", indent.IndexOf("Smart", StringComparison.Ordinal) < 0);
+        }
+
+        private static HighlightSession MakeP7Session(LanguageKind language, TextBuffer buf)
+        {
+            HighlightSession session = new HighlightSession();
+            session.Reset(language, buf.LineCount);
+            session.SyncAfterEdit(buf, 0);
+            return session;
+        }
+
+        private static void ApplySmartEnter(LanguageKind language, TextBuffer buf, HighlightSession session, UndoStack undo, int line, int column, int tabSize)
+        {
+            string prefix = IndentRules.LeadingWhitespace(buf.GetLine(line));
+            SmartIndentPlan plan = SmartIndentRules.Plan(language, buf, session, line, column, tabSize);
+            if (tabSize < 1)
+            {
+                tabSize = 1;
+            }
+
+            string extra = new string(' ', tabSize);
+            string text = "\n" + prefix;
+            if (plan.Kind == SmartIndentKind.Increase)
+            {
+                text = "\n" + prefix + extra;
+            }
+            else if (plan.Kind == SmartIndentKind.SplitPair)
+            {
+                text = "\n" + prefix + extra + "\n" + prefix;
+            }
+            else if (plan.Kind == SmartIndentKind.InsertBlockClose)
+            {
+                string close = plan.CloseText == null ? "" : plan.CloseText;
+                text = "\n" + prefix + extra + "\n" + prefix + close;
+            }
+
+            buf.Insert(line, column, text);
+            if (undo != null)
+            {
+                undo.RecordInsert(line, column, text);
+            }
+
+            session.Reset(language, buf.LineCount);
+            session.SyncAfterEdit(buf, 0);
+        }
+
+        private static int CountToken(string text, string token)
+        {
+            if (text == null || token == null || token.Length == 0)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            int start = 0;
+            while (true)
+            {
+                int at = text.IndexOf(token, start, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    return count;
+                }
+
+                count++;
+                start = at + token.Length;
             }
         }
 

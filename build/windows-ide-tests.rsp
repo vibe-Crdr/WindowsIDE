@@ -89,6 +89,12 @@ src\WindowsIDE\Vba\VbaSyncService.cs
 src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs
+src\WindowsIDE\Languages\BracePairs.cs
+src\WindowsIDE\Languages\BraceMatch.cs
+src\WindowsIDE\Languages\AutoCloseRules.cs
+src\WindowsIDE\Languages\SmartIndentRules.cs
+src\WindowsIDE\Languages\VbaBlockRules.cs
+src\WindowsIDE\Languages\VbaKeywordCase.cs
 src\WindowsIDE\Workspace\PathGuard.cs
 src\WindowsIDE\Workspace\WorkspaceCreateRules.cs
 src\WindowsIDE\Workspace\WorkspaceSettings.cs

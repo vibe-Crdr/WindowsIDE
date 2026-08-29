@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace WindowsIDE.Languages
 {
@@ -103,5 +104,42 @@ namespace WindowsIDE.Languages
 
         /// <summary>OrdinalIgnoreCase のキーワード集合。</summary>
         public static readonly KeywordSet Set = new KeywordSet(Words, StringComparer.OrdinalIgnoreCase);
+
+        private static readonly Dictionary<string, string> CanonicalMap = BuildCanonicalMap();
+
+        /// <summary>
+        /// Words の綴りを OrdinalIgnoreCase で返す。
+        /// </summary>
+        /// <param name="word">照合する語。</param>
+        /// <param name="canonical">表の綴り。</param>
+        /// <returns>表にあるとき true。</returns>
+        public static bool TryCanonical(string word, out string canonical)
+        {
+            canonical = null;
+            if (word == null)
+            {
+                return false;
+            }
+
+            return CanonicalMap.TryGetValue(word, out canonical);
+        }
+
+        private static Dictionary<string, string> BuildCanonicalMap()
+        {
+            Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            int i = 0;
+            while (i < Words.Length)
+            {
+                string item = Words[i];
+                if (!string.IsNullOrEmpty(item) && !map.ContainsKey(item))
+                {
+                    map.Add(item, item);
+                }
+
+                i++;
+            }
+
+            return map;
+        }
     }
 }

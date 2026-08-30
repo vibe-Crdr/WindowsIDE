@@ -77,7 +77,7 @@
 
 [requirements.md](requirements.md) の **フェーズ P8**（Markdown／VBAProject 参照／マクロ）と、下表の **提案 P8**（F-CMP の P5 必須範囲）も別物である。混同しない。
 
-P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
+P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
 
 | ID | 提案 | 理由 | 代替 |
 | --- | --- | --- | --- |
@@ -98,6 +98,8 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 | P30 | インデント線の XML トグルは今作らない（D25 どおり常時オン） | P4 の workspace.xml 契約を今増やさない | `editor/@renderIndentGuides` |
 | P31 | 空行をまたぐガイド継続は VS Code 風を実装既定にしてよい。確定にはしない | 空行で線が途切れるとブロックが見えにくい | 非空行の先頭空白だけに線を引く |
 | P32 | VB.NET デバッグは独立 ID `F-DBG-VB`（ICorDebug）。F-DBG-CS に相乗りしない。P9 の受け入れにデバッグを入れない。時期は P4 の後 | C# デバッガ実装を VB で壊さない | F-DBG-CS に `.vb` を足す |
+| P33 | ワークスペース内ファイル作成は Ctrl+Alt+N、フォルダ作成は Ctrl+Shift+N。グローバル。`CreateDisplayCommand` + ProcessCmdKey（ShortcutKeys なし）。IME 変換中は奪わない。Ctrl+N 無題は維持。VS Code の Ctrl+Shift+N（New Window）は単一 WinExe（P6）のため使わず、Explorer の新フォルダに合わせる。Ctrl+Shift+F は使わない。確定しない。F-EXP 実装既定。 | D12 近傍かつ無題と衝突しない。フォルダは Explorer と同じ。 | 両方 Ctrl+Alt、ツリーフォーカス時のみ、ShortcutKeys、裸の N |
+| P34 | 編集器（TextView）へフォーカスは Ctrl+1。グローバル。CreateDisplayCommand + ProcessCmdKey（ShortcutKeys なし）。IME 変換中は奪わない。表示メニューはエクスプローラーの直後「編集器」Ctrl+1。左ペイン・下パネルは畳まない。FindBar は閉じない。ワークスペース無しでも可（無題 TextView）。NumPad1 は足さない。Ctrl+E は使わない（F-QO / Ctrl+P エイリアス）。確定しない。F-ED / F-EXP 実装既定。 | D12。VS Code の focusFirstEditorGroup。Ctrl+` の畳みと分離。 | Ctrl+E、Escape、F6、NumPad1、ShortcutKeys |
 
 ## まだ聞かないが後で決める
 

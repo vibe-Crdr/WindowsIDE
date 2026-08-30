@@ -31,8 +31,8 @@ namespace WindowsIDE.Ui
             this.Controls.Add(this.folderGlyph);
 
             this.toolTip = new ToolTip();
-            this.toolTip.SetToolTip(this.fileGlyph, "ファイルを作成");
-            this.toolTip.SetToolTip(this.folderGlyph, "フォルダを作成");
+            this.toolTip.SetToolTip(this.fileGlyph, "ファイルを作成 (Ctrl+Alt+N)");
+            this.toolTip.SetToolTip(this.folderGlyph, "フォルダを作成 (Ctrl+Shift+N)");
             this.ApplyBarHeight();
         }
 

@@ -321,7 +321,10 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.Alt | Keys.D)
                     || keyData == (Keys.Control | Keys.K)
                     || keyData == (Keys.Control | Keys.I)
-                    || keyData == (Keys.Control | Keys.Shift | Keys.E))
+                    || keyData == (Keys.Control | Keys.Shift | Keys.E)
+                    || keyData == (Keys.Control | Keys.D1)
+                    || keyData == (Keys.Control | Keys.Alt | Keys.N)
+                    || keyData == (Keys.Control | Keys.Shift | Keys.N))
                 {
                     return false;
                 }
@@ -401,6 +404,24 @@ namespace WindowsIDE.Ui
             if (keyData == (Keys.Control | Keys.Shift | Keys.E))
             {
                 this.OnFocusExplorer(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D1))
+            {
+                this.OnFocusEditor(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Alt | Keys.N))
+            {
+                this.RunTreeCreate(false);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Shift | Keys.N))
+            {
+                this.RunTreeCreate(true);
                 return true;
             }
 
@@ -550,6 +571,8 @@ namespace WindowsIDE.Ui
             ToolStripMenuItem file = this.CreateTop("ファイル(&F)");
             file.DropDownItems.Add(this.CreateItem("フォルダを開く(&O)", Keys.Control | Keys.O, this.OnOpenFolder));
             file.DropDownItems.Add(this.CreateItem("新規(&N)", Keys.Control | Keys.N, this.OnNew));
+            file.DropDownItems.Add(this.CreateDisplayCommand("ファイルを作成(&I)", "Ctrl+Alt+N", this.OnCreateWorkspaceFile));
+            file.DropDownItems.Add(this.CreateDisplayCommand("フォルダを作成(&D)", "Ctrl+Shift+N", this.OnCreateWorkspaceFolder));
             file.DropDownItems.Add(new ToolStripSeparator());
             file.DropDownItems.Add(this.CreateItem("保存(&S)", Keys.Control | Keys.S, this.OnSave));
             file.DropDownItems.Add(this.CreateItem("名前を付けて保存(&A)", Keys.Control | Keys.Shift | Keys.S, this.OnSaveAs));
@@ -598,6 +621,7 @@ namespace WindowsIDE.Ui
 
             ToolStripMenuItem view = this.CreateTop("表示(&V)");
             view.DropDownItems.Add(this.CreateDisplayCommand("エクスプローラー(&E)", "Ctrl+Shift+E", this.OnFocusExplorer));
+            view.DropDownItems.Add(this.CreateDisplayCommand("編集器(&D)", "Ctrl+1", this.OnFocusEditor));
             view.DropDownItems.Add(new ToolStripSeparator());
             this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
             view.DropDownItems.Add(this.viewTerminalItem);
@@ -1376,6 +1400,18 @@ namespace WindowsIDE.Ui
             }
         }
 
+        /// <summary>ファイルメニュー／ショートカットからワークスペース内ファイルの行内作成を始める。</summary>
+        private void OnCreateWorkspaceFile(object sender, EventArgs e)
+        {
+            this.RunTreeCreate(false);
+        }
+
+        /// <summary>ファイルメニュー／ショートカットからワークスペース内フォルダの行内作成を始める。</summary>
+        private void OnCreateWorkspaceFolder(object sender, EventArgs e)
+        {
+            this.RunTreeCreate(true);
+        }
+
         private void OnTreeCreateFile(object sender, EventArgs e)
         {
             this.BeginInvoke(new MethodInvoker(delegate { this.RunTreeCreate(false); }));
@@ -1387,7 +1423,7 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// 作成バーからファイルまたはフォルダの行内作成を始める。
+        /// 作成バーまたはショートカットからファイルまたはフォルダの行内作成を始める。
         /// </summary>
         /// <param name="isFolder">フォルダなら true。</param>
         private void RunTreeCreate(bool isFolder)
@@ -1499,6 +1535,14 @@ namespace WindowsIDE.Ui
             {
                 this.tree.FocusInlineCreate();
             }
+        }
+
+        /// <summary>
+        /// 編集器へフォーカスする。ワークスペース無しでも可。左ペイン・下パネルは畳まない。FindBar は閉じない。
+        /// </summary>
+        private void OnFocusEditor(object sender, EventArgs e)
+        {
+            this.FocusEditor();
         }
 
         /// <summary>
@@ -3089,7 +3133,7 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// 起動時の初期フォーカスを編集器へ移す。
+        /// 起動時・Ctrl+1・表示メニューのフォーカスを編集器へ移す。
         /// </summary>
         private void FocusEditor()
         {

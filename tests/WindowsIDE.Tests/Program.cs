@@ -726,6 +726,16 @@ namespace WindowsIDE.Tests
                 Check("f-exp explorer nearby no ShortcutKeys", nearby.IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0);
             }
 
+            Check("f-ed ProcessCmdKey Ctrl+1 count", CountToken(main, "Keys.Control | Keys.D1") >= 2);
+            Check("f-ed display Ctrl+1", main.IndexOf("CreateDisplayCommand(\"編集器(&D)\", \"Ctrl+1\"", StringComparison.Ordinal) >= 0);
+            int editorCmdAt = main.IndexOf("CreateDisplayCommand(\"編集器(&D)\", \"Ctrl+1\"", StringComparison.Ordinal);
+            Check("f-ed editor line no ShortcutKeys", LineHasNoShortcutKeys(main, editorCmdAt));
+
+            int editorMenuAt = main.IndexOf("編集器(&D)", StringComparison.Ordinal);
+            Check("f-ed view menu order", explorerAt >= 0 && editorMenuAt > explorerAt && terminalAt > editorMenuAt);
+            Check("f-ed no NumPad1", main.IndexOf("Keys.NumPad1", StringComparison.Ordinal) < 0);
+            Check("f-ed no Ctrl+E", main.IndexOf("keyData == (Keys.Control | Keys.E)", StringComparison.Ordinal) < 0);
+
             Check("f-exp tree F2", tree.IndexOf("Keys.F2", StringComparison.Ordinal) >= 0);
             Check("f-exp tree Delete", tree.IndexOf("Keys.Delete", StringComparison.Ordinal) >= 0);
             Check("f-exp ProcessCmdKey no Delete", main.IndexOf("keyData == Keys.Delete", StringComparison.Ordinal) < 0);
@@ -743,6 +753,31 @@ namespace WindowsIDE.Tests
             Check("f-exp HideSelection false", tree.IndexOf("this.HideSelection = false", StringComparison.Ordinal) >= 0);
             Check("f-exp no TreeNodeStates.Focused", tree.IndexOf("TreeNodeStates.Focused", StringComparison.Ordinal) < 0);
             Check("f-exp theme palette size", CountToken(theme, "readonly Color") == 17);
+            Check("f-exp untitled Ctrl+N remains", main.IndexOf("CreateItem(\"新規(&N)\", Keys.Control | Keys.N", StringComparison.Ordinal) >= 0);
+            Check("f-exp Ctrl+Alt+N count", CountToken(main, "Keys.Control | Keys.Alt | Keys.N") >= 2);
+            Check("f-exp Ctrl+Shift+N count", CountToken(main, "Keys.Control | Keys.Shift | Keys.N") >= 2);
+            Check("f-exp display file create", main.IndexOf("CreateDisplayCommand(\"ファイルを作成(&I)\", \"Ctrl+Alt+N\"", StringComparison.Ordinal) >= 0);
+            Check("f-exp display folder create", main.IndexOf("CreateDisplayCommand(\"フォルダを作成(&D)\", \"Ctrl+Shift+N\"", StringComparison.Ordinal) >= 0);
+
+            int untitledAt = main.IndexOf("新規(&N)", StringComparison.Ordinal);
+            int fileCreateAt = main.IndexOf("ファイルを作成(&I)", StringComparison.Ordinal);
+            int folderCreateAt = main.IndexOf("フォルダを作成(&D)", StringComparison.Ordinal);
+            int saveAt = main.IndexOf("保存(&S)", StringComparison.Ordinal);
+            Check("f-exp create menu order", untitledAt >= 0 && untitledAt < fileCreateAt && fileCreateAt < folderCreateAt && folderCreateAt < saveAt);
+
+            int fileCmdAt = main.IndexOf("CreateDisplayCommand(\"ファイルを作成(&I)\", \"Ctrl+Alt+N\"", StringComparison.Ordinal);
+            int folderCmdAt = main.IndexOf("CreateDisplayCommand(\"フォルダを作成(&D)\", \"Ctrl+Shift+N\"", StringComparison.Ordinal);
+            Check("f-exp file create line no ShortcutKeys", LineHasNoShortcutKeys(main, fileCmdAt));
+            Check("f-exp folder create line no ShortcutKeys", LineHasNoShortcutKeys(main, folderCmdAt));
+
+            int onCreateFileAt = main.IndexOf("private void OnTreeCreateFile(", StringComparison.Ordinal);
+            int onCreateFolderAt = main.IndexOf("private void OnTreeCreateFolder(", StringComparison.Ordinal);
+            Check("f-exp OnTreeCreateFile BeginInvoke", onCreateFileAt >= 0 && onCreateFolderAt > onCreateFileAt && main.Substring(onCreateFileAt, onCreateFolderAt - onCreateFileAt).IndexOf("BeginInvoke", StringComparison.Ordinal) >= 0);
+            Check("f-exp bar file tooltip shortcut", bar.IndexOf("ファイルを作成 (Ctrl+Alt+N)", StringComparison.Ordinal) >= 0);
+            Check("f-exp bar folder tooltip shortcut", bar.IndexOf("フォルダを作成 (Ctrl+Shift+N)", StringComparison.Ordinal) >= 0);
+            Check("f-exp tree no Ctrl+Alt+N", tree.IndexOf("Keys.Control | Keys.Alt | Keys.N", StringComparison.Ordinal) < 0);
+            Check("f-exp tree no Ctrl+Shift+N", tree.IndexOf("Keys.Control | Keys.Shift | Keys.N", StringComparison.Ordinal) < 0);
+            Check("f-exp no Ctrl+Shift+F", main.IndexOf("Keys.Control | Keys.Shift | Keys.F", StringComparison.Ordinal) < 0);
         }
 
         /// <summary>
@@ -820,6 +855,9 @@ namespace WindowsIDE.Tests
                 Check("left pane explorer no MessageBox", explorerBody.IndexOf("MessageBox", StringComparison.Ordinal) < 0);
                 Check("left pane explorer no OpenFolder", explorerBody.IndexOf("OpenFolder", StringComparison.Ordinal) < 0);
             }
+
+            int editorFocusAt = main.IndexOf("private void OnFocusEditor(", StringComparison.Ordinal);
+            Check("left pane OnFocusEditor calls FocusEditor", editorFocusAt >= 0 && explorerAt >= 0 && editorFocusAt > explorerAt && renameAt > editorFocusAt && main.Substring(editorFocusAt, renameAt - editorFocusAt).IndexOf("this.FocusEditor()", StringComparison.Ordinal) >= 0);
         }
 
         /// <summary>
@@ -2568,6 +2606,31 @@ namespace WindowsIDE.Tests
 
             session.Reset(language, buf.LineCount);
             session.SyncAfterEdit(buf, 0);
+        }
+
+        /// <summary>指定位置から行末までの区間に ShortcutKeys が無い。</summary>
+        /// <param name="text">ソース。</param>
+        /// <param name="at">行内の開始位置。負なら失敗。</param>
+        /// <returns>位置が有効かつ ShortcutKeys が無いとき true。</returns>
+        private static bool LineHasNoShortcutKeys(string text, int at)
+        {
+            if (text == null || at < 0 || at >= text.Length)
+            {
+                return false;
+            }
+
+            int lineEnd = text.IndexOf("\r\n", at, StringComparison.Ordinal);
+            if (lineEnd < 0)
+            {
+                lineEnd = text.IndexOf("\n", at, StringComparison.Ordinal);
+            }
+
+            if (lineEnd < 0)
+            {
+                lineEnd = text.Length;
+            }
+
+            return text.Substring(at, lineEnd - at).IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0;
         }
 
         private static int CountToken(string text, string token)

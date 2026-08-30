@@ -35,7 +35,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 - 作業領域の 90% にクランプ（高さ優先）。MinimumSize が作業領域より大きければ作業領域まで落とす
 - 適用後、作業領域で再センタリングする
 
-左ペインは薄い作成バー（Dock.Top）+ ツリー。バーは線画アイコン 2 個のまま（文字ラベルなし。リネーム用グリフは足さない）。DualFont ボタンと ChromeMark の枠ホバーは使わない。字形 16 DIP をヒット 22 DIP 正方形の中央（各辺 3 DIP インセット）へ置く。バー高さ 30 DIP（ヒット 22 + 上下 4）、左寄せは余白 6 DIP・間隔 4 DIP・上下 4 DIP。枠は描かない。ホバーは CurrentLine、線は Theme.Foreground、塗りなし。新しい Theme 色は足さない。下端 1 物理 px Theme.Border。ツリー行内 DualFontField（12 DIP、editor/@fontSize ではない。フォーカス枠は Theme.Selection。FindBar の Theme.Border は変えない）を作成とリネームで共有する。選択行は FileTreeControl.ContainsFocus なら Theme.Selection、さもなくば Theme.CurrentLine（HideSelection=false）。表示メニュー先頭「エクスプローラー」Ctrl+Shift+E（ShortcutKeys は付けず ProcessCmdKey。IME 変換中は奪わない）。F2 と選択済みラベルの遅延クリックでインラインリネーム。Delete で確認後ごみ箱。タブ閉じる印は軸平行のため SmoothingMode を足さない。作成バー線画だけ斜線を含むので OnPaint 中のみ AntiAlias、終了時に戻す。
+左ペインは薄い作成バー（Dock.Top）+ ツリー。バーは線画アイコン 2 個のまま（文字ラベルなし。リネーム用グリフは足さない）。DualFont ボタンと ChromeMark の枠ホバーは使わない。字形 16 DIP をヒット 22 DIP 正方形の中央（各辺 3 DIP インセット）へ置く。バー高さ 30 DIP（ヒット 22 + 上下 4）、左寄せは余白 6 DIP・間隔 4 DIP・上下 4 DIP。枠は描かない。ホバーは CurrentLine、線は Theme.Foreground、塗りなし。新しい Theme 色は足さない。下端 1 物理 px Theme.Border。ツリー行内 DualFontField（12 DIP、editor/@fontSize ではない。フォーカス枠は Theme.Selection。FindBar の Theme.Border は変えない）を作成とリネームで共有する。選択行は FileTreeControl.ContainsFocus なら Theme.Selection、さもなくば Theme.CurrentLine（HideSelection=false）。表示メニュー先頭「エクスプローラー」Ctrl+Shift+E、直後「編集器」Ctrl+1（ShortcutKeys は付けず ProcessCmdKey。IME 変換中は奪わない。左ペイン・下パネルは畳まない）。ファイルメニュー「ファイルを作成」Ctrl+Alt+N、「フォルダを作成」Ctrl+Shift+N を新規の直後（ShortcutKeys なし、ProcessCmdKey、IME 中は奪わない）。作成バーツールチップは「ファイルを作成 (Ctrl+Alt+N)」「フォルダを作成 (Ctrl+Shift+N)」。線画バーは文字ラベルなしのまま。F2 と選択済みラベルの遅延クリックでインラインリネーム。Delete で確認後ごみ箱。タブ閉じる印は軸平行のため SmoothingMode を足さない。作成バー線画だけ斜線を含むので OnPaint 中のみ AntiAlias、終了時に戻す。
 
 ### P1 ハイライト
 

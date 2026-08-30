@@ -172,7 +172,7 @@ COM は STA / UI。VBIDE に診断リストを返す `Compile()` は無い、と
 2. `Application.VBE.CommandBars` から Compile（通例 Control Id **578**、キャプション依存にしない）を `FindControl`。
 3. `Enabled = False` なら直近は成功扱い（問題一覧の VBA 診断をクリア）。
 4. `Enabled = True` なら `Execute`。成功後に再び Enabled を見る。
-5. 失敗時: `ActiveCodePane.GetSelection` と `CodeModule.Parent.Name` を `vba-map` でディスクパスへ。メッセージは COM から取れなければ「VBA のコンパイルに失敗した」でよい。VBE のモーダルに IDE の MessageBox を重ねない。
+5. 失敗時: `ActiveCodePane.GetSelection` と `CodeModule.Parent.Name` を `vba-map` でディスクパスへ。GetSelection は CodeModule 行。マップ後、StripForCodeModule と同じ先頭ヘッダ行数を足してディスク行にする。列はそのまま。読めなければ未変換。メッセージは COM から取れなければ「VBA のコンパイルに失敗した」でよい。VBE のモーダルに IDE の MessageBox を重ねない。
 6. FindControl 失敗・VBE 未初期化: 問題一覧に **取得失敗** を 1 件。VbaLexer の推測エラーで埋めない。VBE をちら見せしてリトライは C。
 
 ### 定義へ移動（F-GD）とホバー（F-HOV）

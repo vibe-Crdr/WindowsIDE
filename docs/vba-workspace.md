@@ -108,7 +108,7 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 - エクスポート: `VBComponent.Export`（TEMP 生バイト、ディスクへはマップ encoding）
 - 取り込み: 既存は CodeModule 置換。新規だけ TEMP 経由 Import。document は Name 変更・Remove・Import しない
 - IDE が起動した Excel を Quit しない。IDE 終了時も Excel を触らない
-- Compile（フェーズ P7）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
+- Compile（フェーズ P7）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。行は Strip と同じヘッダ加算。レキサで埋めない。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
 - References（フェーズ P8）: `VBProject.References` の一覧・追加・削除
 
 IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。診断 Compile も UI/STA。バックグラウンドスレッドで Excel を触らない。

@@ -4531,6 +4531,18 @@ namespace WindowsIDE.Tests
             Check("export body only", VbaExportText.StripForCodeModule("Option Explicit\r\n") == "Option Explicit\r\n");
             string bodyAttr = "Option Explicit\r\nAttribute VB_Name = \"kept\"\r\n";
             Check("export keep body attribute", VbaExportText.StripForCodeModule(bodyAttr) == bodyAttr);
+            string disk = "Attribute VB_Name = \"Main\"\r\n\r\nOption Explicit\r\n";
+            Check("export header count main", VbaExportText.CountCodeModuleHeaderLines(disk) == 1);
+            Check("export to disk main 20", VbaExportText.ToDiskLine(20, disk) == 21);
+            Check("export header count cls", VbaExportText.CountCodeModuleHeaderLines(clsExport) == 6);
+            Check("export to disk cls 1", VbaExportText.ToDiskLine(1, clsExport) == 7);
+            Check("export to disk cls 20", VbaExportText.ToDiskLine(20, clsExport) == 26);
+            Check("export to disk body only", VbaExportText.ToDiskLine(20, "Option Explicit\r\n") == 20);
+            Check("export to disk null text", VbaExportText.ToDiskLine(20, null) == 20);
+            Check("export to disk zero", VbaExportText.ToDiskLine(0, disk) == 0);
+            Check("export to disk negative", VbaExportText.ToDiskLine(-1, disk) == -1);
+            Check("export header count null", VbaExportText.CountCodeModuleHeaderLines(null) == 0);
+            Check("export to disk body attribute", VbaExportText.ToDiskLine(1, bodyAttr) == 1);
 
             Check("name filename", VbaNaming.FromRelPath("Lib/StringUtil.bas", VbaNamingMode.Filename) == "StringUtil");
             Check("name folder_prefix", VbaNaming.FromRelPath("Lib/StringUtil.bas", VbaNamingMode.FolderPrefix) == "Lib_StringUtil");

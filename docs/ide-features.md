@@ -184,7 +184,7 @@ F-HOV は S。P7-B の対象は C# / VBA / PowerShell / cmd。cmd を対象外�
 | C# | ファイル内 → ワークスペース `.cs`。BCL へは入らない | シグネチャ常時。F-DOC 枠。連続 `///` の `<summary>` をプレーンテキスト（生成はしないが認識する）。BCL は DLL 隣の Framework XML（無ければ出さない、エラーにしない） |
 | VB.NET | ワークスペース `.vb`。BCL へは入らない。フェーズ P9 | シグネチャ常時。F-DOC 枠。直前 `'` / `'''` 認識（生成しない）。フェーズ P9 |
 | VBA | ディスク木の Sub / Function / Property（Excel 平坦名ではない） | シグネチャ常時。F-DOC 枠。直前の連続 `'` / `Rem`。COM HelpString は W |
-| PS | ファイル内 `function`。ドットソース先は初期対象外 | シグネチャ常時。F-DOC 枠。直前 `#`（S） |
+| PS | ファイル内 `function` とファイル内変数（`param` / 代入左辺 / `foreach` イテレータ）。照合は `$` なし名前・OrdinalIgnoreCase。`$script:x` 等は名前 `x`。複数は先頭。ピッカーなし。ドットソース先・自動変数・`$env:` 等ドライブ・splat・`Set-Variable` は初期対象外。スコープに忠実な解決はしない。 | シグネチャ常時。F-DOC 枠。直前 `#`（S） |
 | cmd | 対象外 | F-DOC 枠。直前の連続 `rem` / `::`（cmd にユーザー関数宣言は無いのでシグネチャは出さない） |
 
 キーは D12 どおり F12。Peek / 参照検索は W。Object Browser は W。Markdown の見出し直前ホバーはフェーズ P8。

@@ -56,6 +56,22 @@ namespace WindowsIDE.Languages
                 return false;
             }
 
+            if (language == LanguageKind.PowerShell)
+            {
+                List<DeclaredSymbol> psList = ListCurrent(language, buffer, filePath);
+                if (hit.IsPowerShellVariable)
+                {
+                    if (hit.IsPowerShellDrive)
+                    {
+                        return false;
+                    }
+
+                    return TryPickCore(psList, hit.Name, language, false, false, null, null, new SymbolKind[] { SymbolKind.Local }, out symbol);
+                }
+
+                return TryPickCore(psList, hit.Name, language, false, false, null, null, new SymbolKind[] { SymbolKind.Method }, out symbol);
+            }
+
             bool paren = FollowedByParen(buffer, hit);
             bool afterNew = PrecededByNew(buffer, hit);
             string receiver = DotReceiver(buffer, hit);
@@ -99,7 +115,7 @@ namespace WindowsIDE.Languages
         }
 
         /// <summary>
-        /// 現在バッファの宣言。C# はローカル込み。PS は FunctionDefinitionAst のみ。
+        /// 現在バッファの宣言。C# はローカル込み。PS は function と変数。
         /// </summary>
         /// <param name="language">言語。</param>
         /// <param name="buffer">本文。</param>
@@ -119,19 +135,19 @@ namespace WindowsIDE.Languages
 
             if (language == LanguageKind.PowerShell)
             {
-                return ListPowerShellFunctions(buffer, filePath);
+                return ListPowerShell(buffer, filePath);
             }
 
             return new List<DeclaredSymbol>();
         }
 
         /// <summary>
-        /// Parser.ParseInput の FunctionDefinitionAst だけ。ドットソースは見ない。Runspace は開かない。
+        /// Parser.ParseInput の function と変数宣言。ドットソースは見ない。Runspace は開かない。
         /// </summary>
         /// <param name="buffer">本文。</param>
         /// <param name="filePath">ディスクパス。無題は null。</param>
-        /// <returns>関数宣言。</returns>
-        public static List<DeclaredSymbol> ListPowerShellFunctions(TextBuffer buffer, string filePath)
+        /// <returns>出現順の宣言。</returns>
+        public static List<DeclaredSymbol> ListPowerShell(TextBuffer buffer, string filePath)
         {
             List<DeclaredSymbol> result = new List<DeclaredSymbol>();
             if (buffer == null)
@@ -162,7 +178,10 @@ namespace WindowsIDE.Languages
             {
                 nodes = ast.FindAll(delegate(Ast item)
                 {
-                    return item is FunctionDefinitionAst;
+                    return item is FunctionDefinitionAst ||
+                        item is ParameterAst ||
+                        item is AssignmentStatementAst ||
+                        item is ForEachStatementAst;
                 }, true);
             }
             catch (Exception)
@@ -173,40 +192,256 @@ namespace WindowsIDE.Languages
             foreach (Ast node in nodes)
             {
                 FunctionDefinitionAst fn = node as FunctionDefinitionAst;
-                if (fn == null || fn.Extent == null || string.IsNullOrEmpty(fn.Name))
+                if (fn != null)
                 {
+                    AddPowerShellFunction(fn, filePath, result);
                     continue;
                 }
 
-                int line = fn.Extent.StartLineNumber - 1;
-                int col = fn.Extent.StartColumnNumber - 1;
-                string extentText = fn.Extent.Text;
-                if (!string.IsNullOrEmpty(extentText))
+                ParameterAst paramAst = node as ParameterAst;
+                if (paramAst != null)
                 {
-                    int at = extentText.IndexOf(fn.Name, StringComparison.OrdinalIgnoreCase);
-                    if (at >= 0)
+                    string name;
+                    int line;
+                    int col;
+                    int length;
+                    if (!TryDescribePowerShellVar(paramAst.Name, out name, out line, out col, out length))
                     {
-                        col = col + at;
+                        continue;
                     }
+
+                    result.Add(new DeclaredSymbol(name, SymbolKind.Local, LanguageKind.PowerShell, filePath, line, col, length, null, "param $" + name));
+                    continue;
                 }
 
-                if (line < 0)
+                AssignmentStatementAst assign = node as AssignmentStatementAst;
+                if (assign != null)
                 {
-                    line = 0;
+                    string sig = null;
+                    if (assign.Left != null && assign.Left.Extent != null)
+                    {
+                        sig = assign.Left.Extent.Text;
+                    }
+
+                    AddPowerShellAssignment(assign.Left, filePath, sig, result);
+                    continue;
                 }
 
-                if (col < 0)
+                ForEachStatementAst loop = node as ForEachStatementAst;
+                if (loop != null)
                 {
-                    col = 0;
-                }
+                    string name;
+                    int line;
+                    int col;
+                    int length;
+                    if (!TryDescribePowerShellVar(loop.Variable, out name, out line, out col, out length))
+                    {
+                        continue;
+                    }
 
-                result.Add(new DeclaredSymbol(fn.Name, SymbolKind.Method, LanguageKind.PowerShell, filePath, line, col, fn.Name.Length, null, "function " + fn.Name));
+                    result.Add(new DeclaredSymbol(name, SymbolKind.Local, LanguageKind.PowerShell, filePath, line, col, length, null, "$" + name));
+                }
             }
 
             return result;
         }
 
+        private static void AddPowerShellFunction(FunctionDefinitionAst fn, string filePath, List<DeclaredSymbol> result)
+        {
+            if (fn == null || fn.Extent == null || string.IsNullOrEmpty(fn.Name) || result == null)
+            {
+                return;
+            }
+
+            int line = fn.Extent.StartLineNumber - 1;
+            int col = fn.Extent.StartColumnNumber - 1;
+            string extentText = fn.Extent.Text;
+            if (!string.IsNullOrEmpty(extentText))
+            {
+                int at = extentText.IndexOf(fn.Name, StringComparison.OrdinalIgnoreCase);
+                if (at >= 0)
+                {
+                    col = col + at;
+                }
+            }
+
+            if (line < 0)
+            {
+                line = 0;
+            }
+
+            if (col < 0)
+            {
+                col = 0;
+            }
+
+            result.Add(new DeclaredSymbol(fn.Name, SymbolKind.Method, LanguageKind.PowerShell, filePath, line, col, fn.Name.Length, null, "function " + fn.Name));
+        }
+
+        private static void AddPowerShellAssignment(ExpressionAst left, string filePath, string signature, List<DeclaredSymbol> result)
+        {
+            if (left == null || result == null)
+            {
+                return;
+            }
+
+            ConvertExpressionAst conv = left as ConvertExpressionAst;
+            if (conv != null)
+            {
+                AddPowerShellAssignment(conv.Child, filePath, signature, result);
+                return;
+            }
+
+            AttributedExpressionAst attr = left as AttributedExpressionAst;
+            if (attr != null)
+            {
+                AddPowerShellAssignment(attr.Child, filePath, signature, result);
+                return;
+            }
+
+            ArrayLiteralAst arr = left as ArrayLiteralAst;
+            if (arr != null)
+            {
+                if (arr.Elements == null)
+                {
+                    return;
+                }
+
+                int e = 0;
+                while (e < arr.Elements.Count)
+                {
+                    AddPowerShellAssignment(arr.Elements[e], filePath, signature, result);
+                    e++;
+                }
+
+                return;
+            }
+
+            if (left is MemberExpressionAst || left is IndexExpressionAst)
+            {
+                return;
+            }
+
+            VariableExpressionAst ve = left as VariableExpressionAst;
+            if (ve == null)
+            {
+                return;
+            }
+
+            string name;
+            int line;
+            int col;
+            int length;
+            if (!TryDescribePowerShellVar(ve, out name, out line, out col, out length))
+            {
+                return;
+            }
+
+            string sig = signature;
+            if (string.IsNullOrEmpty(sig))
+            {
+                sig = "$" + name;
+            }
+
+            result.Add(new DeclaredSymbol(name, SymbolKind.Local, LanguageKind.PowerShell, filePath, line, col, length, null, sig));
+        }
+
+        private static bool TryDescribePowerShellVar(VariableExpressionAst ve, out string name, out int line, out int column, out int length)
+        {
+            name = null;
+            line = 0;
+            column = 0;
+            length = 0;
+            if (ve == null || ve.VariablePath == null || ve.Extent == null || ve.Splatted)
+            {
+                return false;
+            }
+
+            if (ve.VariablePath.IsDriveQualified && !IsPowerShellScopeName(ve.VariablePath.DriveName))
+            {
+                return false;
+            }
+
+            string user = ve.VariablePath.UserPath;
+            if (string.IsNullOrEmpty(user))
+            {
+                return false;
+            }
+
+            if (ve.VariablePath.IsUnqualified)
+            {
+                name = user;
+            }
+            else
+            {
+                int colon = user.LastIndexOf(':');
+                if (colon >= 0 && colon + 1 < user.Length)
+                {
+                    name = user.Substring(colon + 1);
+                }
+                else
+                {
+                    name = user;
+                }
+            }
+
+            if (string.IsNullOrEmpty(name) || IsPowerShellConstantName(name))
+            {
+                return false;
+            }
+
+            line = ve.Extent.StartLineNumber - 1;
+            column = ve.Extent.StartColumnNumber - 1;
+            string extentText = ve.Extent.Text;
+            if (!string.IsNullOrEmpty(extentText))
+            {
+                int at = extentText.LastIndexOf(name, StringComparison.OrdinalIgnoreCase);
+                if (at >= 0)
+                {
+                    column = column + at;
+                }
+            }
+
+            if (line < 0)
+            {
+                line = 0;
+            }
+
+            if (column < 0)
+            {
+                column = 0;
+            }
+
+            length = name.Length;
+            return length > 0;
+        }
+
+        private static bool IsPowerShellScopeName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            return string.Equals(name, "local", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "script", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "global", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "private", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPowerShellConstantName(string name)
+        {
+            return string.Equals(name, "null", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "false", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool TryPickCore(List<DeclaredSymbol> list, string name, LanguageKind language, bool paren, bool afterNew, string receiverType, string skipPath, out DeclaredSymbol symbol)
+        {
+            return TryPickCore(list, name, language, paren, afterNew, receiverType, skipPath, null, out symbol);
+        }
+
+        private static bool TryPickCore(List<DeclaredSymbol> list, string name, LanguageKind language, bool paren, bool afterNew, string receiverType, string skipPath, SymbolKind[] kindOrder, out DeclaredSymbol symbol)
         {
             symbol = null;
             if (list == null || string.IsNullOrEmpty(name))
@@ -215,7 +450,11 @@ namespace WindowsIDE.Languages
             }
 
             SymbolKind[] order;
-            if (afterNew && paren)
+            if (kindOrder != null && kindOrder.Length > 0)
+            {
+                order = kindOrder;
+            }
+            else if (afterNew && paren)
             {
                 order = new SymbolKind[] { SymbolKind.Constructor, SymbolKind.Type, SymbolKind.Method, SymbolKind.Property, SymbolKind.Field, SymbolKind.Local };
             }

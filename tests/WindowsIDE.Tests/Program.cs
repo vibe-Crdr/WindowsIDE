@@ -2069,6 +2069,82 @@ namespace WindowsIDE.Tests
             bool psHit = DefinitionResolver.TryResolve(LanguageKind.PowerShell, psBuf, psSession, "C:\\tmp\\a.ps1", null, psLine, psCol, out psSym);
             Check("gd-ps", psHit && psSym != null && string.Equals(psSym.Name, "Foo", StringComparison.OrdinalIgnoreCase) && psSym.Line == 0);
 
+            string psVarAssign = "$x = 1\r\n$x\r\n";
+            int psVarLine;
+            int psVarCol;
+            Check("gd-ps-var-assign loc", TryNthIdentSrc(psVarAssign, "x", 2, out psVarLine, out psVarCol));
+            DeclaredSymbol psVarSym;
+            bool psVarHit = ResolvePowerShell(psVarAssign, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-assign", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local && string.Equals(psVarSym.Name, "x", StringComparison.OrdinalIgnoreCase) && psVarSym.Line == 0);
+
+            string psVarParam = "param($p)\r\n$p\r\n";
+            Check("gd-ps-var-param loc", TryNthIdentSrc(psVarParam, "p", 3, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarParam, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-param", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local && psVarSym.Line == 0 && psVarSym.Signature != null && psVarSym.Signature.IndexOf("param $p", StringComparison.Ordinal) >= 0);
+
+            string psVarFor = "foreach ($i in 1) { $i }\r\n";
+            Check("gd-ps-var-foreach loc", TryNthIdentSrc(psVarFor, "i", 3, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarFor, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-foreach", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local && psVarSym.Line == 0);
+
+            string psVarComp = "$n += 1\r\n$n\r\n";
+            Check("gd-ps-var-compound loc", TryNthIdentSrc(psVarComp, "n", 2, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarComp, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-compound", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local);
+
+            string psVarFirst = "$x = 1\r\n$x = 2\r\n$x\r\n";
+            Check("gd-ps-var-first loc", TryNthIdentSrc(psVarFirst, "x", 3, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarFirst, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-first", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local && psVarSym.Line == 0);
+
+            string psVarStay = "$x = 1\r\n";
+            Check("gd-ps-var-stay loc", TryNthIdentSrc(psVarStay, "x", 1, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarStay, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-stay", psVarHit && psVarSym != null && psVarSym.Line == 0);
+
+            string psVarClash = "function Foo {\r\n}\r\n$Foo = 1\r\n$Foo\r\nFoo\r\n";
+            Check("gd-ps-var-clash-var loc", TryNthIdentSrc(psVarClash, "Foo", 3, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarClash, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-clash-var", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local);
+            Check("gd-ps-var-clash-fn loc", TryNthIdentSrc(psVarClash, "Foo", 4, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarClash, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-clash-fn", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Method);
+
+            string psVarScope = "$script:x = 1\r\n$x\r\n";
+            Check("gd-ps-var-scope loc", TryNthIdentSrc(psVarScope, "x", 2, out psVarLine, out psVarCol));
+            psVarHit = ResolvePowerShell(psVarScope, psVarLine, psVarCol, out psVarSym);
+            Check("gd-ps-var-scope", psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local && psVarSym.Line == 0);
+            TextBuffer psScopeBuf = new TextBuffer();
+            psScopeBuf.SetText(psVarScope);
+            int scriptCol = psScopeBuf.GetLine(0).IndexOf("script", StringComparison.Ordinal);
+            psVarHit = ResolvePowerShell(psVarScope, 0, scriptCol, out psVarSym);
+            Check("gd-ps-var-scope-token", scriptCol >= 0 && psVarHit && psVarSym != null && string.Equals(psVarSym.Name, "x", StringComparison.OrdinalIgnoreCase) && psVarSym.Line == 0);
+
+            TextBuffer psDollarBuf = new TextBuffer();
+            psDollarBuf.SetText("$x = 1\r\n$x\r\n");
+            int dollarCol = psDollarBuf.GetLine(1).IndexOf('$');
+            psVarHit = ResolvePowerShell("$x = 1\r\n$x\r\n", 1, dollarCol, out psVarSym);
+            Check("gd-ps-var-dollar", dollarCol >= 0 && psVarHit && psVarSym != null && psVarSym.Kind == SymbolKind.Local && psVarSym.Line == 0);
+
+            Check("gd-ps-var-env loc", TryNthIdentSrc("$env:PATH\r\n", "PATH", 1, out psVarLine, out psVarCol));
+            Check("gd-ps-var-env", !ResolvePowerShell("$env:PATH\r\n", psVarLine, psVarCol, out psVarSym));
+
+            Check("gd-ps-var-auto loc", TryNthIdentSrc("$_\r\n", "_", 1, out psVarLine, out psVarCol));
+            Check("gd-ps-var-auto", !ResolvePowerShell("$_\r\n", psVarLine, psVarCol, out psVarSym));
+
+            Check("gd-ps-var-null loc", TryNthIdentSrc("$null = 1\r\n$null\r\n", "null", 2, out psVarLine, out psVarCol));
+            Check("gd-ps-var-null", !ResolvePowerShell("$null = 1\r\n$null\r\n", psVarLine, psVarCol, out psVarSym));
+
+            TextBuffer hovPsBuf = new TextBuffer();
+            hovPsBuf.SetText("$x = 1\r\n");
+            HighlightSession hovPsSession = MakeP7Session(LanguageKind.PowerShell, hovPsBuf);
+            int hovPsLine;
+            int hovPsCol;
+            Check("hov-ps-var loc", TryNthIdent(hovPsBuf, "x", 1, out hovPsLine, out hovPsCol));
+            string hovPsText;
+            bool hovPsOk = HoverText.TryGet(LanguageKind.PowerShell, hovPsBuf, hovPsSession, "C:\\tmp\\a.ps1", null, hovPsLine, hovPsCol, out hovPsText);
+            Check("hov-ps-var", hovPsOk && hovPsText != null && hovPsText.IndexOf("$x", StringComparison.Ordinal) >= 0);
+
             TextBuffer cmdBuf = new TextBuffer();
             cmdBuf.SetText(":Foo\r\ngoto Foo\r\n");
             HighlightSession cmdSession = MakeP7Session(LanguageKind.Cmd, cmdBuf);
@@ -2528,6 +2604,21 @@ namespace WindowsIDE.Tests
             }
 
             return n;
+        }
+
+        private static bool TryNthIdentSrc(string src, string name, int nth, out int line, out int column)
+        {
+            TextBuffer buffer = new TextBuffer();
+            buffer.SetText(src);
+            return TryNthIdent(buffer, name, nth, out line, out column);
+        }
+
+        private static bool ResolvePowerShell(string src, int line, int column, out DeclaredSymbol symbol)
+        {
+            TextBuffer buffer = new TextBuffer();
+            buffer.SetText(src);
+            HighlightSession session = MakeP7Session(LanguageKind.PowerShell, buffer);
+            return DefinitionResolver.TryResolve(LanguageKind.PowerShell, buffer, session, "C:\\tmp\\a.ps1", null, line, column, out symbol);
         }
 
         private static bool TryNthIdent(TextBuffer buffer, string name, int nth, out int line, out int column)

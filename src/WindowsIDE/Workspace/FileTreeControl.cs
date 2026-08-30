@@ -82,6 +82,10 @@ namespace WindowsIDE.Workspace
             this.hScroll.SmallChange = 8;
             this.vScroll.ValueChanged += this.OnThemedScrollChanged;
             this.hScroll.ValueChanged += this.OnThemedScrollChanged;
+            this.vScroll.GotFocus += this.OnPaneFocusInvalidate;
+            this.vScroll.LostFocus += this.OnPaneFocusInvalidate;
+            this.hScroll.GotFocus += this.OnPaneFocusInvalidate;
+            this.hScroll.LostFocus += this.OnPaneFocusInvalidate;
             this.Controls.Add(this.vScroll);
             this.Controls.Add(this.hScroll);
 
@@ -91,6 +95,7 @@ namespace WindowsIDE.Workspace
             this.createField.BackColor = Theme.EditorBackground;
             this.createField.ForeColor = Theme.Foreground;
             this.createField.KeyDown += this.OnCreateFieldKeyDown;
+            this.createField.GotFocus += this.OnPaneFocusInvalidate;
             this.createField.LostFocus += this.OnCreateFieldLostFocus;
             this.Controls.Add(this.createField);
 
@@ -591,6 +596,16 @@ namespace WindowsIDE.Workspace
         }
 
         /// <summary>
+        /// ツリー選択行の塗り。ペイン内にフォーカスがあれば Selection、なければ CurrentLine。
+        /// </summary>
+        /// <param name="paneContainsFocus">FileTreeControl.ContainsFocus 相当。</param>
+        /// <returns>選択行に使う Theme 色。プレースホルダには使わない。</returns>
+        public static Color TreeSelectionBack(bool paneContainsFocus)
+        {
+            return paneContainsFocus ? Theme.Selection : Theme.CurrentLine;
+        }
+
+        /// <summary>
         /// ノードをダーク描画する。縦バー領域は塗らない。
         /// </summary>
         protected override void OnDrawNode(DrawTreeNodeEventArgs e)
@@ -617,7 +632,7 @@ namespace WindowsIDE.Workspace
 
             bool placeholder = this.IsCreatePlaceholder(e.Node);
             bool selected = !placeholder && (e.State & TreeNodeStates.Selected) != 0;
-            Color back = selected ? Theme.Selection : Theme.Background;
+            Color back = selected ? TreeSelectionBack(this.ContainsFocus) : Theme.Background;
             int rowW = this.ClientSize.Width - vBar;
             if (rowW < 0)
             {
@@ -693,6 +708,39 @@ namespace WindowsIDE.Workspace
             {
                 DualFontPainter.Draw(e.Graphics, e.Node.Text, this.halfFont, this.fullFont, clip, x, fg, this.typographic);
             }
+        }
+
+        /// <summary>ツリー本体がフォーカスを得たとき選択行を Selection で描き直す。</summary>
+        protected override void OnGotFocus(EventArgs e)
+        {
+            base.OnGotFocus(e);
+            this.Invalidate();
+        }
+
+        /// <summary>ツリー本体がフォーカスを失ったとき選択行を CurrentLine で描き直す。</summary>
+        protected override void OnLostFocus(EventArgs e)
+        {
+            base.OnLostFocus(e);
+            this.Invalidate();
+        }
+
+        /// <summary>子を含むペインへ入ったとき選択行を描き直す。</summary>
+        protected override void OnEnter(EventArgs e)
+        {
+            base.OnEnter(e);
+            this.Invalidate();
+        }
+
+        /// <summary>子を含むペインから出たとき選択行を描き直す。</summary>
+        protected override void OnLeave(EventArgs e)
+        {
+            base.OnLeave(e);
+            this.Invalidate();
+        }
+
+        private void OnPaneFocusInvalidate(object sender, EventArgs e)
+        {
+            this.Invalidate();
         }
 
         /// <summary>HWHEEL は横、縦ホイール後は自前バーを同期する。</summary>
@@ -1456,7 +1504,7 @@ namespace WindowsIDE.Workspace
             this.Invalidate();
         }
 
-        /// <summary>所有している 12 DIP Pixel フォントを破棄する。作成欄の購読も外す。</summary>
+        /// <summary>所有している 12 DIP Pixel フォントを破棄する。作成欄とスクロールの購読も外す。</summary>
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -1472,7 +1520,20 @@ namespace WindowsIDE.Workspace
                 if (this.createField != null)
                 {
                     this.createField.KeyDown -= this.OnCreateFieldKeyDown;
+                    this.createField.GotFocus -= this.OnPaneFocusInvalidate;
                     this.createField.LostFocus -= this.OnCreateFieldLostFocus;
+                }
+
+                if (this.vScroll != null)
+                {
+                    this.vScroll.GotFocus -= this.OnPaneFocusInvalidate;
+                    this.vScroll.LostFocus -= this.OnPaneFocusInvalidate;
+                }
+
+                if (this.hScroll != null)
+                {
+                    this.hScroll.GotFocus -= this.OnPaneFocusInvalidate;
+                    this.hScroll.LostFocus -= this.OnPaneFocusInvalidate;
                 }
 
                 if (this.halfFont != null)
@@ -1725,6 +1786,7 @@ namespace WindowsIDE.Workspace
 
         private void OnCreateFieldLostFocus(object sender, EventArgs e)
         {
+            this.Invalidate();
             if (!this.IsInlineCreateActive || this.suppressBlurCancel)
             {
                 return;

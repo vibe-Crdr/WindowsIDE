@@ -688,7 +688,8 @@ namespace WindowsIDE.Tests
             string treePath = Path.Combine(repo, "src", "WindowsIDE", "Workspace", "FileTreeControl.cs");
             string recyclePath = Path.Combine(repo, "src", "WindowsIDE", "Workspace", "WorkspaceRecycle.cs");
             string barPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "FileTreeCreateBar.cs");
-            if (!File.Exists(mainPath) || !File.Exists(treePath) || !File.Exists(recyclePath) || !File.Exists(barPath))
+            string themePath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "Theme.cs");
+            if (!File.Exists(mainPath) || !File.Exists(treePath) || !File.Exists(recyclePath) || !File.Exists(barPath) || !File.Exists(themePath))
             {
                 Check("f-exp source readable", false);
                 return;
@@ -698,6 +699,7 @@ namespace WindowsIDE.Tests
             string tree = File.ReadAllText(treePath);
             string recycle = File.ReadAllText(recyclePath);
             string bar = File.ReadAllText(barPath);
+            string theme = File.ReadAllText(themePath);
 
             Check("f-exp ProcessCmdKey Ctrl+Shift+E", main.IndexOf("Keys.Control | Keys.Shift | Keys.E", StringComparison.Ordinal) >= 0);
             Check("f-exp display Ctrl+Shift+E", main.IndexOf("CreateDisplayCommand(\"エクスプローラー(&E)\", \"Ctrl+Shift+E\"", StringComparison.Ordinal) >= 0);
@@ -731,6 +733,13 @@ namespace WindowsIDE.Tests
             Check("f-exp bar file event", bar.IndexOf("FileCreateRequested", StringComparison.Ordinal) >= 0);
             Check("f-exp bar folder event", bar.IndexOf("FolderCreateRequested", StringComparison.Ordinal) >= 0);
             Check("f-exp bar no rename glyph event", bar.IndexOf("RenameRequested", StringComparison.Ordinal) < 0);
+            Check("f-exp TreeSelectionBack helper", tree.IndexOf("public static Color TreeSelectionBack(bool paneContainsFocus)", StringComparison.Ordinal) >= 0);
+            Check("f-exp TreeSelectionBack colors", tree.IndexOf("return paneContainsFocus ? Theme.Selection : Theme.CurrentLine;", StringComparison.Ordinal) >= 0);
+            Check("f-exp OnDrawNode TreeSelectionBack", tree.IndexOf("TreeSelectionBack(this.ContainsFocus)", StringComparison.Ordinal) >= 0);
+            Check("f-exp createField BorderColor Selection", tree.IndexOf("createField.BorderColor = Theme.Selection", StringComparison.Ordinal) >= 0);
+            Check("f-exp HideSelection false", tree.IndexOf("this.HideSelection = false", StringComparison.Ordinal) >= 0);
+            Check("f-exp no TreeNodeStates.Focused", tree.IndexOf("TreeNodeStates.Focused", StringComparison.Ordinal) < 0);
+            Check("f-exp theme palette size", CountToken(theme, "readonly Color") == 17);
         }
 
         private static void RunWorkspaceSettings()
@@ -1033,6 +1042,7 @@ namespace WindowsIDE.Tests
             Check("FieldOuterHeight 0+1", ImeLayout.FieldOuterHeight(0, 1) == 3);
             Check("FieldOuterHeight 10+0", ImeLayout.FieldOuterHeight(10, 0) == 10);
             Check("Theme.Selection is #3d59a1", Theme.Selection.ToArgb() == Color.FromArgb(0x3d, 0x59, 0xa1).ToArgb());
+            Check("Theme.CurrentLine is #292e42", Theme.CurrentLine.ToArgb() == Color.FromArgb(0x29, 0x2e, 0x42).ToArgb());
         }
 
         private static void RunStartupArgs()

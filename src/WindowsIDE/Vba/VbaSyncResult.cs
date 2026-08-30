@@ -12,6 +12,7 @@ namespace WindowsIDE.Vba
         private bool cancelled;
         private bool createdMap;
         private bool replaceProblems;
+        private bool applyVbaCompile;
         private bool isErrorMessage;
         private string message;
         private Diagnostic[] diagnostics;
@@ -47,6 +48,12 @@ namespace WindowsIDE.Vba
         public bool ReplaceProblems
         {
             get { return this.replaceProblems; }
+        }
+
+        /// <summary>成功後に VBA 診断バケットへ出すなら true（手動 Compile）。</summary>
+        public bool ApplyVbaCompile
+        {
+            get { return this.applyVbaCompile; }
         }
 
         /// <summary>MessageBox を Error にするなら true。Information なら false。</summary>
@@ -114,6 +121,21 @@ namespace WindowsIDE.Vba
             r.success = true;
             r.writtenPaths = (writtenPaths == null) ? new string[0] : writtenPaths;
             r.excelOnlyNames = (excelOnlyNames == null) ? new string[0] : excelOnlyNames;
+            return r;
+        }
+
+        /// <summary>
+        /// プッシュ成功のうえ Compile 結果を VBA バケットへ出す。
+        /// </summary>
+        /// <param name="writtenPaths">書いたパス。</param>
+        /// <param name="excelOnlyNames">Excel のみの名前。</param>
+        /// <param name="compileDiagnostics">Compile 診断。成功クリアは空。</param>
+        /// <returns>結果。</returns>
+        public static VbaSyncResult OkPushThenCompile(string[] writtenPaths, string[] excelOnlyNames, Diagnostic[] compileDiagnostics)
+        {
+            VbaSyncResult r = OkSync(writtenPaths, excelOnlyNames);
+            r.applyVbaCompile = true;
+            r.diagnostics = (compileDiagnostics == null) ? new Diagnostic[0] : compileDiagnostics;
             return r;
         }
 

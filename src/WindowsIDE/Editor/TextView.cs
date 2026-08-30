@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Windows.Forms;
+using WindowsIDE.Build;
 using WindowsIDE.Languages;
 using WindowsIDE.Ui;
 using WindowsIDE.Ui.Fonts;
@@ -92,6 +93,7 @@ namespace WindowsIDE.Editor
         private int lastDpi;
         private int wheelLeftover;
         private readonly List<Token> paintTokens;
+        private Diagnostic[] errorDiagnostics;
 
         /// <summary>
         /// 空の編集器を作る。
@@ -104,6 +106,7 @@ namespace WindowsIDE.Editor
             this.asciiWidth = 8f;
             this.imeComposition = "";
             this.paintTokens = new List<Token>();
+            this.errorDiagnostics = new Diagnostic[0];
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable | ControlStyles.ResizeRedraw | ControlStyles.EnableNotifyMessage, true);
             this.TabStop = true;
             this.BackColor = Theme.EditorBackground;
@@ -206,6 +209,24 @@ namespace WindowsIDE.Editor
         public bool IsComposing
         {
             get { return !string.IsNullOrEmpty(this.imeComposition); }
+        }
+
+        /// <summary>
+        /// 現在文書の error 波線。warning は渡さない。null は空。
+        /// </summary>
+        /// <param name="diagnostics">IsError の診断。</param>
+        public void SetErrorDiagnostics(Diagnostic[] diagnostics)
+        {
+            if (diagnostics == null)
+            {
+                this.errorDiagnostics = new Diagnostic[0];
+            }
+            else
+            {
+                this.errorDiagnostics = diagnostics;
+            }
+
+            this.Invalidate();
         }
 
         /// <summary>
@@ -978,6 +999,8 @@ namespace WindowsIDE.Editor
                         }
                     }
                 }
+
+                this.PaintSquiggles(g, first, last, textInset);
             }
             finally
             {
@@ -1978,6 +2001,77 @@ namespace WindowsIDE.Editor
             }
 
             return x;
+        }
+
+        private void PaintSquiggles(Graphics g, int first, int last, int textInset)
+        {
+            if (g == null || this.document == null || this.document.Buffer == null || this.errorDiagnostics == null)
+            {
+                return;
+            }
+
+            using (Pen pen = new Pen(Theme.Error, 1f))
+            {
+                int i = 0;
+                while (i < this.errorDiagnostics.Length)
+                {
+                    Diagnostic d = this.errorDiagnostics[i];
+                    i++;
+                    if (d == null || !d.IsError)
+                    {
+                        continue;
+                    }
+
+                    int startLine = d.Line > 0 ? (d.Line - 1) : 0;
+                    int endLine = d.EndLine > 0 ? (d.EndLine - 1) : startLine;
+                    if (endLine < startLine)
+                    {
+                        endLine = startLine;
+                    }
+
+                    int startCol = d.Column > 0 ? (d.Column - 1) : 0;
+                    int endCol = d.EndColumn > 0 ? d.EndColumn : -1;
+                    int line = startLine;
+                    while (line <= endLine)
+                    {
+                        if (line >= first && line <= last && line >= 0 && line < this.document.Buffer.LineCount)
+                        {
+                            string text = this.document.Buffer.GetLine(line);
+                            int spanStart = (line == startLine) ? startCol : 0;
+                            int spanEnd = (line == endLine) ? endCol : -1;
+                            SquiggleSpan span = SquiggleSpan.FromLine(line, text, spanStart, spanEnd);
+                            int cy = (span.Line - first) * this.lineHeight;
+                            int y = cy + this.lineHeight - 2;
+                            float x0 = this.gutterWidth + textInset + this.ColumnToX(span.Line, span.StartColumn) - this.hScroll.Value;
+                            float x1 = this.gutterWidth + textInset + this.ColumnToX(span.Line, span.EndColumn) - this.hScroll.Value;
+                            if (x1 <= x0)
+                            {
+                                x1 = x0 + Math.Max(1f, this.asciiWidth);
+                            }
+
+                            float x = x0;
+                            float y0 = y;
+                            bool up = true;
+                            while (x < x1)
+                            {
+                                float nx = x + 3f;
+                                if (nx > x1)
+                                {
+                                    nx = x1;
+                                }
+
+                                float ny = up ? (y - 2f) : y;
+                                g.DrawLine(pen, x, y0, nx, ny);
+                                x = nx;
+                                y0 = ny;
+                                up = !up;
+                            }
+                        }
+
+                        line++;
+                    }
+                }
+            }
         }
 
         private void PaintBraceMatch(Graphics g, int first, int last, Rectangle textArea)

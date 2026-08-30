@@ -8,6 +8,8 @@
         private string filePath;
         private int line;
         private int column;
+        private int endLine;
+        private int endColumn;
         private bool isError;
         private string code;
         private string message;
@@ -28,6 +30,18 @@
         public int Column
         {
             get { return this.column; }
+        }
+
+        /// <summary>1 始まりの終了行。未指定は 0。</summary>
+        public int EndLine
+        {
+            get { return this.endLine; }
+        }
+
+        /// <summary>1 始まりの終了列（含む）。未指定は 0。</summary>
+        public int EndColumn
+        {
+            get { return this.endColumn; }
         }
 
         /// <summary>error / fatal / 合成なら true。warning なら false。</summary>
@@ -64,9 +78,57 @@
             d.filePath = filePath;
             d.line = line;
             d.column = column;
+            d.endLine = 0;
+            d.endColumn = 0;
             d.isError = isError;
             d.code = code;
             d.message = (message == null) ? "" : message;
+            return d;
+        }
+
+        /// <summary>
+        /// csc または位置付き診断。終了が無ければ 0。
+        /// </summary>
+        /// <param name="filePath">フルパス。無ければ null。</param>
+        /// <param name="line">1 始まり。無ければ 0。</param>
+        /// <param name="column">1 始まり。無ければ 0。</param>
+        /// <param name="isError">error なら true。</param>
+        /// <param name="code">CSxxxx。不明なら null。</param>
+        /// <param name="message">本文。</param>
+        /// <param name="endLine">1 始まりの終了行。未指定は 0。</param>
+        /// <param name="endColumn">1 始まりの終了列（含む）。未指定は 0。</param>
+        /// <returns>診断。</returns>
+        public static Diagnostic FromCompiler(string filePath, int line, int column, bool isError, string code, string message, int endLine, int endColumn)
+        {
+            Diagnostic d = FromCompiler(filePath, line, column, isError, code, message);
+            d.endLine = endLine;
+            d.endColumn = endColumn;
+            return d;
+        }
+
+        /// <summary>
+        /// 終了位置だけ付け替える。
+        /// </summary>
+        /// <param name="newEndLine">1 始まりの終了行。</param>
+        /// <param name="newEndColumn">1 始まりの終了列（含む）。</param>
+        /// <returns>新しい診断。</returns>
+        public Diagnostic WithEnd(int newEndLine, int newEndColumn)
+        {
+            Diagnostic d = this.Clone();
+            d.endLine = newEndLine;
+            d.endColumn = newEndColumn;
+            return d;
+        }
+
+        /// <summary>
+        /// ファイルパスだけ付け替える（TEMP リマップ用）。
+        /// </summary>
+        /// <param name="newFilePath">論理パス。無題は null。</param>
+        /// <returns>新しい診断。</returns>
+        public Diagnostic WithFilePath(string newFilePath)
+        {
+            Diagnostic d = this.Clone();
+            d.filePath = newFilePath;
             return d;
         }
 
@@ -92,9 +154,25 @@
             d.filePath = filePath;
             d.line = 0;
             d.column = 0;
+            d.endLine = 0;
+            d.endColumn = 0;
             d.isError = true;
             d.code = null;
             d.message = (message == null) ? "" : message;
+            return d;
+        }
+
+        private Diagnostic Clone()
+        {
+            Diagnostic d = new Diagnostic();
+            d.filePath = this.filePath;
+            d.line = this.line;
+            d.column = this.column;
+            d.endLine = this.endLine;
+            d.endColumn = this.endColumn;
+            d.isError = this.isError;
+            d.code = this.code;
+            d.message = this.message;
             return d;
         }
     }

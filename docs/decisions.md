@@ -26,7 +26,7 @@
 | D18 | フォルダ選択と名前を付けて保存は Windows Common Item Dialog（IFileOpenDialog / IFileSaveDialog、ole32）。フォルダは FOS_PICKFOLDERS\|FOS_FORCEFILESYSTEM\|FOS_PATHMUSTEXIST。保存は FOS_OVERWRITEPROMPT\|FOS_FORCEFILESYSTEM\|FOS_PATHMUSTEXIST（PICKFOLDERS なし）。キャンセル HRESULT 0x800704C7 はエラーにしない。追加 /r なし。app.manifest に Common-Controls 6.0 amd64。新しいフォルダボタンは Explorer 既定 |
 | D19 | About を開いたときライセンス TextBox は非選択。初期フォーカスは閉じる。手動選択してコピーは可 |
 | D20 | 起動引数の既存ファイルは開く（ワークスペース外可）。親フォルダはワークスペースにしない。ディレクトリ引数は OpenFolder と同じ BindWorkspace（複数なら最後が勝つ）。失敗は MessageBox 1 枚で続行。全部失敗または無引数は無題。単一インスタンスは作らない。メニュー「ファイルを開く」とドラッグ＆ドロップは未決 |
-| D21 | フェーズ P7 で提案 P14 / P16 / P17 をこのチャットで採用する（覆すまで）。P16 / P17 は P7-A で実装する。P14（常時コンパイル単位）は波 C までコードを書かない |
+| D21 | フェーズ P7 で提案 P14 / P16 / P17 をこのチャットで採用する（覆すまで）。P16 / P17 は P7-A で実装する。P14（常時コンパイル単位）は P7-C で実装する |
 | D22 | このチャットで提案 P19 / P21 / P22 を採用する（覆すまで）。P19 の実装はフェーズ P7-B（着手）。P21 / P22 の実装はフェーズ P8。今はコードを書かない |
 | D23 | ユーザー `.cmd` / `.bat` は新規・0 バイト Open・無題 SaveAs が CP932 BOM なし CRLF。保存時は BOM を書かない。非空 UTF-8 BOM の Open は検出どおり UTF-8 のまま、Save で BOM だけ落とす（本文は再エンコードしない）。TryDecode は変えない。 |
 | D24 | このチャットで D4 を覆し、VB.NET を第5のホストに加える。拡張子は `.vb` のみ（`.vbs` は Plain。`.bas` / `.cls` は VBA）。診断の正は指定 `vbc.exe`。表示名は `VB.NET`。実装はフェーズ P9。今はコードを書かない |
@@ -53,7 +53,7 @@
 
 ## フェーズ P7 で採用した提案
 
-採用済み提案 P7（UTF-8 BOM）とは別。P7-A 完了。P7-B は F-GD / F-HOV / F-DOC を着手する。P16 / P17 は P7-A で実装済み。P14 は波 C までコードを書かない。P19 の枠コメント実装は P7-B。
+採用済み提案 P7（UTF-8 BOM）とは別。P7-A / P7-B 完了。P7-C 着手。P14 を波 C で実装。P16/P17 は実装済み。P15/P18/P25 は確定しない。P19 は P7-B 済み。
 
 | ID | 内容 |
 | --- | --- |

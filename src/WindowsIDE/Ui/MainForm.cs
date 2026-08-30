@@ -40,6 +40,9 @@ namespace WindowsIDE.Ui
         private TextView editor;
         private BottomPane bottomPane;
         private CscRunner cscRunner;
+        private CscRunner liveCscRunner;
+        private System.Windows.Forms.Timer liveTimer;
+        private const int LiveDiagnoseDebounceMs = 600;
         private CsharpProcessHost csharpHost;
         private PowerShellProcessHost powershellHost;
         private CmdProcessHost cmdHost;
@@ -49,6 +52,12 @@ namespace WindowsIDE.Ui
         private ToolStripMenuItem vbaNameFilenameItem;
         private ToolStripMenuItem vbaNameFolderPrefixItem;
         private int buildGeneration;
+        private int liveGeneration;
+        private int csharpDiagSeq;
+        private Diagnostic[] csharpBucket;
+        private Diagnostic[] psBucket;
+        private Diagnostic[] vbaBucket;
+        private Diagnostic[] lastPublishedDiagnostics;
         private int runGeneration;
         private ActiveRunKind activeRunKind;
         private string lastManualOutputExe;
@@ -86,6 +95,11 @@ namespace WindowsIDE.Ui
             this.AutoScaleMode = AutoScaleMode.None;
 
             this.cscRunner = new CscRunner();
+            this.liveCscRunner = new CscRunner();
+            this.liveTimer = new System.Windows.Forms.Timer();
+            this.liveTimer.Interval = LiveDiagnoseDebounceMs;
+            this.liveTimer.Tick += this.OnLiveTick;
+            this.lastPublishedDiagnostics = new Diagnostic[0];
             this.csharpHost = new CsharpProcessHost();
             this.csharpHost.LineReceived += this.OnCsharpLineReceived;
             this.csharpHost.Exited += this.OnCsharpExited;
@@ -611,6 +625,7 @@ namespace WindowsIDE.Ui
             vba.DropDownItems.Add(this.CreateItem("ブックを選ぶ(&B)", Keys.None, this.OnVbaPickWorkbook));
             vba.DropDownItems.Add(this.CreateVbaPullItem("プル(&P)", this.OnVbaPull));
             vba.DropDownItems.Add(this.CreateVbaPushItem("プッシュ(&H)", this.OnVbaPush));
+            vba.DropDownItems.Add(this.CreateDisplayCommand("コンパイル(&C)", "", this.OnVbaCompile));
             vba.DropDownItems.Add(new ToolStripSeparator());
             ToolStripMenuItem naming = this.CreateTop("名前の付け方(&N)");
             this.vbaNameFilenameItem = this.CreateShellCheckItem("filename", this.OnVbaNamingFilename);
@@ -1131,6 +1146,7 @@ namespace WindowsIDE.Ui
             this.editor.RestoreViewState();
             this.tabs.RefreshTabs();
             this.UpdateStatus();
+            this.ApplyEditorSquiggles(this.lastPublishedDiagnostics);
             this.editor.Focus();
             this.RefreshFindCount();
         }
@@ -2101,6 +2117,14 @@ namespace WindowsIDE.Ui
             }, false);
         }
 
+        private void OnVbaCompile(object sender, EventArgs e)
+        {
+            this.RunVbaSync(delegate(VbaSyncConfirm confirm)
+            {
+                return VbaSyncService.PushThenCompile(this.workspace.RootPath, confirm);
+            }, false);
+        }
+
         private void OnVbaNamingFilename(object sender, EventArgs e)
         {
             this.ChangeVbaNamingMode(VbaNamingMode.Filename);
@@ -2312,6 +2336,11 @@ namespace WindowsIDE.Ui
                 return;
             }
 
+            if (result.ApplyVbaCompile)
+            {
+                this.ApplyVbaDiagnostics(result.Diagnostics);
+            }
+
             if (result.CreatedMap)
             {
                 MessageBox.Show(
@@ -2432,6 +2461,8 @@ namespace WindowsIDE.Ui
                     this.cscRunner.Kill();
                 }
 
+                this.InvalidateLiveCsc();
+
                 if (this.csharpHost != null)
                 {
                     this.csharpHost.Kill();
@@ -2462,6 +2493,8 @@ namespace WindowsIDE.Ui
                 {
                     this.cscRunner.Kill();
                 }
+
+                this.InvalidateLiveCsc();
 
                 if (this.csharpHost != null)
                 {
@@ -2555,6 +2588,8 @@ namespace WindowsIDE.Ui
             {
                 this.cscRunner.Kill();
             }
+
+            this.InvalidateLiveCsc();
 
             if (this.csharpHost != null)
             {
@@ -2759,6 +2794,8 @@ namespace WindowsIDE.Ui
             {
                 this.cscRunner.Kill();
             }
+
+            this.InvalidateLiveCsc();
 
             string workspaceRoot = (this.workspace == null) ? null : this.workspace.RootPath;
             string focused = null;
@@ -3092,10 +3129,196 @@ namespace WindowsIDE.Ui
 
         private void ShowBuildDiagnostics(Diagnostic[] list)
         {
+            this.csharpBucket = null;
+            this.psBucket = null;
+            this.vbaBucket = null;
             this.EnsureBottomPaneVisible();
+            this.PublishProblemList(list);
+        }
+
+        /// <summary>
+        /// C# 常時診断だけを置き換える。hostOwns を外す。
+        /// </summary>
+        /// <param name="list">csc 診断。null は空。</param>
+        private void ApplyCSharpDiagnostics(Diagnostic[] list)
+        {
+            this.csharpBucket = list;
+            this.PublishBuckets();
+        }
+
+        /// <summary>
+        /// PowerShell ParseInput 診断だけを置き換える。
+        /// </summary>
+        /// <param name="list">構文エラー。null は空。</param>
+        private void ApplyPowerShellDiagnostics(Diagnostic[] list)
+        {
+            this.psBucket = list;
+            this.PublishBuckets();
+        }
+
+        /// <summary>
+        /// VBA Compile 診断だけを置き換える。成功クリアは空配列。
+        /// </summary>
+        /// <param name="list">Compile 診断。null は空。</param>
+        private void ApplyVbaDiagnostics(Diagnostic[] list)
+        {
+            this.vbaBucket = list;
+            this.PublishBuckets();
+        }
+
+        private void PublishBuckets()
+        {
+            Diagnostic[] list = ConcatBuckets(this.csharpBucket, this.psBucket, this.vbaBucket);
+            if (list.Length > 0)
+            {
+                this.EnsureBottomPaneVisible();
+            }
+
+            this.PublishProblemList(list);
+        }
+
+        private void PublishProblemList(Diagnostic[] list)
+        {
+            if (list == null)
+            {
+                list = new Diagnostic[0];
+            }
+
+            this.lastPublishedDiagnostics = list;
             if (this.bottomPane != null)
             {
                 this.bottomPane.SetProblemItems(list);
+            }
+
+            this.ApplyEditorSquiggles(list);
+        }
+
+        private void ApplyEditorSquiggles(Diagnostic[] list)
+        {
+            if (this.editor == null)
+            {
+                return;
+            }
+
+            Document doc = this.editor.Document;
+            if (doc == null)
+            {
+                this.editor.SetErrorDiagnostics(new Diagnostic[0]);
+                return;
+            }
+
+            if (list == null)
+            {
+                list = this.lastPublishedDiagnostics;
+            }
+
+            if (list == null)
+            {
+                this.editor.SetErrorDiagnostics(new Diagnostic[0]);
+                return;
+            }
+
+            List<Diagnostic> matched = new List<Diagnostic>();
+            int i = 0;
+            while (i < list.Length)
+            {
+                Diagnostic d = list[i];
+                i++;
+                if (d == null || !d.IsError)
+                {
+                    continue;
+                }
+
+                if (DiagnosticMatchesDocument(d, doc))
+                {
+                    matched.Add(d);
+                }
+            }
+
+            this.editor.SetErrorDiagnostics(matched.ToArray());
+        }
+
+        private static bool DiagnosticMatchesDocument(Diagnostic d, Document doc)
+        {
+            if (d == null || doc == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(d.FilePath))
+            {
+                if (!string.IsNullOrEmpty(doc.FilePath))
+                {
+                    return false;
+                }
+
+                if (string.IsNullOrEmpty(d.FilePath) && !string.IsNullOrEmpty(doc.DisplayName))
+                {
+                    return true;
+                }
+
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(doc.FilePath))
+            {
+                return string.Equals(d.FilePath, doc.DisplayName, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return string.Equals(d.FilePath, doc.FilePath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Diagnostic[] ConcatBuckets(Diagnostic[] a, Diagnostic[] b, Diagnostic[] c)
+        {
+            int na = (a == null) ? 0 : a.Length;
+            int nb = (b == null) ? 0 : b.Length;
+            int nc = (c == null) ? 0 : c.Length;
+            Diagnostic[] list = new Diagnostic[na + nb + nc];
+            int o = 0;
+            int i;
+            if (a != null)
+            {
+                i = 0;
+                while (i < a.Length)
+                {
+                    list[o] = a[i];
+                    o++;
+                    i++;
+                }
+            }
+
+            if (b != null)
+            {
+                i = 0;
+                while (i < b.Length)
+                {
+                    list[o] = b[i];
+                    o++;
+                    i++;
+                }
+            }
+
+            if (c != null)
+            {
+                i = 0;
+                while (i < c.Length)
+                {
+                    list[o] = c[i];
+                    o++;
+                    i++;
+                }
+            }
+
+            return list;
+        }
+
+        private void InvalidateLiveCsc()
+        {
+            this.liveGeneration++;
+            this.csharpDiagSeq++;
+            if (this.liveCscRunner != null)
+            {
+                this.liveCscRunner.Kill();
             }
         }
 
@@ -3955,6 +4178,246 @@ namespace WindowsIDE.Ui
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             this.RefreshFindCount();
+            if (this.editor != null && this.editor.IsComposing)
+            {
+                if (this.liveTimer != null)
+                {
+                    this.liveTimer.Stop();
+                }
+
+                return;
+            }
+
+            if (this.liveTimer == null)
+            {
+                return;
+            }
+
+            this.liveTimer.Interval = LiveDiagnoseDebounceMs;
+            this.liveTimer.Stop();
+            this.liveTimer.Start();
+        }
+
+        private void OnLiveTick(object sender, EventArgs e)
+        {
+            if (this.editor != null && this.editor.IsComposing)
+            {
+                if (this.liveTimer != null)
+                {
+                    this.liveTimer.Stop();
+                    this.liveTimer.Start();
+                }
+
+                return;
+            }
+
+            if (this.liveTimer != null)
+            {
+                this.liveTimer.Stop();
+            }
+
+            LanguageKind lang = LanguageKind.Plain;
+            if (this.editor != null && this.editor.Document != null)
+            {
+                lang = this.editor.Document.Language;
+            }
+
+            if (lang == LanguageKind.CSharp)
+            {
+                this.StartLiveCsc();
+                return;
+            }
+
+            if (lang == LanguageKind.PowerShell)
+            {
+                this.ApplyPowerShellDiagnostics(this.CollectOpenPowerShellDiagnostics());
+                return;
+            }
+        }
+
+        private void StartLiveCsc()
+        {
+            LiveBuffer[] bufs = this.CollectLiveBuffers();
+            string workspaceRoot = (this.workspace == null) ? null : this.workspace.RootPath;
+            string focused = null;
+            if (this.editor != null && this.editor.Document != null)
+            {
+                focused = this.editor.Document.FilePath;
+            }
+
+            LiveCompileSnapshot snapshot;
+            try
+            {
+                snapshot = LiveCompileUnit.Build(workspaceRoot, bufs, focused);
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            if (snapshot == null || snapshot.CscPaths == null || snapshot.CscPaths.Length == 0)
+            {
+                return;
+            }
+
+            this.buildGeneration++;
+            this.liveGeneration++;
+            this.csharpDiagSeq++;
+            int seq = this.csharpDiagSeq;
+            int liveGen = this.liveGeneration;
+            if (this.cscRunner != null)
+            {
+                this.cscRunner.Kill();
+            }
+
+            if (this.liveCscRunner != null)
+            {
+                this.liveCscRunner.Kill();
+            }
+
+            LiveBuildRequest req = new LiveBuildRequest();
+            req.LiveGeneration = liveGen;
+            req.CSharpDiagSeq = seq;
+            req.Snapshot = snapshot;
+            req.RspPath = snapshot.RspPath;
+            Thread thread = new Thread(this.LiveCscWorkerProc);
+            thread.IsBackground = true;
+            thread.Start(req);
+        }
+
+        private void LiveCscWorkerProc(object state)
+        {
+            LiveBuildRequest req = state as LiveBuildRequest;
+            if (req == null || this.liveCscRunner == null)
+            {
+                return;
+            }
+
+            CscRunResult result = this.liveCscRunner.Run(req.RspPath, req.LiveGeneration);
+            if (this.IsDisposed || !this.IsHandleCreated)
+            {
+                if (req.Snapshot != null)
+                {
+                    LiveCompileUnit.TryDeleteDirectory(req.Snapshot.OutputDir);
+                }
+
+                return;
+            }
+
+            this.BeginInvoke(new MethodInvoker(delegate
+            {
+                this.OnLiveCscFinished(req, result);
+            }));
+        }
+
+        private void OnLiveCscFinished(LiveBuildRequest req, CscRunResult result)
+        {
+            if (this.IsDisposed || req == null)
+            {
+                return;
+            }
+
+            if (req.CSharpDiagSeq != this.csharpDiagSeq || req.LiveGeneration != this.liveGeneration)
+            {
+                if (req.Snapshot != null)
+                {
+                    LiveCompileUnit.TryDeleteDirectory(req.Snapshot.OutputDir);
+                }
+
+                return;
+            }
+
+            Diagnostic[] parsed;
+            if (result == null || !string.IsNullOrEmpty(result.StartError))
+            {
+                string msg = (result == null || string.IsNullOrEmpty(result.StartError)) ? "csc.exe を起動できませんでした。" : result.StartError;
+                parsed = new Diagnostic[] { Diagnostic.CreateSynthetic(msg) };
+            }
+            else
+            {
+                string combined = result.CombinedOutput();
+                parsed = DiagnosticParser.ApplyExitCode(DiagnosticParser.Parse(combined), result.ExitCode, combined);
+            }
+
+            Diagnostic[] remapped = new Diagnostic[(parsed == null) ? 0 : parsed.Length];
+            int i = 0;
+            while (parsed != null && i < parsed.Length)
+            {
+                remapped[i] = LiveCompileUnit.Remap(parsed[i], req.Snapshot);
+                i++;
+            }
+
+            this.ApplyCSharpDiagnostics(remapped);
+            if (req.Snapshot != null)
+            {
+                LiveCompileUnit.TryDeleteDirectory(req.Snapshot.OutputDir);
+            }
+        }
+
+        private LiveBuffer[] CollectLiveBuffers()
+        {
+            if (this.tabs == null)
+            {
+                return new LiveBuffer[0];
+            }
+
+            List<LiveBuffer> list = new List<LiveBuffer>();
+            int i = 0;
+            while (i < this.tabs.Tabs.Count)
+            {
+                Document d = this.tabs.Tabs[i];
+                i++;
+                if (d == null)
+                {
+                    continue;
+                }
+
+                LiveBuffer b = new LiveBuffer();
+                b.FilePath = d.FilePath;
+                b.DisplayName = d.DisplayName;
+                b.Text = (d.Buffer == null) ? "" : d.Buffer.GetText();
+                b.IsDirty = d.IsDirty;
+                b.IsCSharp = d.Language == LanguageKind.CSharp;
+                list.Add(b);
+            }
+
+            return list.ToArray();
+        }
+
+        private Diagnostic[] CollectOpenPowerShellDiagnostics()
+        {
+            List<Diagnostic> list = new List<Diagnostic>();
+            if (this.tabs == null)
+            {
+                return list.ToArray();
+            }
+
+            int i = 0;
+            while (i < this.tabs.Tabs.Count)
+            {
+                Document d = this.tabs.Tabs[i];
+                i++;
+                if (d == null || d.Language != LanguageKind.PowerShell || d.Buffer == null)
+                {
+                    continue;
+                }
+
+                PowerShellParseError[] errs = PowerShellParseErrors.Collect(d.Buffer.GetText());
+                int e = 0;
+                while (e < errs.Length)
+                {
+                    PowerShellParseError err = errs[e];
+                    e++;
+                    if (err == null)
+                    {
+                        continue;
+                    }
+
+                    list.Add(Diagnostic.FromCompiler(d.FilePath, err.StartLine, err.StartColumn, true, null, err.Message, err.EndLine, err.EndColumn));
+                }
+            }
+
+            return list.ToArray();
         }
 
         /// <summary>クロム用 Font を破棄する。Renderer は所有しない。</summary>
@@ -3962,6 +4425,19 @@ namespace WindowsIDE.Ui
         {
             if (disposing)
             {
+                if (this.liveTimer != null)
+                {
+                    this.liveTimer.Stop();
+                    this.liveTimer.Tick -= this.OnLiveTick;
+                    this.liveTimer.Dispose();
+                    this.liveTimer = null;
+                }
+
+                if (this.liveCscRunner != null)
+                {
+                    this.liveCscRunner.Kill();
+                }
+
                 if (this.cscRunner != null)
                 {
                     this.cscRunner.Kill();
@@ -4076,6 +4552,14 @@ namespace WindowsIDE.Ui
             public string RspPath;
             public string OutputExe;
             public string WorkingDirectory;
+        }
+
+        private sealed class LiveBuildRequest
+        {
+            public int LiveGeneration;
+            public int CSharpDiagSeq;
+            public string RspPath;
+            public LiveCompileSnapshot Snapshot;
         }
     }
 }

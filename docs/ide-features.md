@@ -121,15 +121,15 @@ R7 の VBA ディレクトリ ↔ Excel 明示プル／プッシュ。Compile / 
 | --- | --- | --- |
 | F-IG | 全ファイル形式（Plain / cmd / Markdown / 無題 / 全ホスト）で、先頭 `' '` と `'\t'` から `tabSize` 列ごとに 1 物理 px の縦線を本文へ描く。色は既存 LineNumber。常時オン。新 XML なし。規則は `WindowsIDE.Editor`（WinForms 非依存の計測 + `TextView` 描画）。`DpiUtil.TextBodyClip` 内。ガターへはみ出さない | F-SIND、F-IND の Enter/Tab 契約変更、Languages、新 Theme 色、アクティブガイド（P29）、XML トグル（P30）、空行継続の確定（P31）、U+3000 を数えること、列 0 の線、P7-A への混入 |
 
-## フェーズ P7（編集器インテリジェンス）— P7-B 着手
+## フェーズ P7（編集器インテリジェンス）— P7-B 完了。P7-C 着手（F-LIVE / F-SQU / F-VBA-BLD 手動。VBA ライブは今は実装しない）。F-CMP 拡張と F-SIG は今は実装しない。
 
-P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「最初の利用可能 IDE」を壊さない。着手時期は採用済み P16（P2 完了の直後。波 C の F-LIVE / F-SQU / F-VBA-BLD は残 P1 の F-CS-BLD / F-PROB 待ち）。**P7-A（波 A）は完了。P7-B は F-GD / F-HOV / F-DOC だけ着手する。F-CMP の P7 拡張と F-SIG と波 C は今は実装しない。** 設定 XML の新規属性は今増やさない。F-CMP の P5 基本はフェーズ順では P7 の後（P5）に実装される。
+P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「最初の利用可能 IDE」を壊さない。着手時期は採用済み P16（P2 完了の直後。波 C の F-LIVE / F-SQU / F-VBA-BLD は残 P1 の F-CS-BLD / F-PROB 待ち）。**P7-A（波 A）は完了。P7-B は完了。P7-C は F-LIVE / F-SQU / F-VBA-BLD 手動を着手する。VBA ライブは今は実装しない。F-CMP の P7 拡張と F-SIG は今は実装しない。** 設定 XML の新規属性は今増やさない。F-CMP の P5 基本はフェーズ順では P7 の後（P5）に実装される。
 
 | 波 | ID | 内容 | 依存 | 状態 |
 | --- | --- | --- | --- | --- |
 | A 構造 | F-BR、F-AC、F-SIND、F-VBA-CASE | 括弧強調、自動閉じ、スマートインデント、VBA キーワード大文字小文字 | Editor + Languages。Build 不要 | 完了 |
 | B ナビ | F-GD、F-HOV、F-DOC、F-CMP の P7 拡張、F-SIG（C） | 定義へ移動、ホバー、枠コメント、ワークスペース／メンバー補完、パラメータヒント。対象は C# / VBA / PowerShell / cmd。VB.NET はフェーズ P9 | 位置付きシンボル。csc 不要 | F-GD / F-HOV / F-DOC 着手。F-CMP 拡張と F-SIG は今は実装しない |
-| C 診断 | F-LIVE、F-SQU、F-VBA-BLD | 常時 csc、波線、VBA Compile 診断 | 残 P1 の F-CS-BLD / F-PROB の後。VBA はプッシュ後 | 今は実装しない |
+| C 診断 | F-LIVE、F-SQU、F-VBA-BLD | 常時 csc、波線、VBA Compile 診断 | 残 P1 の F-CS-BLD / F-PROB の後。VBA はプッシュ後 | 着手（手動 Compile。ライブ VBA とブロック不一致波線は今は実装しない） |
 
 | ID | P7 で対象 | 今の P1 および P7 でやらない |
 | --- | --- | --- |
@@ -142,9 +142,9 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 | F-DOC | ショートカット 1 つで言語の枠コメントを定義直前に 1 回入れる | 既存枠の二重挿入。C# の `///` `<summary>` を生成すること。キーを確定すること（提案 P20 は確認待ち） |
 | F-CMP | P7 でワークスペースのユーザーシンボルと `.` 後のメンバー候補（P12 束縛／ヒューリスティック） | Roslyn。オーバーロード解決・変換・definite assignment。Excel 未起動の COM 型。P5 必須の拡大（提案 P8 は未確定） |
 | F-SIG | （C）呼び出し中の粗い引数リスト | P5 必須にすること。完全な型システム |
-| F-LIVE | デバウンスした Framework `csc.exe` の診断のみ。生成物は起動しない | EXE 自動起動、キー入力ごとの同期 csc、C# 以外への csc |
-| F-SQU | C# は csc、PS は `ParseInput`、VBA は F-VBA-BLD の位置 | 自前パーサをコンパイラ診断と偽る。cmd 波線 |
-| F-VBA-BLD | プッシュ後の Excel Compile 失敗を問題一覧と波線へ。Run しない | `Application.Run`、MakeCompiledFile、ダミー Run、キーごとの Compile、Excel 未起動のライブ自動起動、バックグラウンドスレッドの COM |
+| F-LIVE | デバウンスした Framework `csc.exe` の診断のみ。生成物は起動しない。C# タブの入力停止後だけ live csc。PS は ParseInput。VBA ライブは今は実装しない | EXE 自動起動、キー入力ごとの同期 csc、C# 以外への csc、ホスト Kill、UI スレッドでの WaitForExit |
+| F-SQU | C# は csc、PS は `ParseInput`、VBA は手動 F-VBA-BLD の位置。error のみ。既存 Error 色。新色なし | 自前パーサをコンパイラ診断と偽る。cmd 波線。warning 波線。ブロック不一致波線（今は実装しない） |
+| F-VBA-BLD | メニュー「コンパイル」からの手動。プッシュ後の Excel Compile 失敗を問題一覧と波線へ。Run しない。ライブ VBA は今は実装しない | `Application.Run`、MakeCompiledFile、ダミー Run、キーごとの Compile、Excel 未起動のライブ自動起動、バックグラウンドスレッドの COM |
 | F-IND | （P7 の対象外）P1 F-IND スライス | スマートインデントを F-IND に足すこと |
 | F-LSP | 変えない（W） | 外部 LSP / Roslyn を上げること |
 | F-CS-BLD | 手動ビルドのまま | 常時コンパイルと同一コマンドにすること |
@@ -153,7 +153,7 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 
 ### 常時コンパイル（F-LIVE）
 
-入力停止後にデバウンス（数値は実装時定数。未決）。前回の **csc プロセスだけ** を Kill。UI スレッドで csc を待たない。一時出力へ書き、診断後に削除する。`Process.Start` しない。C# 以外に csc しない。手動ビルドと常時が競合したら **新しい方** で問題一覧を置き換える。コンパイル単位は採用済み P14（ワークスペース内すべての `.cs`）。ユーザー `/r` は提案 P15。`/target` は提案 P18。
+入力停止後にデバウンス（MainForm の定数。XML に書かない）。前回の **csc プロセスだけ** を Kill（csharpHost / powershellHost / cmdHost / PTY は Kill しない）。UI スレッドで csc を待たない。一時出力へ書き、診断後に削除する。`Process.Start` しない。C# 以外に csc しない。手動ビルドと常時が競合したら **新しい方** で問題一覧を置き換える。コンパイル単位は採用済み P14（ワークスペース内すべての `.cs`。無題 C# は一時ファイル）。ユーザー `/r` は提案 P15（確定しない）。live rsp は `/target:library`（debug スイッチ無し）。起動しない。
 
 PS の波線は `Parser.ParseInput` の構文エラー位置で可（Runspace は開始しない）。VBA の波線は F-VBA-BLD（Excel Compile）の位置。ディスク上の粗いブロック不一致を波線にするのは C で、UI 上は「構造ヒント」としコンパイラと並べて偽らない。cmd は波線なし（W）。
 
@@ -164,7 +164,7 @@ PS の波線は `Parser.ParseInput` の構文エラー位置で可（Runspace �
 | 経路 | 動き |
 | --- | --- |
 | 手動（S） | コマンド「VBA をコンパイル」。Excel 未起動なら起動してよい（プル／プッシュと同じ）。保存確認 → プッシュ → Compile |
-| ライブ（C、提案 P25 は確認待ち） | マップ済みブックが既に開いているときだけ。Excel を自動起動しない。デバウンス後にプッシュ（既存の Excel 未保存確認）→ Compile。キー入力ごと禁止 |
+| ライブ（C、提案 P25 は確認待ち。今は実装しない） | マップ済みブックが既に開いているときだけ。Excel を自動起動しない。デバウンス後にプッシュ（既存の Excel 未保存確認）→ Compile。キー入力ごと禁止。今は実装しない |
 
 COM は STA / UI。VBIDE に診断リストを返す `Compile()` は無い、と書いてよい。ベストエフォート:
 

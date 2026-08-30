@@ -340,6 +340,22 @@ namespace WindowsIDE.Vba
         /// <returns>結果。</returns>
         public static VbaSyncResult Push(string workspaceRoot, VbaSyncConfirm confirm)
         {
+            return PushCore(workspaceRoot, confirm, false);
+        }
+
+        /// <summary>
+        /// プッシュ成功と同じセッション解放前に Compile する。失敗・Cancel・問題一覧置換なら Push の結果のまま。
+        /// </summary>
+        /// <param name="workspaceRoot">ワークスペースルート。</param>
+        /// <param name="confirm">未保存確認。</param>
+        /// <returns>結果。</returns>
+        public static VbaSyncResult PushThenCompile(string workspaceRoot, VbaSyncConfirm confirm)
+        {
+            return PushCore(workspaceRoot, confirm, true);
+        }
+
+        private static VbaSyncResult PushCore(string workspaceRoot, VbaSyncConfirm confirm, bool compileAfter)
+        {
             VbaMap map;
             VbaSyncResult fail;
             if (!TryRequireMap(workspaceRoot, true, out map, out fail))
@@ -618,6 +634,12 @@ namespace WindowsIDE.Vba
                 {
                     RollbackPush(session.Components, applied);
                     return VbaSyncResult.MessageBox(saveMapErr, true);
+                }
+
+                if (compileAfter)
+                {
+                    Diagnostic[] compileDiags = VbaCompiler.Compile(session.App, map, workspaceRoot);
+                    return VbaSyncResult.OkPushThenCompile(new string[0], excelOnly.ToArray(), compileDiags);
                 }
 
                 return VbaSyncResult.OkSync(new string[0], excelOnly.ToArray());

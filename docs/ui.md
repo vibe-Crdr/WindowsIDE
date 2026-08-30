@@ -67,7 +67,7 @@ P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`T
 
 ### フェーズ P7
 
-P7-A 対括弧は Selection / 不一致は Error。P7-B ホバー（F-HOV）は既存の背景 / 前景 / 枠。シグネチャ行は既存 Keyword / Type / Method / Local 等。長い本文は折り返し、収まらなければ ThemedScrollBar（10 DIP、オートハイド）。フォーカスは奪わない（`SW_SHOWNOACTIVATE`）。波 C は今は実装しない。波線は既存エラー `#f7768e`。フェーズ P7 でも新しいテーマ色は足さない。虹色括弧は W。P1 の「これ以外の新しい色は足さない」は維持する。つまみホバーはスクロールバーのマウスオーバーであり F-HOV ではない。
+P7-A 対括弧は Selection / 不一致は Error。P7-B ホバー（F-HOV）は既存の背景 / 前景 / 枠。シグネチャ行は既存 Keyword / Type / Method / Local 等。長い本文は折り返し、収まらなければ ThemedScrollBar（10 DIP、オートハイド）。フォーカスは奪わない（`SW_SHOWNOACTIVATE`）。P7-C 波線は既存 Error。新色なし。ライブ VBA は今は実装しない。波線は既存エラー `#f7768e`。フェーズ P7 でも新しいテーマ色は足さない。虹色括弧は W。P1 の「これ以外の新しい色は足さない」は維持する。つまみホバーはスクロールバーのマウスオーバーであり F-HOV ではない。
 
 ### フェーズ P8（今は実装しない）
 

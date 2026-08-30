@@ -49,6 +49,60 @@ namespace WindowsIDE.Vba
             return Invoke(target, name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.InvokeMethod, args);
         }
 
+        /// <summary>
+        /// メソッドを ByRef 引数付きで呼ぶ。GetSelection 用。6 引数 InvokeMember は維持する。
+        /// </summary>
+        /// <param name="target">COM オブジェクト。</param>
+        /// <param name="name">メソッド名。</param>
+        /// <param name="args">ByRef で更新する引数配列。</param>
+        /// <returns>戻り値。void なら null。</returns>
+        public static object CallByRef(object target, string name, object[] args)
+        {
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+            {
+                throw new InvalidOperationException("Excel COM は STA の UI スレッドでのみ呼べます。");
+            }
+
+            if (target == null)
+            {
+                throw new ArgumentNullException("target");
+            }
+
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("name");
+            }
+
+            if (args == null)
+            {
+                args = new object[0];
+            }
+
+            ParameterModifier[] modifiers = null;
+            if (args.Length > 0)
+            {
+                ParameterModifier mod = new ParameterModifier(args.Length);
+                int i = 0;
+                while (i < args.Length)
+                {
+                    mod[i] = true;
+                    i++;
+                }
+
+                modifiers = new ParameterModifier[] { mod };
+            }
+
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.InvokeMethod;
+            try
+            {
+                return target.GetType().InvokeMember(name, flags, null, target, args, modifiers, InvokeCulture, null);
+            }
+            catch (Exception ex)
+            {
+                throw UnwrapTargetInvocation(ex);
+            }
+        }
+
         private static object Invoke(object target, string name, BindingFlags flags, object[] args)
         {
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)

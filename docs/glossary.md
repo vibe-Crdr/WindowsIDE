@@ -20,7 +20,7 @@
 | Framework csc | `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`。Roslyn / VS 付属 csc は使わない。製品ビルドとユーザー C# 用。 |
 | Framework vbc | `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\vbc.exe`。バナーは Visual Basic 2012。ファイルバージョン 14.8.9221.0。Roslyn / VS 付属 vbc は使わない。ユーザー VB.NET 専用。製品ビルドには使わない。 |
 | インデント線 | F-IG。編集器本文の縦ガイド。言語非依存。全ファイル形式。色は行番号色。ツリーのインデントではない。今は実装しない。 |
-| 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。波 A（F-BR / F-AC / F-SIND / F-VBA-CASE）は完了。波 B（F-GD / F-HOV / F-DOC）は着手。波 C は今は実装しない。P0–P2 の必須には含めない。 |
+| 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。波 A（F-BR / F-AC / F-SIND / F-VBA-CASE）は完了。波 B（F-GD / F-HOV / F-DOC）は完了。波 C（F-LIVE / F-SQU / F-VBA-BLD 手動）は着手。ライブ VBA は今は実装しない。P0–P2 の必須には含めない。 |
 | フェーズ P8 | Markdown 字句とプレビュー、VBAProject 参照、キー記録マクロ。今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
 | フェーズ P9 | VB.NET ホスト（`.vb`、指定 `vbc.exe`、実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない。 |
 | 提案 P8 | F-CMP を P5 でキーワードと開いているファイルに限ること。ワークスペース拡張を P5 必須にしない。確定していない。フェーズ P8 ではない。 |

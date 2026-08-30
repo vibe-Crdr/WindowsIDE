@@ -48,6 +48,7 @@ src\WindowsIDE\Editor\Document.cs
 src\WindowsIDE\Editor\IndentRules.cs
 src\WindowsIDE\Editor\FindRules.cs
 src\WindowsIDE\Editor\CmdSelectionRules.cs
+src\WindowsIDE\Editor\SquiggleSpan.cs
 src\WindowsIDE\Languages\LanguageKind.cs
 src\WindowsIDE\Languages\TokenKind.cs
 src\WindowsIDE\Languages\Token.cs
@@ -68,6 +69,7 @@ src\WindowsIDE\Languages\IdentifierClassifier.cs
 src\WindowsIDE\Languages\ClassifySpan.cs
 src\WindowsIDE\Languages\SemanticClassifier.cs
 src\WindowsIDE\Languages\PowerShellSemantic.cs
+src\WindowsIDE\Languages\PowerShellParseErrors.cs
 src\WindowsIDE\Languages\VbaSemantic.cs
 src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
 src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
@@ -77,6 +79,7 @@ src\WindowsIDE\Build\FrameworkCsc.cs
 src\WindowsIDE\Build\Diagnostic.cs
 src\WindowsIDE\Build\DiagnosticParser.cs
 src\WindowsIDE\Build\CompileUnit.cs
+src\WindowsIDE\Build\LiveCompileUnit.cs
 src\WindowsIDE\Build\CscArgumentBuilder.cs
 src\WindowsIDE\Build\CscRunner.cs
 src\WindowsIDE\Host\Csharp\CsharpProcessHost.cs
@@ -101,6 +104,7 @@ src\WindowsIDE\Vba\VbaDiskTree.cs
 src\WindowsIDE\Vba\VbaWorkbookPath.cs
 src\WindowsIDE\Vba\VbaSyncResult.cs
 src\WindowsIDE\Vba\VbaSyncService.cs
+src\WindowsIDE\Vba\VbaCompiler.cs
 src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Languages\CSharp\CSharpSemantic.cs
 src\WindowsIDE\Languages\HighlightSession.cs

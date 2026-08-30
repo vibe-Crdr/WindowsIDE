@@ -83,7 +83,7 @@ Excel で名前を変えたら、次のプルでマップを更新する。ツ�
 | プル | ブックを開き（必要なら起動）、VBComponents をエクスポートし、マップに従ってファイルを作る/更新する。IDE に未保存の同名バッファがあれば確認する（全体中止。破棄して上書きしない）。成功時は問題一覧を触らない。開いている対象タブは ReloadFromDisk |
 | プッシュ | ディスクの `.bas` / `.cls` をインポートまたはコード置換する。識別子・衝突は失敗し問題一覧に両方のパス。部分適用しない。Excel にだけあるモジュールは削除しない（成功後に名前リスト）。削除は別コマンド。プッシュ後に Workbook.Save しない |
 | 名前の付け方 | プレビュー（旧名→新名。document は変更なし。先頭 20 件＋残り件数）の Yes でマップの namingMode だけ更新。この操作では Excel をリネームしない |
-| コンパイル（フェーズ P7。今は実装しない） | 保存確認のうえディスクを先にプッシュし、対象 VBProject を Excel VBA コンパイラで Compile する。失敗は問題一覧と波線（F-VBA-BLD）。`Application.Run` しない。手動は Excel 未起動なら起動してよい。ライブはマップ済みブックが既に開いているときだけ（提案 P25 は確認待ち）。キーごと禁止 |
+| コンパイル（フェーズ P7。手動は着手、ライブは今は実装しない） | メニュー「コンパイル」。保存確認のうえディスクを先にプッシュし、対象 VBProject を Excel VBA コンパイラで Compile する。失敗は問題一覧と波線（F-VBA-BLD）。`Application.Run` しない。手動は Excel 未起動なら起動してよい。ライブは今は実装しない（提案 P25 は確認待ち）。キーごと禁止 |
 | 参照（フェーズ P8。今は実装しない） | 開いている VBProject の `References` を一覧・追加・削除する（F-VBA-REF）。`.bas` には書かない。ビルトイン VBA / Excel 参照は削除しない。任意 COM は Excel プロセスに載る。明示操作だけ |
 | 実行 | モジュール名とマクロ名を指定し `Application.Run`。失敗は COM メッセージを出力パネルへ |
 
@@ -108,16 +108,16 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 - エクスポート: `VBComponent.Export`（TEMP 生バイト、ディスクへはマップ encoding）
 - 取り込み: 既存は CodeModule 置換。新規だけ TEMP 経由 Import。document は Name 変更・Remove・Import しない
 - IDE が起動した Excel を Quit しない。IDE 終了時も Excel を触らない
-- Compile（フェーズ P7）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。行は Strip と同じヘッダ加算。レキサで埋めない。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
+- Compile（フェーズ P7。手動は着手、ライブは今は実装しない）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。行は Strip と同じヘッダ加算。レキサで埋めない。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
 - References（フェーズ P8）: `VBProject.References` の一覧・追加・削除
 
 IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。診断 Compile も UI/STA。バックグラウンドスレッドで Excel を触らない。
 
 ## フェーズ P7
 
-波 A（終端語・CASE）は完了。F-GD / F-HOV はディスク上の宣言と、解決できた定義のシグネチャおよび直前コメント（F-DOC 枠を含む）を見る。Compile（F-VBA-BLD）は今は実装しない。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
+波 A（終端語・CASE）は完了。F-GD / F-HOV はディスク上の宣言と、解決できた定義のシグネチャおよび直前コメント（F-DOC 枠を含む）を見る。Compile（F-VBA-BLD）は手動を着手する。ライブは今は実装しない。COM HelpString は使わない。Object Browser は作らない。自動閉じの終端は VBA の実際の語（For / For Each は `Next`、Do は `Loop`、While は `Wend`）。`End For` は書かない。キーワード大文字小文字は F-VBA-CASE（インデントは F-SIND。混ぜない）。
 
-診断 Compile は F-VBA-BLD（今は実装しない）。プッシュ後に Excel VBA コンパイラを使う。Run は明示のまま。ライブは既に開いているマップ済みブックだけ（提案 P25 は確認待ち）。Excel 未起動のライブは走らない。
+診断 Compile は F-VBA-BLD（手動は着手、ライブは今は実装しない）。プッシュ後に Excel VBA コンパイラを使う。Run は明示のまま。ライブは今は実装しない（提案 P25 は確認待ち）。Excel 未起動のライブは走らない。
 
 ## フェーズ P8（今は実装しない）
 

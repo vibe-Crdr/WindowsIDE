@@ -103,6 +103,11 @@ namespace WindowsIDE.Tests
             RunCsFileEnumerator();
             RunCompileUnit();
             RunCscArgumentBuilder();
+            RunCscLiveResponse();
+            RunSquiggleSpan();
+            RunPowerShellParseErrors();
+            RunLiveCompileUnit();
+            InspectP7CSource();
             RunCscBrokenSource();
             RunCsharpProcessHost();
             RunPowerShellProcessHost();
@@ -2839,6 +2844,7 @@ namespace WindowsIDE.Tests
                 Check("rsp no winexe", text.IndexOf("/target:winexe", StringComparison.Ordinal) < 0);
                 Check("rsp out", text.IndexOf("/out:", StringComparison.Ordinal) >= 0);
                 Check("rsp no SMA", text.IndexOf("System.Management.Automation", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("rsp debug+", text.IndexOf("/debug+", StringComparison.Ordinal) >= 0);
             }
             finally
             {
@@ -2850,6 +2856,302 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void RunCscLiveResponse()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-liveresp-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string rsp = Path.Combine(dir, "csc.rsp");
+            string output = Path.Combine(dir, "out.dll");
+            string src = Path.Combine(dir, "A.cs");
+            try
+            {
+                CscArgumentBuilder.WriteLiveResponseFile(rsp, output, new string[] { src });
+                byte[] bytes = File.ReadAllBytes(rsp);
+                Check("live rsp utf8 bom", bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+                string text = Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+                Check("live rsp no noconfig", text.IndexOf("/noconfig", StringComparison.OrdinalIgnoreCase) < 0);
+                Check("live rsp nostdlib", text.IndexOf("/nostdlib", StringComparison.Ordinal) >= 0);
+                Check("live rsp target library", text.IndexOf("/target:library", StringComparison.Ordinal) >= 0);
+                Check("live rsp no exe", text.IndexOf("/target:exe", StringComparison.Ordinal) < 0);
+                Check("live rsp no debug+", text.IndexOf("/debug+", StringComparison.Ordinal) < 0);
+                Check("live rsp no debug-", text.IndexOf("/debug-", StringComparison.Ordinal) < 0);
+                Check("live rsp out dll", text.IndexOf("out.dll", StringComparison.OrdinalIgnoreCase) >= 0);
+                string liveDll = CscArgumentBuilder.GetLiveOutputDllPath(src);
+                Check("live out under live", liveDll.IndexOf(Path.Combine("WindowsIDE", "build", "live"), StringComparison.OrdinalIgnoreCase) >= 0);
+                Check("live out dll", liveDll.EndsWith("out.dll", StringComparison.OrdinalIgnoreCase));
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunSquiggleSpan()
+        {
+            int emptyEnd = SquiggleSpan.Resolve("", 0, -1);
+            Check("squiggle empty start+1", emptyEnd == 1);
+            int trimmed = SquiggleSpan.Resolve("abc   ", 0, -1);
+            Check("squiggle unspecified trim", trimmed == 3);
+            SquiggleSpan one = SquiggleSpan.FromLine(2, "hello", 1, 4);
+            Check("squiggle from line", one != null && one.Line == 2 && one.StartColumn == 1 && one.EndColumn == 4);
+            string[] lines = new string[] { "aaa", "bbb", "ccc" };
+            SquiggleSpan[] multi = SquiggleSpan.FromRange(lines, 0, 1, 2, 2);
+            Check("squiggle multiline count", multi != null && multi.Length == 3);
+            Check("squiggle multiline first", multi != null && multi.Length > 0 && multi[0].StartColumn == 1);
+            Check("squiggle multiline mid start0", multi != null && multi.Length > 1 && multi[1].StartColumn == 0);
+        }
+
+        private static void RunPowerShellParseErrors()
+        {
+            PowerShellParseError[] none = PowerShellParseErrors.Collect("function foo { }");
+            Check("ps parse ok empty", none != null && none.Length == 0);
+            PowerShellParseError[] errs = PowerShellParseErrors.Collect("function {");
+            Check("ps parse has error", errs != null && errs.Length > 0);
+            if (errs != null && errs.Length > 0 && errs[0] != null)
+            {
+                Check("ps parse start 1-based", errs[0].StartLine >= 1 && errs[0].StartColumn >= 1);
+                Check("ps parse end 1-based", errs[0].EndLine >= 1 && errs[0].EndColumn >= 1);
+                Check("ps parse message", !string.IsNullOrEmpty(errs[0].Message));
+            }
+            else
+            {
+                Check("ps parse start 1-based", false);
+                Check("ps parse end 1-based", false);
+                Check("ps parse message", false);
+            }
+        }
+
+        private static void RunLiveCompileUnit()
+        {
+            LiveCompileSnapshot empty = LiveCompileUnit.Build(null, new LiveBuffer[0], null);
+            Check("live empty skip", empty != null && empty.CscPaths != null && empty.CscPaths.Length == 0);
+
+            string ws = Path.Combine(Path.GetTempPath(), "WindowsIDE-livews-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(ws);
+            string a = Path.Combine(ws, "A.cs");
+            string b = Path.Combine(ws, "B.cs");
+            WriteUtf8Bom(a, "class A { }");
+            WriteUtf8Bom(b, "class B { }");
+            try
+            {
+                LiveBuffer dirty = new LiveBuffer();
+                dirty.FilePath = a;
+                dirty.DisplayName = "A.cs";
+                dirty.Text = "class A { int x = ";
+                dirty.IsDirty = true;
+                dirty.IsCSharp = true;
+                LiveCompileSnapshot snap = LiveCompileUnit.Build(ws, new LiveBuffer[] { dirty }, a);
+                Check("live ws two sources", snap != null && snap.CscPaths != null && snap.CscPaths.Length == 2);
+                bool dirtyIsTemp = false;
+                bool bIsDisk = false;
+                if (snap != null && snap.CscPaths != null)
+                {
+                    int i = 0;
+                    while (i < snap.CscPaths.Length)
+                    {
+                        string csc = snap.CscPaths[i];
+                        string log = (snap.LogicalPaths != null && i < snap.LogicalPaths.Length) ? snap.LogicalPaths[i] : null;
+                        if (log != null && string.Equals(Path.GetFullPath(log), Path.GetFullPath(a), StringComparison.OrdinalIgnoreCase))
+                        {
+                            dirtyIsTemp = csc != null && csc.IndexOf("build\\live", StringComparison.OrdinalIgnoreCase) >= 0;
+                        }
+
+                        if (csc != null && string.Equals(Path.GetFullPath(csc), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase))
+                        {
+                            bIsDisk = true;
+                        }
+
+                        i++;
+                    }
+                }
+
+                Check("live dirty uses temp", dirtyIsTemp);
+                Check("live clean uses disk", bIsDisk);
+                Diagnostic raw = Diagnostic.FromCompiler(dirtyIsTemp ? FindTempCsc(snap, a) : a, 1, 1, true, "CS1002", "err");
+                Diagnostic mapped = LiveCompileUnit.Remap(raw, snap);
+                Check("live remap logical", mapped != null && mapped.FilePath != null && string.Equals(Path.GetFullPath(mapped.FilePath), Path.GetFullPath(a), StringComparison.OrdinalIgnoreCase));
+                Check("live remap no temp leak", mapped != null && mapped.FilePath != null && mapped.FilePath.IndexOf("build\\live", StringComparison.OrdinalIgnoreCase) < 0);
+                if (snap != null)
+                {
+                    LiveCompileUnit.TryDeleteDirectory(snap.OutputDir);
+                }
+
+                LiveBuffer untitled = new LiveBuffer();
+                untitled.FilePath = null;
+                untitled.DisplayName = "無題-1";
+                untitled.Text = "class U { int x = ";
+                untitled.IsDirty = true;
+                untitled.IsCSharp = true;
+                LiveCompileSnapshot untitledSnap = LiveCompileUnit.Build(ws, new LiveBuffer[] { untitled }, null);
+                Check("live untitled included", untitledSnap != null && untitledSnap.CscPaths != null && untitledSnap.CscPaths.Length >= 3);
+                bool untitledTemp = false;
+                if (untitledSnap != null && untitledSnap.CscPaths != null)
+                {
+                    int i = 0;
+                    while (i < untitledSnap.CscPaths.Length)
+                    {
+                        string csc = untitledSnap.CscPaths[i];
+                        string log = (untitledSnap.LogicalPaths != null && i < untitledSnap.LogicalPaths.Length) ? untitledSnap.LogicalPaths[i] : null;
+                        if (string.IsNullOrEmpty(log) && csc != null && csc.IndexOf("untitled-", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            untitledTemp = true;
+                            Diagnostic uRaw = Diagnostic.FromCompiler(csc, 1, 1, true, "CS1002", "err");
+                            Diagnostic uMap = LiveCompileUnit.Remap(uRaw, untitledSnap);
+                            Check("live untitled remap empty", uMap != null && string.IsNullOrEmpty(uMap.FilePath));
+                        }
+
+                        i++;
+                    }
+                }
+
+                Check("live untitled temp name", untitledTemp);
+                if (untitledSnap != null)
+                {
+                    LiveCompileUnit.TryDeleteDirectory(untitledSnap.OutputDir);
+                }
+
+                LiveBuffer plainUntitled = new LiveBuffer();
+                plainUntitled.FilePath = null;
+                plainUntitled.DisplayName = "無題-2";
+                plainUntitled.Text = "hello";
+                plainUntitled.IsDirty = true;
+                plainUntitled.IsCSharp = false;
+                LiveCompileSnapshot plainSnap = LiveCompileUnit.Build(null, new LiveBuffer[] { plainUntitled }, null);
+                Check("live plain untitled skip", plainSnap != null && plainSnap.CscPaths != null && plainSnap.CscPaths.Length == 0);
+
+                LiveCompileSnapshot focused = LiveCompileUnit.Build(null, new LiveBuffer[0], a);
+                Check("live no ws focused disk", focused != null && focused.CscPaths != null && focused.CscPaths.Length == 1);
+                if (focused != null)
+                {
+                    LiveCompileUnit.TryDeleteDirectory(focused.OutputDir);
+                }
+
+                string gone = Path.Combine(Path.GetTempPath(), "WindowsIDE-livedel-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(gone);
+                Check("live try delete", LiveCompileUnit.TryDeleteDirectory(gone) && !Directory.Exists(gone));
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(ws, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static string FindTempCsc(LiveCompileSnapshot snap, string logical)
+        {
+            if (snap == null || snap.CscPaths == null || snap.LogicalPaths == null || string.IsNullOrEmpty(logical))
+            {
+                return logical;
+            }
+
+            string full = Path.GetFullPath(logical);
+            int i = 0;
+            int n = snap.CscPaths.Length;
+            if (snap.LogicalPaths.Length < n)
+            {
+                n = snap.LogicalPaths.Length;
+            }
+
+            while (i < n)
+            {
+                if (snap.LogicalPaths[i] != null && string.Equals(Path.GetFullPath(snap.LogicalPaths[i]), full, StringComparison.OrdinalIgnoreCase))
+                {
+                    return snap.CscPaths[i];
+                }
+
+                i++;
+            }
+
+            return logical;
+        }
+
+        private static void InspectP7CSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string main = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs"));
+            Check("p7c no GetProcessesByName", main.IndexOf("GetProcessesByName", StringComparison.Ordinal) < 0);
+            Check("p7c no WaitForExit", main.IndexOf("WaitForExit", StringComparison.Ordinal) < 0);
+            Check("p7c debounce 600", main.IndexOf("LiveDiagnoseDebounceMs = 600", StringComparison.Ordinal) >= 0);
+            int liveAt = main.IndexOf("private void StartLiveCsc(", StringComparison.Ordinal);
+            int nextAt = main.IndexOf("private void LiveCscWorkerProc(", StringComparison.Ordinal);
+            Check("p7c StartLive method", liveAt >= 0 && nextAt > liveAt);
+            if (liveAt >= 0 && nextAt > liveAt)
+            {
+                string body = main.Substring(liveAt, nextAt - liveAt);
+                Check("p7c StartLive no csharpHost.Kill", body.IndexOf("csharpHost.Kill", StringComparison.Ordinal) < 0);
+                Check("p7c StartLive no powershellHost.Kill", body.IndexOf("powershellHost.Kill", StringComparison.Ordinal) < 0);
+                Check("p7c StartLive no cmdHost.Kill", body.IndexOf("cmdHost.Kill", StringComparison.Ordinal) < 0);
+            }
+
+            string langDir = Path.Combine(repo, "src", "WindowsIDE", "Languages");
+            string[] langFiles = Directory.GetFiles(langDir, "*.cs", SearchOption.AllDirectories);
+            bool formsRef = false;
+            int i = 0;
+            while (i < langFiles.Length)
+            {
+                string src = File.ReadAllText(langFiles[i]);
+                if (src.IndexOf("using System.Windows.Forms", StringComparison.Ordinal) >= 0)
+                {
+                    formsRef = true;
+                }
+
+                i++;
+            }
+
+            Check("p7c Languages no WinForms", !formsRef);
+
+            string theme = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Theme.cs"));
+            Check("p7c Theme palette size", CountToken(theme, "readonly Color") == 17);
+
+            string builder = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Build", "CscArgumentBuilder.cs"));
+            int writeAt = builder.IndexOf("public static void WriteResponseFile(", StringComparison.Ordinal);
+            int liveWriteAt = builder.IndexOf("public static void WriteLiveResponseFile(", StringComparison.Ordinal);
+            Check("p7c live write method", writeAt >= 0 && liveWriteAt > writeAt);
+            if (writeAt >= 0 && liveWriteAt > writeAt)
+            {
+                string manualBody = builder.Substring(writeAt, liveWriteAt - writeAt);
+                Check("p7c manual still exe", manualBody.IndexOf("AppendLine(\"/target:exe\")", StringComparison.Ordinal) >= 0);
+                Check("p7c manual still debug+", manualBody.IndexOf("AppendLine(\"/debug+\")", StringComparison.Ordinal) >= 0);
+                Check("p7c manual no library", manualBody.IndexOf("AppendLine(\"/target:library\")", StringComparison.Ordinal) < 0);
+            }
+
+            if (liveWriteAt >= 0)
+            {
+                string liveBody = builder.Substring(liveWriteAt);
+                int hashAt = liveBody.IndexOf("public static string ShortHash(", StringComparison.Ordinal);
+                if (hashAt > 0)
+                {
+                    liveBody = liveBody.Substring(0, hashAt);
+                }
+
+                Check("p7c live library only", liveBody.IndexOf("AppendLine(\"/target:library\")", StringComparison.Ordinal) >= 0);
+                Check("p7c live no exe", liveBody.IndexOf("AppendLine(\"/target:exe\")", StringComparison.Ordinal) < 0);
+            }
+
+            Check("p7c main no library flag", main.IndexOf("/target:library", StringComparison.Ordinal) < 0);
+            Check("p7c compile menu", main.IndexOf("コンパイル(&C)", StringComparison.Ordinal) >= 0);
+
+            string productRsp = File.ReadAllText(Path.Combine(repo, "build", "windows-ide.rsp"));
+            string testsRsp = File.ReadAllText(Path.Combine(repo, "build", "windows-ide-tests.rsp"));
+            Check("p7c product rsp no extra r", CountRspRefs(productRsp) == 7);
+            Check("p7c tests rsp no extra r", CountRspRefs(testsRsp) == 7);
+            Check("p7c rsp SquiggleSpan", productRsp.IndexOf("SquiggleSpan.cs", StringComparison.Ordinal) >= 0 && testsRsp.IndexOf("SquiggleSpan.cs", StringComparison.Ordinal) >= 0);
+            Check("p7c rsp LiveCompileUnit", productRsp.IndexOf("LiveCompileUnit.cs", StringComparison.Ordinal) >= 0 && testsRsp.IndexOf("LiveCompileUnit.cs", StringComparison.Ordinal) >= 0);
+            Check("p7c rsp PowerShellParseErrors", productRsp.IndexOf("PowerShellParseErrors.cs", StringComparison.Ordinal) >= 0 && testsRsp.IndexOf("PowerShellParseErrors.cs", StringComparison.Ordinal) >= 0);
+            Check("p7c rsp VbaCompiler", productRsp.IndexOf("VbaCompiler.cs", StringComparison.Ordinal) >= 0 && testsRsp.IndexOf("VbaCompiler.cs", StringComparison.Ordinal) >= 0);
         }
 
         private static void RunCscBrokenSource()
@@ -4756,6 +5058,17 @@ namespace WindowsIDE.Tests
             Check("vba no GetProcessesByName", vbaSrc.IndexOf("GetProcessesByName", StringComparison.Ordinal) < 0);
             Check("vba no Office Interop", vbaSrc.IndexOf("Microsoft.Office.Interop", StringComparison.Ordinal) < 0);
             Check("vba no Microsoft.CSharp", vbaSrc.IndexOf("Microsoft.CSharp", StringComparison.Ordinal) < 0);
+            Check("vba no Application.Run", vbaSrc.IndexOf("Application.Run", StringComparison.Ordinal) < 0);
+            string vbaCompilerPath = Path.Combine(vbaDir, "VbaCompiler.cs");
+            Check("vba compiler source", File.Exists(vbaCompilerPath));
+            if (File.Exists(vbaCompilerPath))
+            {
+                string compilerSrc = File.ReadAllText(vbaCompilerPath);
+                Check("vba FindControl", compilerSrc.IndexOf("FindControl", StringComparison.Ordinal) >= 0);
+                Check("vba FindControl 578", compilerSrc.IndexOf("FindControl", StringComparison.Ordinal) >= 0 && compilerSrc.IndexOf("578", StringComparison.Ordinal) >= 0);
+                Check("vba no caption Compile search", compilerSrc.IndexOf("\"Compile\"", StringComparison.Ordinal) < 0);
+            }
+
             Check("vba no Application.Quit", vbaSrc.IndexOf("Application.Quit", StringComparison.Ordinal) < 0 && vbaSrc.IndexOf("\"Quit\"", StringComparison.Ordinal) < 0);
             Check("vba no Workbooks.Close", vbaSrc.IndexOf("Workbooks.Close", StringComparison.Ordinal) < 0);
             Check("vba no new Thread ComInvoker", vbaSrc.IndexOf("new Thread", StringComparison.Ordinal) < 0);
@@ -4772,6 +5085,7 @@ namespace WindowsIDE.Tests
 
             string mainSrcPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs");
             string mainSrc = File.ReadAllText(mainSrcPath);
+            Check("vba compile menu", mainSrc.IndexOf("コンパイル(&C)", StringComparison.Ordinal) >= 0);
             Check("vba menu VBA(&A)", mainSrc.IndexOf("VBA(&A)", StringComparison.Ordinal) >= 0);
             Check("vba display Ctrl+Alt+P", mainSrc.IndexOf("ShortcutKeyDisplayString = \"Ctrl+Alt+P\"", StringComparison.Ordinal) >= 0);
             Check("vba display Ctrl+Alt+H", mainSrc.IndexOf("ShortcutKeyDisplayString = \"Ctrl+Alt+H\"", StringComparison.Ordinal) >= 0);

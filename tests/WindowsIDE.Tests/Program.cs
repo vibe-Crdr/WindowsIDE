@@ -4846,6 +4846,76 @@ namespace WindowsIDE.Tests
             Check("export header count null", VbaExportText.CountCodeModuleHeaderLines(null) == 0);
             Check("export to disk body attribute", VbaExportText.ToDiskLine(1, bodyAttr) == 1);
 
+            string importStdBody = "Option Explicit\r\n";
+            string importStd = VbaExportText.EnsureForImport(VbaComponentKind.Std, "Lib_Foo", importStdBody);
+            Check("import std body name", importStd == "Attribute VB_Name = \"Lib_Foo\"\r\n" + importStdBody);
+            Check("import std body no version", importStd.IndexOf("VERSION", StringComparison.OrdinalIgnoreCase) < 0);
+            string importStdWrong = VbaExportText.EnsureForImport(VbaComponentKind.Std, "Lib_Foo", "Attribute VB_Name = \"Wrong\"\r\nOption Explicit\r\n");
+            Check("import std excelName wins", importStdWrong.IndexOf("Attribute VB_Name = \"Lib_Foo\"", StringComparison.Ordinal) >= 0
+                && importStdWrong.IndexOf("\"Wrong\"", StringComparison.Ordinal) < 0);
+            string importClsExpected = "VERSION 1.0 CLASS\r\nBEGIN\r\n  MultiUse = -1  'True\r\nEND\r\n"
+                + "Attribute VB_Name = \"Lib_Foo\"\r\n"
+                + "Attribute VB_GlobalNameSpace = False\r\n"
+                + "Attribute VB_Creatable = False\r\n"
+                + "Attribute VB_PredeclaredId = False\r\n"
+                + "Attribute VB_Exposed = False\r\n"
+                + "Option Explicit\r\n";
+            string importCls = VbaExportText.EnsureForImport(VbaComponentKind.Class, "Lib_Foo", importStdBody);
+            Check("import cls body only", importCls == importClsExpected);
+            string importClsPredIn = "VERSION 1.0 CLASS\r\nBEGIN\r\n  MultiUse = -1  'True\r\nEND\r\n"
+                + "Attribute VB_Name = \"Wrong\"\r\n"
+                + "Attribute VB_GlobalNameSpace = False\r\n"
+                + "Attribute VB_Creatable = False\r\n"
+                + "Attribute VB_PredeclaredId = True\r\n"
+                + "Attribute VB_Exposed = False\r\n"
+                + "Option Explicit\r\n";
+            string importClsPred = VbaExportText.EnsureForImport(VbaComponentKind.Class, "Lib_Foo", importClsPredIn);
+            Check("import cls keep predeclared", importClsPred.IndexOf("Attribute VB_Name = \"Lib_Foo\"", StringComparison.Ordinal) >= 0
+                && importClsPred.IndexOf("Attribute VB_PredeclaredId = True", StringComparison.Ordinal) >= 0
+                && importClsPred.IndexOf("Attribute VB_PredeclaredId = False", StringComparison.Ordinal) < 0
+                && importClsPred.IndexOf("\"Wrong\"", StringComparison.Ordinal) < 0);
+            string importClsMuIn = "VERSION 1.0 CLASS\r\nBEGIN\r\n  MultiUse = 0  'False\r\nEND\r\nAttribute VB_Name = \"C1\"\r\nOption Explicit\r\n";
+            string importClsMu = VbaExportText.EnsureForImport(VbaComponentKind.Class, "MyClass", importClsMuIn);
+            Check("import cls keep multiuse", importClsMu.IndexOf("  MultiUse = 0  'False", StringComparison.Ordinal) >= 0);
+            string importBodyAttr = VbaExportText.EnsureForImport(VbaComponentKind.Std, "Lib_Foo", bodyAttr);
+            Check("import keep body attribute", importBodyAttr.IndexOf("Attribute VB_Name = \"kept\"", StringComparison.Ordinal) >= 0);
+            Check("import strip roundtrip std", VbaExportText.StripForCodeModule(importStd) == importStdBody);
+            Check("import strip roundtrip cls", VbaExportText.StripForCodeModule(importCls) == importStdBody);
+            Check("import strip roundtrip body attr", VbaExportText.StripForCodeModule(importBodyAttr) == bodyAttr);
+            bool importThrewDoc = false;
+            try
+            {
+                VbaExportText.EnsureForImport(VbaComponentKind.Document, "ThisWorkbook", importStdBody);
+            }
+            catch (ArgumentException)
+            {
+                importThrewDoc = true;
+            }
+
+            Check("import reject document", importThrewDoc);
+            bool importThrewEmpty = false;
+            try
+            {
+                VbaExportText.EnsureForImport(VbaComponentKind.Std, "", importStdBody);
+            }
+            catch (ArgumentException)
+            {
+                importThrewEmpty = true;
+            }
+
+            Check("import reject empty excelName", importThrewEmpty);
+            bool importThrewNull = false;
+            try
+            {
+                VbaExportText.EnsureForImport(VbaComponentKind.Std, null, importStdBody);
+            }
+            catch (ArgumentException)
+            {
+                importThrewNull = true;
+            }
+
+            Check("import reject null excelName", importThrewNull);
+
             Check("name filename", VbaNaming.FromRelPath("Lib/StringUtil.bas", VbaNamingMode.Filename) == "StringUtil");
             Check("name folder_prefix", VbaNaming.FromRelPath("Lib/StringUtil.bas", VbaNamingMode.FolderPrefix) == "Lib_StringUtil");
             Check("name nested prefix", VbaNaming.FromRelPath("Lib/Text/Join.bas", VbaNamingMode.FolderPrefix) == "Lib_Text_Join");
@@ -5072,7 +5142,18 @@ namespace WindowsIDE.Tests
             Check("vba no Application.Quit", vbaSrc.IndexOf("Application.Quit", StringComparison.Ordinal) < 0 && vbaSrc.IndexOf("\"Quit\"", StringComparison.Ordinal) < 0);
             Check("vba no Workbooks.Close", vbaSrc.IndexOf("Workbooks.Close", StringComparison.Ordinal) < 0);
             Check("vba no new Thread ComInvoker", vbaSrc.IndexOf("new Thread", StringComparison.Ordinal) < 0);
-            Check("vba sync no Quit", File.ReadAllText(Path.Combine(vbaDir, "VbaSyncService.cs")).IndexOf("Quit", StringComparison.Ordinal) < 0);
+            string syncSrc = File.ReadAllText(Path.Combine(vbaDir, "VbaSyncService.cs"));
+            Check("vba sync no Quit", syncSrc.IndexOf("Quit", StringComparison.Ordinal) < 0);
+            int importAt = syncSrc.IndexOf("private static bool TryImportNew(", StringComparison.Ordinal);
+            int readTextAt = syncSrc.IndexOf("private static bool TryReadText(", StringComparison.Ordinal);
+            Check("sync TryImportNew", importAt >= 0 && readTextAt > importAt);
+            if (importAt >= 0 && readTextAt > importAt)
+            {
+                string importBody = syncSrc.Substring(importAt, readTextAt - importAt);
+                int ensureAt = importBody.IndexOf("EnsureForImport", StringComparison.Ordinal);
+                int writeAt = importBody.IndexOf("TryWriteEncoded", StringComparison.Ordinal);
+                Check("sync EnsureForImport before write", ensureAt >= 0 && writeAt > ensureAt);
+            }
 
             string comSrc = File.ReadAllText(Path.Combine(vbaDir, "ComInvoker.cs"));
             Check("cominvoker GetCultureInfo(1033)", comSrc.IndexOf("GetCultureInfo(1033)", StringComparison.Ordinal) >= 0);

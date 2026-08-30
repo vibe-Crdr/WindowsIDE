@@ -34,6 +34,7 @@
 | D26 | F-HOV は Visual Studio クイックインフォのサブセット。ユーザー定義が解決できたらシグネチャを常時出し、説明（F-DOC / `///` / 直前コメント / BCL XML）はあればその下。新 Theme 色は足さない（既存 Keyword / Type / Method / Local / Foreground）。ホバー窓は `WS_EX_NOACTIVATE` と `ShowWindow(SW_SHOWNOACTIVATE)`。ツリー再読込（F-EXP）は他プロセスからフォアグラウンドに戻ったときだけ（`WM_ACTIVATEAPP`）。自前ホバーでは `OnActivated` から Rebuild しない。C# 宣言インデックスの正は `CSharpSemantic.Collect`（P12 束縛の延長。新規フルパーサは作らない） |
 | D27 | F-EXP のリネームと削除を実装する（以前の「今は実装しない」を覆す）。ツリーフォーカスは Ctrl+Shift+E（ProcessCmdKey、ShortcutKeys なし、IME 中は奪わない）。削除は SHFileOperation FO_DELETE + FOF_ALLOWUNDO（確認付きごみ箱）。Shift+Delete の完全削除は今やらない。ウォッチとツリーからのワークスペース外オープンはやらない。.bas / .cls のディスクリネーム／削除はマップがあれば relpath 更新またはエントリ削除。Excel COM は走らせない。推測紐付けしない。 |
 | D28 | 起動時は `split.Panel1Collapsed = true`。`TryBindWorkspace` 成功で展開し、閉じるまで畳まない。左ペイン 260 DIP は初回展開のみ（幅が足りるとき）。幅は XML に書かない。無引数・ファイル引数（D20）では左ペインを出さない。起動直後フォーカスは常に TextView。Ctrl+Shift+E はワークスペース無しで no-op。OpenFolder 直後は編集器のまま。 |
+| D29 | `.bas` / `.cls` のディスクは本文のみでよい。`Attribute VB_Name` は不要（禁止ではない）。新規 Import は TEMP 直前に `VbaExportText.EnsureForImport` でヘッダを合成し、VB_Name は namingMode の excelName が勝つ。ディスクは書き換えない。プルは Export 生ではなく `StripForCodeModule` を書く。既存は Strip + CodeModule 置換。document は Import しない。クラス Instancing はマップに残さない。 |
 
 ## P0 で採用した提案
 

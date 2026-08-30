@@ -262,6 +262,8 @@ namespace WindowsIDE.Vba
                             continue;
                         }
 
+                        text = VbaExportText.StripForCodeModule(text);
+
                         try
                         {
                             FileEncoding.GetBytesToSave(text, map.GetEncodingInfo(), plan.DestPath);
@@ -1123,7 +1125,8 @@ namespace WindowsIDE.Vba
             error = null;
             string ext = VbaDiskTree.ExtensionFor(item.Kind);
             string tempFile = Path.Combine(tempDir, item.ExcelName + ext);
-            if (!TryWriteEncoded(tempFile, text, encoding, out error))
+            string importText = VbaExportText.EnsureForImport(item.Kind, item.ExcelName, text);
+            if (!TryWriteEncoded(tempFile, importText, encoding, out error))
             {
                 return false;
             }

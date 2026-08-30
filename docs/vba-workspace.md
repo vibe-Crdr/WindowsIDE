@@ -26,6 +26,8 @@ vba/
 
 エンコーディング既定は **CP932**。マップに上書きがあればそれに従う。`.vb` の既定は UTF-8 BOM であり、この CP932 には寄せない。
 
+`.bas` / `.cls` のディスクは本文のみでよい。`Attribute VB_Name` は不要（禁止ではない）。先頭に VERSION / BEGIN-END / Attribute があってもよい。
+
 ## Excel 側の名前（`namingMode`）
 
 Excel にディレクトリは作れない。代わりに、**vba-map だけ**で名前の付け方を切り替える（workspace.xml には書かない。設定画面なし。メニュー「VBA → 名前の付け方」）。
@@ -105,10 +107,10 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 - `Excel.Application`（`Marshal.GetActiveObject`、失敗時は ProgID + `CreateInstance`。CreateObject 時だけ Visible = true）
 - `Workbooks.Open`（実行中なら FullName で探す。開いたブックは Close しない）
 - `VBProject` / `VBComponents` / `CodeModule`
-- エクスポート: `VBComponent.Export`（TEMP 生バイト、ディスクへはマップ encoding）
-- 取り込み: 既存は CodeModule 置換。新規だけ TEMP 経由 Import。document は Name 変更・Remove・Import しない
+- エクスポート: `VBComponent.Export`（TEMP 生バイト → デコード → `StripForCodeModule` → マップ encoding でディスク）
+- 取り込み: 既存は `StripForCodeModule` のうえ CodeModule 置換。新規は TEMP に `VbaExportText.EnsureForImport` して Import（VB_Name は namingMode の excelName）。ディスクは書き換えない。document は Name 変更・Remove・Import しない
 - IDE が起動した Excel を Quit しない。IDE 終了時も Excel を触らない
-- Compile（フェーズ P7。手動は着手、ライブは今は実装しない）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。行は Strip と同じヘッダ加算。レキサで埋めない。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
+- Compile（フェーズ P7。手動は着手、ライブは今は実装しない）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。先頭ヘッダがあればその行数を加算し、本文のみなら GetSelection の行をそのまま。レキサで埋めない。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
 - References（フェーズ P8）: `VBProject.References` の一覧・追加・削除
 
 IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。診断 Compile も UI/STA。バックグラウンドスレッドで Excel を触らない。

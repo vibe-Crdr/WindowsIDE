@@ -31,7 +31,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 単位は 96dpi DIP。`Form.Size` は外枠（ClientSize ではない）。
 
 - 起動 Size 1280×800 DIP、MinimumSize 960×600 DIP
-- 左スプリッタ幅は 6 DIP、色は LineNumber。起動直後の左ペイン 260 DIP は **初回 OnShown のみ**（幅が足りるとき）。以降はセッション内でユーザーが動かす。`Panel1MinSize` 160 DIP、`Panel2MinSize` 320 DIP。幅は XML に書かない
+- 左スプリッタ幅は 6 DIP、色は LineNumber。ワークスペース未 Bind では `Panel1Collapsed`。260 DIP は初回展開（下 180 DIP と同じ。幅が足りるとき）。起動フォーカスは編集器。以降はセッション内でユーザーが動かす。`Panel1MinSize` 160 DIP、`Panel2MinSize` 320 DIP。幅は XML に書かない
 - 作業領域の 90% にクランプ（高さ優先）。MinimumSize が作業領域より大きければ作業領域まで落とす
 - 適用後、作業領域で再センタリングする
 

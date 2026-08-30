@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -68,11 +69,13 @@ namespace WindowsIDE.Tests
             RunWorkspaceCreateRules();
             RunWorkspaceItemRules();
             InspectFileTreeRenameDeleteSource();
+            InspectLeftPaneStartupSource();
             RunWorkspaceSettings();
             RunVbaOffline();
             RunDocumentVbaEncoding();
             RunDocumentCmdEncoding();
             RunFontLoaderFallback();
+            RunMainFormLeftPaneCtor();
             RunTabSwitchScroll();
             RunDpiUtil();
             RunDualFontPainter();
@@ -740,6 +743,181 @@ namespace WindowsIDE.Tests
             Check("f-exp HideSelection false", tree.IndexOf("this.HideSelection = false", StringComparison.Ordinal) >= 0);
             Check("f-exp no TreeNodeStates.Focused", tree.IndexOf("TreeNodeStates.Focused", StringComparison.Ordinal) < 0);
             Check("f-exp theme palette size", CountToken(theme, "readonly Color") == 17);
+        }
+
+        /// <summary>
+        /// 起動時左ペイン畳みと編集器フォーカスのソース契約。Show しない。
+        /// </summary>
+        private static void InspectLeftPaneStartupSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string mainPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs");
+            if (!File.Exists(mainPath))
+            {
+                Check("left pane source readable", false);
+                return;
+            }
+
+            string main = File.ReadAllText(mainPath);
+            Check("left pane split.Panel1Collapsed true", main.IndexOf("this.split.Panel1Collapsed = true", StringComparison.Ordinal) >= 0);
+            Check("left pane not bodySplit.Panel1Collapsed", main.IndexOf("this.bodySplit.Panel1Collapsed", StringComparison.Ordinal) < 0);
+            Check("left pane EnsureLeftPaneVisible", main.IndexOf("private void EnsureLeftPaneVisible(", StringComparison.Ordinal) >= 0);
+
+            int bindAt = main.IndexOf("private bool TryBindWorkspace(", StringComparison.Ordinal);
+            int openAt = main.IndexOf("private bool TryOpenFile(", StringComparison.Ordinal);
+            Check("left pane TryBindWorkspace body", bindAt >= 0 && openAt > bindAt);
+            if (bindAt >= 0 && openAt > bindAt)
+            {
+                string bindBody = main.Substring(bindAt, openAt - bindAt);
+                Check("left pane TryBindWorkspace Ensure", bindBody.IndexOf("this.EnsureLeftPaneVisible()", StringComparison.Ordinal) >= 0);
+            }
+
+            int shownAt = main.IndexOf("protected override void OnShown(", StringComparison.Ordinal);
+            int handleAt = main.IndexOf("protected override void OnHandleCreated(", StringComparison.Ordinal);
+            Check("left pane OnShown body", shownAt >= 0 && handleAt > shownAt);
+            if (shownAt >= 0 && handleAt > shownAt)
+            {
+                string shownBody = main.Substring(shownAt, handleAt - shownAt);
+                Check("left pane OnShown FocusEditor", shownBody.IndexOf("FocusEditor()", StringComparison.Ordinal) >= 0);
+                Check("left pane OnShown no 260 apply", shownBody.IndexOf("ToPixels(260", StringComparison.Ordinal) < 0);
+                Check("left pane OnShown collapsed guard", shownBody.IndexOf("Panel1Collapsed", StringComparison.Ordinal) >= 0);
+                int flagAt = shownBody.IndexOf("leftSplitterInitialized = true", StringComparison.Ordinal);
+                int collapsedAt = shownBody.IndexOf("Panel1Collapsed", StringComparison.Ordinal);
+                Check("left pane OnShown flag after expand", flagAt < 0 || (collapsedAt >= 0 && collapsedAt < flagAt));
+            }
+
+            int applyAt = main.IndexOf("private void TryApplyInitialLeftPaneWidth(", StringComparison.Ordinal);
+            int focusAt = main.IndexOf("private void FocusEditor(", StringComparison.Ordinal);
+            int bottomAt = main.IndexOf("private void EnsureBottomPaneVisible(", StringComparison.Ordinal);
+            Check("left pane TryApply width method", applyAt >= 0 && focusAt > applyAt);
+            if (applyAt >= 0 && focusAt > applyAt)
+            {
+                string applyBody = main.Substring(applyAt, focusAt - applyAt);
+                Check("left pane 260 DIP in TryApply", applyBody.IndexOf("ToPixels(260", StringComparison.Ordinal) >= 0);
+            }
+
+            Check("left pane FocusEditor method", focusAt >= 0 && bottomAt > focusAt);
+            if (focusAt >= 0 && bottomAt > focusAt)
+            {
+                string focusBody = main.Substring(focusAt, bottomAt - focusAt);
+                Check("left pane OnShown ActiveControl", focusBody.IndexOf("ActiveControl", StringComparison.Ordinal) >= 0);
+                Check("left pane OnShown editor.Focus", focusBody.IndexOf("editor.Focus", StringComparison.Ordinal) >= 0);
+            }
+
+            int explorerAt = main.IndexOf("private void OnFocusExplorer(", StringComparison.Ordinal);
+            int renameAt = main.IndexOf("private void OnTreeInlineRenameCommit(", StringComparison.Ordinal);
+            Check("left pane OnFocusExplorer body", explorerAt >= 0 && renameAt > explorerAt);
+            if (explorerAt >= 0 && renameAt > explorerAt)
+            {
+                string explorerBody = main.Substring(explorerAt, renameAt - explorerAt);
+                int nextSummary = explorerBody.IndexOf("/// <summary>", StringComparison.Ordinal);
+                if (nextSummary > 0)
+                {
+                    explorerBody = explorerBody.Substring(0, nextSummary);
+                }
+
+                Check("left pane explorer null workspace return", explorerBody.IndexOf("this.workspace == null", StringComparison.Ordinal) >= 0);
+                Check("left pane explorer no MessageBox", explorerBody.IndexOf("MessageBox", StringComparison.Ordinal) < 0);
+                Check("left pane explorer no OpenFolder", explorerBody.IndexOf("OpenFolder", StringComparison.Ordinal) < 0);
+            }
+        }
+
+        /// <summary>
+        /// Show しない STA コンストラクタで左ペインの畳みを見る。
+        /// </summary>
+        private static void RunMainFormLeftPaneCtor()
+        {
+            FontLoadResult fonts = FontLoader.Load();
+            if (fonts == null)
+            {
+                Check("left pane ctor fonts", false);
+                return;
+            }
+
+            try
+            {
+                using (MainForm form = new MainForm(fonts, new string[0]))
+                {
+                    SplitContainer split = GetPrivateInstanceField(form, "split") as SplitContainer;
+                    object ws = GetPrivateInstanceField(form, "workspace");
+                    Check("left pane ctor no-arg collapsed", split != null && split.Panel1Collapsed);
+                    Check("left pane ctor no-arg workspace null", ws == null);
+                }
+            }
+            catch (Exception ex)
+            {
+                Check("left pane ctor no-arg " + ex.Message, false);
+            }
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-left-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                try
+                {
+                    using (MainForm form = new MainForm(fonts, new string[] { dir }))
+                    {
+                        SplitContainer split = GetPrivateInstanceField(form, "split") as SplitContainer;
+                        Check("left pane ctor dir expanded", split != null && !split.Panel1Collapsed);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Check("left pane ctor dir " + ex.Message, false);
+                }
+
+                string file = Path.Combine(Path.GetTempPath(), "WindowsIDE-leftf-" + Guid.NewGuid().ToString("N") + ".txt");
+                File.WriteAllText(file, "x", Encoding.UTF8);
+                try
+                {
+                    using (MainForm form = new MainForm(fonts, new string[] { file }))
+                    {
+                        SplitContainer split = GetPrivateInstanceField(form, "split") as SplitContainer;
+                        Check("left pane ctor file collapsed", split != null && split.Panel1Collapsed);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Check("left pane ctor file " + ex.Message, false);
+                }
+                finally
+                {
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch (IOException)
+                    {
+                    }
+                }
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        /// <summary>private インスタンス欄を読む。InternalsVisibleTo は使わない。</summary>
+        private static object GetPrivateInstanceField(object target, string name)
+        {
+            if (target == null || string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
+
+            FieldInfo field = target.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field == null)
+            {
+                return null;
+            }
+
+            return field.GetValue(target);
         }
 
         private static void RunWorkspaceSettings()

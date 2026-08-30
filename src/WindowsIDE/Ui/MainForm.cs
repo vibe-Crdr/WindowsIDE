@@ -21,7 +21,7 @@ using WindowsIDE.Workspace;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力 / ターミナル）、ステータス。起動時は下パネルを畳む。
+    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力 / ターミナル）、ステータス。起動時は下パネルを畳む。起動時は左ペインも畳む。
     /// </summary>
     public sealed class MainForm : Form
     {
@@ -110,22 +110,17 @@ namespace WindowsIDE.Ui
             this.UpdateStatus();
         }
 
-        /// <summary>レイアウト後、初回だけ左ペイン幅を 260 DIP 相当にする。</summary>
+        /// <summary>展開済みなら初回の左ペイン幅を入れ、常に編集器へフォーカスする。</summary>
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            if (this.split == null || this.leftSplitterInitialized)
+            if (this.split != null && !this.split.Panel1Collapsed)
             {
-                return;
+                this.TryApplyInitialLeftPaneWidth();
+                this.leftSplitterInitialized = true;
             }
 
-            int dist = DpiUtil.ToPixels(260, DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero));
-            if (this.split.Width > dist)
-            {
-                this.split.SplitterDistance = dist;
-            }
-
-            this.leftSplitterInitialized = true;
+            this.FocusEditor();
         }
 
         /// <summary>最初のハンドルで起動サイズを実 DPI に合わせ、キャプション色を付ける。</summary>
@@ -901,6 +896,7 @@ namespace WindowsIDE.Ui
             this.split.BackColor = Theme.LineNumber;
             this.split.Panel1.BackColor = Theme.Background;
             this.split.Panel2.BackColor = Theme.EditorBackground;
+            this.split.Panel1Collapsed = true;
 
             this.tree = new FileTreeControl();
             this.tree.Dock = DockStyle.Fill;
@@ -1280,6 +1276,7 @@ namespace WindowsIDE.Ui
                 {
                     this.ApplyWorkspaceToDocument(this.editor.Document);
                 }
+                this.EnsureLeftPaneVisible();
                 return true;
             }
             catch (Exception ex)
@@ -1487,15 +1484,16 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// ツリーへフォーカスする。インライン中は欄へ。作成はキャンセルしない。
+        /// ツリーへフォーカスする。ワークスペース未 Bind では何もしない。インライン中は欄へ。作成はキャンセルしない。
         /// </summary>
         private void OnFocusExplorer(object sender, EventArgs e)
         {
-            if (this.tree == null)
+            if (this.workspace == null || this.tree == null)
             {
                 return;
             }
 
+            this.EnsureLeftPaneVisible();
             this.tree.Focus();
             if (this.tree.IsInlineCreateActive)
             {
@@ -3055,6 +3053,53 @@ namespace WindowsIDE.Ui
             {
                 this.bottomPane.SetProblemItems(list);
             }
+        }
+
+        /// <summary>
+        /// 左ペインを展開し、未設定なら初期幅 260 DIP を入れる。フォーカスは移さない。
+        /// </summary>
+        private void EnsureLeftPaneVisible()
+        {
+            if (this.split == null)
+            {
+                return;
+            }
+
+            this.split.Panel1Collapsed = false;
+            this.TryApplyInitialLeftPaneWidth();
+        }
+
+        /// <summary>
+        /// 左ペインが展開済みで幅が足りるとき、初回だけ 260 DIP を入れる。
+        /// </summary>
+        private void TryApplyInitialLeftPaneWidth()
+        {
+            if (this.split == null || this.split.Panel1Collapsed || this.leftSplitterInitialized)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int dist = DpiUtil.ToPixels(260, dpi);
+            if (this.split.Width > dist)
+            {
+                this.split.SplitterDistance = dist;
+                this.leftSplitterInitialized = true;
+            }
+        }
+
+        /// <summary>
+        /// 起動時の初期フォーカスを編集器へ移す。
+        /// </summary>
+        private void FocusEditor()
+        {
+            if (this.editor == null)
+            {
+                return;
+            }
+
+            this.ActiveControl = this.editor;
+            this.editor.Focus();
         }
 
         private void EnsureBottomPaneVisible()

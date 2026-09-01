@@ -39,6 +39,7 @@ src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Ui\DualFontField.cs
 src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
+src\WindowsIDE\Ui\TabStripLayout.cs
 src\WindowsIDE\Ui\TabStrip.cs
 src\WindowsIDE\Ui\AboutForm.cs
 src\WindowsIDE\Ui\Fonts\FontLoader.cs

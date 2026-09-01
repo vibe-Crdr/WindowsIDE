@@ -22,7 +22,7 @@
 | D14 | 指定フォントは製品に同梱してプロセス内読み込み。実行 PC への事前インストールは要求しない |
 | D15 | P0 で提案 P4 / P6 / P7 を採用する（覆すまで）。設定は XML、製品は単一 WinExe、C# は UTF-8 BOM |
 | D16 | editor/@fontSize は 96dpi DIP。本文は GraphicsUnit.Pixel に換算。既定は **14 DIP**（VS Code `editor.fontSize` 14 相当）。13 から 18 は `Control.DeviceDpi` が 96 のままになる環境での見た目対策だった。`GetDpiForWindow` 修正後は 18 DIP が VS Code 14 より大きい。既存 `workspace.xml` はマイグレーションしない。DPI の正は **GetDpiForWindow**（無ハンドルは GetDpiForSystem）。`Control.DeviceDpi` は使わない。 |
-| D17 | P0 スクロールバーは About 含め ThemedScrollBar、オートハイド |
+| D17 | P0 スクロールバーは About 含め ThemedScrollBar、オートハイド。対象は編集器・ツリー・About・F-HOV 等の内容スクロール。タブバー溢れは D17 の対象外で ThemedScrollBar を載せない |
 | D18 | フォルダ選択と名前を付けて保存は Windows Common Item Dialog（IFileOpenDialog / IFileSaveDialog、ole32）。フォルダは FOS_PICKFOLDERS\|FOS_FORCEFILESYSTEM\|FOS_PATHMUSTEXIST。保存は FOS_OVERWRITEPROMPT\|FOS_FORCEFILESYSTEM\|FOS_PATHMUSTEXIST（PICKFOLDERS なし）。キャンセル HRESULT 0x800704C7 はエラーにしない。追加 /r なし。app.manifest に Common-Controls 6.0 amd64。新しいフォルダボタンは Explorer 既定 |
 | D19 | About を開いたときライセンス TextBox は非選択。初期フォーカスは閉じる。手動選択してコピーは可 |
 | D20 | 起動引数の既存ファイルは開く（ワークスペース外可）。親フォルダはワークスペースにしない。ディレクトリ引数は OpenFolder と同じ BindWorkspace（複数なら最後が勝つ）。失敗は MessageBox 1 枚で続行。全部失敗または無引数は無題。単一インスタンスは作らない。メニュー「ファイルを開く」とドラッグ＆ドロップは未決 |

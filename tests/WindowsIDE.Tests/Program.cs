@@ -78,6 +78,7 @@ namespace WindowsIDE.Tests
             RunMainFormLeftPaneCtor();
             RunTabSwitchScroll();
             RunDpiUtil();
+            RunTabStripLayout();
             RunDualFontPainter();
             RunUiMnemonic();
             RunDualFontMenuItemPreferredSize();
@@ -1071,6 +1072,46 @@ namespace WindowsIDE.Tests
             Check("TextBodyClip gutter covers Width==0", covered.Width == 0);
             Rectangle shifted = DpiUtil.TextBodyClip(48, new Rectangle(10, 20, 800, 400));
             Check("TextBodyClip inherits Y", shifted.Y == 20);
+        }
+
+        private static void RunTabStripLayout()
+        {
+            Check("TabWidth minW wins", TabStripLayout.TabWidth(40, 8, 20, 72) == 72);
+            Check("TabWidth text+pad+closeSlot wins", TabStripLayout.TabWidth(100, 8, 20, 72) == 128);
+
+            int[] three = new int[] { 10, 20, 30 };
+            Check("ContentWidth start4 gap2 no trailing", TabStripLayout.ContentWidth(three, 4, 2) == 68);
+            Check("ContentWidth empty", TabStripLayout.ContentWidth(new int[0], 4, 2) == 0);
+            Check("ContentWidth null", TabStripLayout.ContentWidth(null, 4, 2) == 0);
+
+            Check("Clamp no overflow positive", TabStripLayout.ClampOffset(50, 100, 200) == 0);
+            Check("Clamp no overflow negative", TabStripLayout.ClampOffset(-10, 100, 200) == 0);
+            Check("Clamp equal content viewport", TabStripLayout.ClampOffset(9, 160, 160) == 0);
+
+            Check("Clamp negative to 0", TabStripLayout.ClampOffset(-5, 300, 100) == 0);
+            Check("Clamp over to content-viewport", TabStripLayout.ClampOffset(999, 300, 100) == 200);
+            Check("Clamp viewport<=0", TabStripLayout.ClampOffset(50, 300, 0) == 0);
+            Check("Clamp in range", TabStripLayout.ClampOffset(40, 300, 100) == 40);
+
+            Check("EnsureVisible already visible", TabStripLayout.EnsureVisible(10, 20, 80, 300, 100) == 10);
+            Check("EnsureVisible left overflow is tabLeft", TabStripLayout.EnsureVisible(30, 5, 25, 300, 100) == 5);
+            Check("EnsureVisible right overflow is tabRight-viewport", TabStripLayout.EnsureVisible(0, 150, 180, 300, 100) == 80);
+            Check("EnsureVisible tab wider than viewport pins tabLeft", TabStripLayout.EnsureVisible(50, 10, 200, 300, 100) == 10);
+
+            int bar = 200;
+            int viewport = bar - 20 - 20;
+            Check("chevron example viewport 160", viewport == 160);
+            Check("Clamp uses viewport 160", TabStripLayout.ClampOffset(1000, 300, viewport) == 140);
+            Check("Clamp with full bar 200 differs", TabStripLayout.ClampOffset(1000, 300, bar) == 100);
+            Check("EnsureVisible uses viewport 160", TabStripLayout.EnsureVisible(0, 200, 250, 300, viewport) == 90);
+            Check("EnsureVisible with bar 200 differs", TabStripLayout.EnsureVisible(0, 200, 250, 300, bar) == 50);
+
+            int[] tabs = new int[] { 80, 80, 80 };
+            int content = TabStripLayout.ContentWidth(tabs, TabStripLayout.StartX, TabStripLayout.TabGap);
+            int lastLeft = TabStripLayout.TabLeft(tabs, 2, TabStripLayout.StartX, TabStripLayout.TabGap);
+            int showingLast = TabStripLayout.EnsureVisible(0, lastLeft, lastLeft + tabs[2], content, 100);
+            int showingFirst = TabStripLayout.EnsureVisible(showingLast, 4, 4 + tabs[0], content, 100);
+            Check("EnsureVisible last to first toward 0", showingFirst < showingLast && showingFirst == 4);
         }
 
         private static void RunDualFontPainter()

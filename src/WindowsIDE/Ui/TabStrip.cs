@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using WindowsIDE.Editor;
 using WindowsIDE.Ui.Fonts;
@@ -29,8 +30,11 @@ namespace WindowsIDE.Ui
     /// <summary>
     /// 自前タブバー。WinForms の TabControl は使わない。
     /// </summary>
-    public sealed class TabStrip : Control
+    public sealed class TabStrip : Control, IMessageFilter
     {
+        private const int WM_MOUSEWHEEL = 0x020A;
+        private const int WM_MOUSEHWHEEL = 0x020E;
+
         private readonly List<Document> tabs;
         private int selectedIndex;
         private readonly List<Rectangle> tabBounds;
@@ -39,6 +43,10 @@ namespace WindowsIDE.Ui
         private Font borrowedFull;
         private Font fallbackHalf;
         private Font fallbackFull;
+        private int scrollOffset;
+        private int contentWidth;
+        private bool needEnsureVisible;
+        private bool filterRegistered;
 
         /// <summary>
         /// 空のタブバーを作る。
@@ -58,11 +66,19 @@ namespace WindowsIDE.Ui
             this.ForeColor = Theme.Foreground;
         }
 
-        /// <summary>ハンドル作成後に GetDpi で高さを合わせる。</summary>
+        /// <summary>ハンドル作成後に GetDpi で高さを合わせ、ホイール用 IMessageFilter を登録する。</summary>
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+            this.AddWheelFilter();
             this.ApplyBarHeight();
+        }
+
+        /// <summary>ハンドル破棄時に IMessageFilter を外す。再作成時の二重 Add を防ぐ。</summary>
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            this.RemoveWheelFilter();
+            base.OnHandleDestroyed(e);
         }
 
         /// <summary>フォント変更後に描画フォント基準で高さを合わせる。</summary>
@@ -72,11 +88,20 @@ namespace WindowsIDE.Ui
             this.ApplyBarHeight();
         }
 
-        /// <summary>親の DPI 変更後にバー高さを合わせる。フォント再生成は MainForm.RecreateChromeFonts。</summary>
+        /// <summary>親の DPI 変更後にバー高さを合わせ、選択タブを可視へ寄せる。</summary>
         protected override void OnDpiChangedAfterParent(EventArgs e)
         {
             base.OnDpiChangedAfterParent(e);
+            this.needEnsureVisible = true;
             this.ApplyBarHeight();
+        }
+
+        /// <summary>幅変更後に選択タブを可視へ寄せる。</summary>
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            this.needEnsureVisible = true;
+            this.Invalidate();
         }
 
         /// <summary>選択変更。</summary>
@@ -105,6 +130,7 @@ namespace WindowsIDE.Ui
                 if (this.selectedIndex != value)
                 {
                     this.selectedIndex = value;
+                    this.needEnsureVisible = true;
                     this.Invalidate();
                     EventHandler h = this.SelectedIndexChanged;
                     if (h != null)
@@ -172,6 +198,7 @@ namespace WindowsIDE.Ui
             if (this.tabs.Count == 0)
             {
                 this.selectedIndex = -1;
+                this.scrollOffset = 0;
             }
             else if (this.selectedIndex >= this.tabs.Count)
             {
@@ -182,6 +209,7 @@ namespace WindowsIDE.Ui
                 this.selectedIndex--;
             }
 
+            this.needEnsureVisible = true;
             this.Invalidate();
             EventHandler h = this.SelectedIndexChanged;
             if (h != null)
@@ -285,7 +313,8 @@ namespace WindowsIDE.Ui
             int closeSize = DpiUtil.ToPixels(8, dpi);
             int closeSlot = closeGap + closeSize + closeGap;
             int minW = DpiUtil.ToPixels(72, dpi);
-            int x = 4;
+            int[] widths = new int[this.tabs.Count];
+            string[] titles = new string[this.tabs.Count];
             for (int i = 0; i < this.tabs.Count; i++)
             {
                 Document doc = this.tabs[i];
@@ -295,13 +324,27 @@ namespace WindowsIDE.Ui
                     title = title + " *";
                 }
 
+                titles[i] = title;
                 int textW = (int)Math.Ceiling(DualFontPainter.Measure(g, title, half, full, null));
-                int w = textW + pad + closeSlot;
-                if (w < minW)
-                {
-                    w = minW;
-                }
+                widths[i] = TabStripLayout.TabWidth(textW, pad, closeSlot, minW);
+            }
 
+            this.contentWidth = TabStripLayout.ContentWidth(widths, TabStripLayout.StartX, TabStripLayout.TabGap);
+            int viewportWidth = this.ClientSize.Width;
+            this.scrollOffset = TabStripLayout.ClampOffset(this.scrollOffset, this.contentWidth, viewportWidth);
+            if (this.needEnsureVisible && this.selectedIndex >= 0 && this.selectedIndex < widths.Length)
+            {
+                int tabLeft = TabStripLayout.TabLeft(widths, this.selectedIndex, TabStripLayout.StartX, TabStripLayout.TabGap);
+                int tabRight = tabLeft + widths[this.selectedIndex];
+                this.scrollOffset = TabStripLayout.EnsureVisible(this.scrollOffset, tabLeft, tabRight, this.contentWidth, viewportWidth);
+            }
+
+            this.needEnsureVisible = false;
+
+            int x = TabStripLayout.StartX;
+            for (int i = 0; i < this.tabs.Count; i++)
+            {
+                int w = widths[i];
                 Rectangle tab = new Rectangle(x, 0, w, this.Height - 1);
                 this.tabBounds.Add(tab);
                 int closeX = tab.Right - closeGap - closeSize;
@@ -325,33 +368,49 @@ namespace WindowsIDE.Ui
                     }
                 }
 
-                Rectangle close = new Rectangle(closeX, closeY, closeSize, closeSize);
-                this.closeBounds.Add(close);
+                this.closeBounds.Add(new Rectangle(closeX, closeY, closeSize, closeSize));
+                x += w + TabStripLayout.TabGap;
+            }
 
-                Color back = (i == this.selectedIndex) ? Theme.EditorBackground : Theme.Background;
-                using (SolidBrush b = new SolidBrush(back))
+            GraphicsState state = g.Save();
+            try
+            {
+                g.SetClip(this.ClientRectangle);
+                for (int i = 0; i < this.tabBounds.Count; i++)
                 {
-                    g.FillRectangle(b, tab);
-                }
+                    Rectangle tab = this.tabBounds[i];
+                    Rectangle close = this.closeBounds[i];
+                    int drawX = tab.X - this.scrollOffset;
+                    Rectangle drawTab = new Rectangle(drawX, tab.Y, tab.Width, tab.Height);
+                    Rectangle drawClose = new Rectangle(close.X - this.scrollOffset, close.Y, close.Width, close.Height);
 
-                using (Pen p = new Pen(Theme.Border))
-                {
-                    g.DrawRectangle(p, tab);
-                }
+                    Color back = (i == this.selectedIndex) ? Theme.EditorBackground : Theme.Background;
+                    using (SolidBrush b = new SolidBrush(back))
+                    {
+                        g.FillRectangle(b, drawTab);
+                    }
 
-                Rectangle titleRect = new Rectangle(tab.X + pad, tab.Y, Math.Max(0, tab.Width - pad - closeSlot), tab.Height);
-                using (SolidBrush fg = new SolidBrush(Theme.Foreground))
-                {
-                    DualFontPainter.DrawEllipsis(g, title, half, full, titleRect, fg, null);
-                }
+                    using (Pen p = new Pen(Theme.Border))
+                    {
+                        g.DrawRectangle(p, drawTab);
+                    }
 
-                using (Pen xp = new Pen(Theme.Foreground, 2f))
-                {
-                    g.DrawLine(xp, close.Left, close.Top, close.Right - 1, close.Bottom - 1);
-                    g.DrawLine(xp, close.Right - 1, close.Top, close.Left, close.Bottom - 1);
-                }
+                    Rectangle titleRect = new Rectangle(drawTab.X + pad, drawTab.Y, Math.Max(0, drawTab.Width - pad - closeSlot), drawTab.Height);
+                    using (SolidBrush fg = new SolidBrush(Theme.Foreground))
+                    {
+                        DualFontPainter.DrawEllipsis(g, titles[i], half, full, titleRect, fg, null);
+                    }
 
-                x += w + 2;
+                    using (Pen xp = new Pen(Theme.Foreground, 2f))
+                    {
+                        g.DrawLine(xp, drawClose.Left, drawClose.Top, drawClose.Right - 1, drawClose.Bottom - 1);
+                        g.DrawLine(xp, drawClose.Right - 1, drawClose.Top, drawClose.Left, drawClose.Bottom - 1);
+                    }
+                }
+            }
+            finally
+            {
+                g.Restore(state);
             }
         }
 
@@ -451,11 +510,12 @@ namespace WindowsIDE.Ui
             this.Height = DpiUtil.TabStripHeight(fontHeight, dpi);
         }
 
-        /// <summary>借用フォントは破棄しない。所有している退避フォントだけ破棄する。</summary>
+        /// <summary>借用フォントは破棄しない。所有している退避フォントだけ破棄する。Filter も外す。</summary>
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                this.RemoveWheelFilter();
                 this.DisposeFallbackFonts();
                 this.borrowedHalf = null;
                 this.borrowedFull = null;
@@ -465,16 +525,17 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// クリックで選択または閉じる。
+        /// クリックで選択または閉じる。ヒットはレイアウト座標（e.X+scrollOffset）。
         /// </summary>
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
             try
             {
+                Point layout = new Point(e.X + this.scrollOffset, e.Y);
                 for (int i = 0; i < this.closeBounds.Count; i++)
                 {
-                    if (this.closeBounds[i].Contains(e.Location))
+                    if (this.closeBounds[i].Contains(layout))
                     {
                         EventHandler<TabCloseEventArgs> close = this.TabCloseRequested;
                         if (close != null)
@@ -488,7 +549,7 @@ namespace WindowsIDE.Ui
 
                 for (int i = 0; i < this.tabBounds.Count; i++)
                 {
-                    if (this.tabBounds[i].Contains(e.Location))
+                    if (this.tabBounds[i].Contains(layout))
                     {
                         this.SelectedIndex = i;
                         return;
@@ -503,6 +564,95 @@ namespace WindowsIDE.Ui
                     focus(this, EventArgs.Empty);
                 }
             }
+        }
+
+        /// <summary>
+        /// 編集器フォーカス時でもバー上ホイールを横オフセットへ吸う。WM_MOUSEWHEEL / HWHEEL のみ。
+        /// </summary>
+        /// <param name="m">フィルタ対象。</param>
+        /// <returns>バー内なら true（以降へ流さない）。</returns>
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg != WM_MOUSEWHEEL && m.Msg != WM_MOUSEHWHEEL)
+            {
+                return false;
+            }
+
+            if (!this.IsHandleCreated || !this.Visible)
+            {
+                return false;
+            }
+
+            int lp = unchecked((int)m.LParam.ToInt64());
+            int sx = (short)(lp & 0xFFFF);
+            int sy = (short)((lp >> 16) & 0xFFFF);
+            Point client = this.PointToClient(new Point(sx, sy));
+            if (!this.ClientRectangle.Contains(client))
+            {
+                return false;
+            }
+
+            long wp = m.WParam.ToInt64();
+            short delta = (short)((wp >> 16) & 0xFFFF);
+            this.ApplyWheelDelta(delta);
+            return true;
+        }
+
+        /// <summary>Filter が無いときの保険。縦ホイールも横オフセット。EnsureVisible はしない。</summary>
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            this.ApplyWheelDelta(e.Delta);
+            HandledMouseEventArgs handled = e as HandledMouseEventArgs;
+            if (handled != null)
+            {
+                handled.Handled = true;
+            }
+        }
+
+        /// <summary>Filter が無いときの HWHEEL 保険。</summary>
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_MOUSEHWHEEL)
+            {
+                long wp = m.WParam.ToInt64();
+                short delta = (short)((wp >> 16) & 0xFFFF);
+                this.ApplyWheelDelta(delta);
+                m.Result = (IntPtr)1;
+                return;
+            }
+
+            base.WndProc(ref m);
+        }
+
+        private void ApplyWheelDelta(int delta)
+        {
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int step = DpiUtil.ToPixels(TabStripLayout.WheelStepDip, dpi);
+            this.scrollOffset += DpiUtil.WheelToPixels(delta, step);
+            this.scrollOffset = TabStripLayout.ClampOffset(this.scrollOffset, this.contentWidth, this.ClientSize.Width);
+            this.Invalidate();
+        }
+
+        private void AddWheelFilter()
+        {
+            if (this.filterRegistered)
+            {
+                return;
+            }
+
+            Application.AddMessageFilter(this);
+            this.filterRegistered = true;
+        }
+
+        private void RemoveWheelFilter()
+        {
+            if (!this.filterRegistered)
+            {
+                return;
+            }
+
+            Application.RemoveMessageFilter(this);
+            this.filterRegistered = false;
         }
     }
 }

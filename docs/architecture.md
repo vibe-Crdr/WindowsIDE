@@ -50,7 +50,7 @@ flowchart LR
 | 名前空間 | 責務 |
 | --- | --- |
 | `WindowsIDE` | `Program.Main`、起動引数（`StartupArgs`）、未処理例外 |
-| `WindowsIDE.Ui` | メイン枠、テーマ、FindBar、HoverInfoControl（F-HOV。既存色。`SW_SHOWNOACTIVATE` / `WS_EX_NOACTIVATE`。折返しと ThemedScrollBar）、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成／リネーム）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
+| `WindowsIDE.Ui` | メイン枠、テーマ、TabStrip / TabStripLayout（横オフセット。タブバーに ThemedScrollBar は載せない）、FindBar、HoverInfoControl（F-HOV。既存色。`SW_SHOWNOACTIVATE` / `WS_EX_NOACTIVATE`。折返しと ThemedScrollBar）、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成／リネーム）、BottomPane（問題 / 出力 / ターミナル）、ProblemListControl、OutputPanelControl、TerminalControl。将来: コマンドパレット、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8） |
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）、対括弧の FillRectangle（F-BR。Selection / Error）、自動閉じと F-SIND / VBA 終端の挿入、F-DOC の挿入、ホバー枠のホスト、Document.Retarget（ディスク移動後のパス追従。本文は書かない）、波線（`SquiggleSpan` + TextView。error のみ。既存 Error。WinForms 非依存の区間計算）。将来: インデント線（F-IG。LineNumber。TextBodyClip 内。今は実装しない）、キー記録（P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML、WorkspaceItemRules（名前検証・リネームパス・ディレクトリ境界）、WorkspaceCreateRules（新規作成。検証は ItemRules へ委譲）、WorkspaceRecycle（shell32 SHFileOperation ごみ箱。追加 /r なし） |

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
+using WindowsIDE.Debug;
 using WindowsIDE.Editor;
 using WindowsIDE.Host.Cmd;
 using WindowsIDE.Host.Csharp;
@@ -21,7 +22,7 @@ using WindowsIDE.Workspace;
 namespace WindowsIDE.Ui
 {
     /// <summary>
-    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力 / ターミナル）、ステータス。起動時は下パネルを畳む。起動時は左ペインも畳む。
+    /// メイン枠。メニュー、ツリー、タブ、編集器、下パネル（問題 / 出力 / ターミナル / デバッグ）、ステータス。起動時は下パネルを畳む。起動時は左ペインも畳む。
     /// </summary>
     public sealed class MainForm : Form
     {
@@ -59,7 +60,10 @@ namespace WindowsIDE.Ui
         private Diagnostic[] vbaBucket;
         private Diagnostic[] lastPublishedDiagnostics;
         private int runGeneration;
+        private int debugGeneration;
         private ActiveRunKind activeRunKind;
+        private BreakpointStore breakpointStore;
+        private PowerShellDebugger psDebugger;
         private string lastManualOutputExe;
         private bool pendingLaunchAfterBuild;
         private bool bottomSplitterInitialized;
@@ -112,6 +116,11 @@ namespace WindowsIDE.Ui
             this.cmdHost.LineReceived += this.OnCmdLineReceived;
             this.cmdHost.Exited += this.OnCmdExited;
             this.cmdHost.StartFailed += this.OnCmdStartFailed;
+            this.breakpointStore = new BreakpointStore();
+            this.psDebugger = new PowerShellDebugger(this.breakpointStore);
+            this.psDebugger.Stopped += this.OnDebugStopped;
+            this.psDebugger.ConsoleLine += this.OnDebugConsole;
+            this.psDebugger.Ended += this.OnDebugEnded;
             this.BuildMenu();
             this.BuildStatus();
             this.BuildBody();
@@ -327,7 +336,12 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Shift | Keys.F3)
                     || keyData == (Keys.Control | Keys.Shift | Keys.B)
                     || keyData == (Keys.Control | Keys.F5)
+                    || keyData == Keys.F5
+                    || keyData == (Keys.Shift | Keys.F5)
                     || keyData == Keys.F8
+                    || keyData == Keys.F9
+                    || keyData == Keys.F10
+                    || keyData == Keys.F11
                     || keyData == (Keys.Control | Keys.Oemtilde)
                     || keyData == (Keys.Control | Keys.Alt | Keys.P)
                     || keyData == (Keys.Control | Keys.Alt | Keys.H)
@@ -465,6 +479,36 @@ namespace WindowsIDE.Ui
             if (keyData == Keys.F8)
             {
                 this.OnRunSelection(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == Keys.F5)
+            {
+                this.OnDebugStartContinue(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Shift | Keys.F5))
+            {
+                this.OnDebugStop(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == Keys.F9)
+            {
+                this.OnDebugToggleBreakpoint(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == Keys.F10)
+            {
+                this.OnDebugStepOver(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == Keys.F11)
+            {
+                this.OnDebugStepInto(this, EventArgs.Empty);
                 return true;
             }
 
@@ -617,6 +661,11 @@ namespace WindowsIDE.Ui
             build.DropDownItems.Add(this.CreateBuildItem("ビルド(&B)", this.OnBuild));
 
             ToolStripMenuItem run = this.CreateTop("実行(&R)");
+            run.DropDownItems.Add(this.CreateDisplayCommand("開始/続行(&C)", "F5", this.OnDebugStartContinue));
+            run.DropDownItems.Add(this.CreateDisplayCommand("停止(&S)", "Shift+F5", this.OnDebugStop));
+            run.DropDownItems.Add(this.CreateDisplayCommand("ステップ オーバー(&O)", "F10", this.OnDebugStepOver));
+            run.DropDownItems.Add(this.CreateDisplayCommand("ステップ イン(&I)", "F11", this.OnDebugStepInto));
+            run.DropDownItems.Add(new ToolStripSeparator());
             run.DropDownItems.Add(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun));
             run.DropDownItems.Add(this.CreateRunSelectionItem("選択行を実行(&L)", this.OnRunSelection));
 
@@ -640,6 +689,7 @@ namespace WindowsIDE.Ui
             view.DropDownItems.Add(new ToolStripSeparator());
             this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
             view.DropDownItems.Add(this.viewTerminalItem);
+            view.DropDownItems.Add(this.CreateDisplayCommand("デバッグ(&G)", "", this.OnViewDebug));
             view.DropDownItems.Add(new ToolStripSeparator());
             this.viewPowerShellItem = this.CreateShellCheckItem("PowerShell 5.1", this.OnViewPowerShell);
             this.viewPowerShellItem.Checked = true;
@@ -981,6 +1031,7 @@ namespace WindowsIDE.Ui
             this.editor.DocumentChanged += this.OnEditorChanged;
             this.editor.HoverIdle += this.OnEditorHoverIdle;
             this.editor.HoverCancel += this.OnEditorHoverCancel;
+            this.editor.BreakpointToggleRequested += this.OnEditorBreakpointToggle;
 
             editorColumn.Controls.Add(this.editor);
             editorColumn.Controls.Add(this.findBar);
@@ -1147,6 +1198,7 @@ namespace WindowsIDE.Ui
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             this.ApplyEditorSquiggles(this.lastPublishedDiagnostics);
+            this.RefreshBreakpointMarks();
             this.editor.Focus();
             this.RefreshFindCount();
         }
@@ -2439,6 +2491,12 @@ namespace WindowsIDE.Ui
 
         private void OnRun(object sender, EventArgs e)
         {
+            if (this.IsDebugging())
+            {
+                this.ShowSynthetic("デバッグ中は実行できない。");
+                return;
+            }
+
             string path = null;
             if (this.editor != null && this.editor.Document != null)
             {
@@ -2532,6 +2590,12 @@ namespace WindowsIDE.Ui
 
         private void OnRunSelection(object sender, EventArgs e)
         {
+            if (this.IsDebugging())
+            {
+                this.ShowSynthetic("デバッグ中は実行できない。");
+                return;
+            }
+
             string path = null;
             if (this.editor != null && this.editor.Document != null)
             {
@@ -4173,12 +4237,362 @@ namespace WindowsIDE.Ui
             this.UpdateStatus();
         }
 
+        private bool IsDebugging()
+        {
+            return this.psDebugger != null && this.psDebugger.State != DebugSessionState.Idle;
+        }
+
+        private static bool IsPs1Path(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            return string.Equals(Path.GetExtension(path), ".ps1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void RefreshBreakpointMarks()
+        {
+            if (this.editor == null)
+            {
+                return;
+            }
+
+            string path = null;
+            if (this.editor.Document != null)
+            {
+                path = this.editor.Document.FilePath;
+            }
+
+            int[] lines1 = (this.breakpointStore == null) ? new int[0] : this.breakpointStore.GetLines(path);
+            int[] lines0 = new int[lines1.Length];
+            int i = 0;
+            while (i < lines1.Length)
+            {
+                lines0[i] = lines1[i] - 1;
+                i++;
+            }
+
+            this.editor.SetBreakpointLines(lines0);
+        }
+
+        private void OnViewDebug(object sender, EventArgs e)
+        {
+            this.ShowDebugPanel();
+        }
+
+        private void ShowDebugPanel()
+        {
+            this.EnsureBottomPaneVisible();
+            if (this.bottomPane == null)
+            {
+                return;
+            }
+
+            this.bottomPane.ShowDebug();
+        }
+
+        private void OnEditorBreakpointToggle(object sender, GutterBreakpointEventArgs e)
+        {
+            if (e == null || this.editor == null || this.editor.Document == null)
+            {
+                return;
+            }
+
+            string path = this.editor.Document.FilePath;
+            if (!IsPs1Path(path))
+            {
+                return;
+            }
+
+            this.breakpointStore.Toggle(path, e.Line + 1);
+            this.RefreshBreakpointMarks();
+        }
+
+        private void OnDebugToggleBreakpoint(object sender, EventArgs e)
+        {
+            if (this.editor == null || this.editor.Document == null)
+            {
+                return;
+            }
+
+            string path = this.editor.Document.FilePath;
+            if (!IsPs1Path(path))
+            {
+                return;
+            }
+
+            int line1 = this.editor.Document.CaretLine + 1;
+            this.breakpointStore.Toggle(path, line1);
+            this.RefreshBreakpointMarks();
+        }
+
+        private void OnDebugStartContinue(object sender, EventArgs e)
+        {
+            if (this.psDebugger == null)
+            {
+                return;
+            }
+
+            DebugSessionState st = this.psDebugger.State;
+            if (st == DebugSessionState.Running)
+            {
+                return;
+            }
+
+            if (st == DebugSessionState.Stopped)
+            {
+                this.psDebugger.Continue();
+                return;
+            }
+
+            string path = null;
+            if (this.editor != null && this.editor.Document != null)
+            {
+                path = this.editor.Document.FilePath;
+            }
+
+            if (string.IsNullOrEmpty(path))
+            {
+                this.ShowSynthetic("無題はデバッグできない。");
+                return;
+            }
+
+            if (!IsPs1Path(path))
+            {
+                this.ShowSynthetic("PowerShell のデバッグはディスク上の .ps1 だけです。");
+                return;
+            }
+
+            this.StartPsDebug(path);
+        }
+
+        private void OnDebugStop(object sender, EventArgs e)
+        {
+            if (this.psDebugger == null || this.psDebugger.State == DebugSessionState.Idle)
+            {
+                return;
+            }
+
+            this.psDebugger.Stop();
+        }
+
+        private void OnDebugStepOver(object sender, EventArgs e)
+        {
+            if (this.psDebugger != null)
+            {
+                this.psDebugger.StepOver();
+            }
+        }
+
+        private void OnDebugStepInto(object sender, EventArgs e)
+        {
+            if (this.psDebugger != null)
+            {
+                this.psDebugger.StepInto();
+            }
+        }
+
+        private void StartPsDebug(string path)
+        {
+            string full;
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch (Exception)
+            {
+                this.ShowSynthetic("PowerShell のデバッグはディスク上の .ps1 だけです。");
+                return;
+            }
+
+            if (this.editor != null && this.editor.Document != null && this.editor.Document.IsDirty)
+            {
+                try
+                {
+                    if (!this.editor.Document.Save())
+                    {
+                        this.ShowSynthetic("保存に失敗した: " + this.editor.Document.FilePath);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    this.ShowSynthetic("保存に失敗した: " + ex.Message);
+                    return;
+                }
+
+                if (this.tabs != null)
+                {
+                    this.tabs.RefreshTabs();
+                }
+
+                this.UpdateStatus();
+            }
+
+            this.pendingLaunchAfterBuild = false;
+            this.buildGeneration++;
+            if (this.cscRunner != null)
+            {
+                this.cscRunner.Kill();
+            }
+
+            this.InvalidateLiveCsc();
+            if (this.liveTimer != null)
+            {
+                this.liveTimer.Stop();
+            }
+
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            if (this.powershellHost != null)
+            {
+                this.powershellHost.Kill();
+            }
+
+            if (this.cmdHost != null)
+            {
+                this.cmdHost.Kill();
+            }
+
+            this.ShowDebugPanel();
+            if (this.bottomPane != null)
+            {
+                this.bottomPane.DebugPane.ClearLocals();
+                this.bottomPane.DebugPane.ConsolePanel.Clear();
+                this.bottomPane.DebugPane.ConsolePanel.AppendStatus("起動: " + full);
+            }
+
+            this.debugGeneration++;
+            string scriptDir = Path.GetDirectoryName(full);
+            this.psDebugger.Start(full, scriptDir, this.debugGeneration);
+        }
+
+        private void OnDebugStopped(object sender, DebugStoppedEventArgs e)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new EventHandler<DebugStoppedEventArgs>(this.OnDebugStopped), sender, e);
+                return;
+            }
+
+            if (this.IsDisposed || e == null || e.Generation != this.debugGeneration)
+            {
+                return;
+            }
+
+            if (this.bottomPane != null)
+            {
+                this.bottomPane.DebugPane.SetLocals(e.Variables);
+            }
+
+            string stopPath = e.Path;
+            if (!string.IsNullOrEmpty(stopPath) && File.Exists(stopPath))
+            {
+                string openError;
+                if (this.TryOpenFile(stopPath, false, out openError))
+                {
+                    this.GoToDebugLine(e.Line);
+                }
+            }
+            else if (this.bottomPane != null)
+            {
+                string missing = string.IsNullOrEmpty(stopPath) ? "(不明)" : stopPath;
+                this.bottomPane.DebugPane.ConsolePanel.AppendStatus("停止位置のファイルを開けない: " + missing);
+            }
+        }
+
+        private void GoToDebugLine(int line1)
+        {
+            if (this.editor == null || this.editor.Document == null || this.editor.Document.Buffer == null)
+            {
+                return;
+            }
+
+            if (line1 < 1)
+            {
+                return;
+            }
+
+            int line0 = line1 - 1;
+            BufferPoint p = new BufferPoint(line0, 0);
+            this.editor.SelectRange(p, p);
+        }
+
+        private void OnDebugConsole(object sender, DebugConsoleEventArgs e)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new EventHandler<DebugConsoleEventArgs>(this.OnDebugConsole), sender, e);
+                return;
+            }
+
+            if (this.IsDisposed || e == null || e.Generation != this.debugGeneration || this.bottomPane == null)
+            {
+                return;
+            }
+
+            if (e.Kind == 1)
+            {
+                this.bottomPane.DebugPane.ConsolePanel.Append(e.Line, true);
+            }
+            else if (e.Kind == 2)
+            {
+                this.bottomPane.DebugPane.ConsolePanel.AppendStatus(e.Line);
+            }
+            else
+            {
+                this.bottomPane.DebugPane.ConsolePanel.Append(e.Line, false);
+            }
+        }
+
+        private void OnDebugEnded(object sender, DebugEndedEventArgs e)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new EventHandler<DebugEndedEventArgs>(this.OnDebugEnded), sender, e);
+                return;
+            }
+
+            if (this.IsDisposed || e == null || e.Generation != this.debugGeneration)
+            {
+                return;
+            }
+
+            if (this.bottomPane != null)
+            {
+                this.bottomPane.DebugPane.ClearLocals();
+                this.bottomPane.DebugPane.ConsolePanel.AppendStatus("終了");
+            }
+
+            if (this.liveTimer != null && !this.IsDebugging())
+            {
+                this.liveTimer.Interval = LiveDiagnoseDebounceMs;
+                this.liveTimer.Stop();
+                this.liveTimer.Start();
+            }
+        }
+
         private void OnEditorChanged(object sender, EventArgs e)
         {
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             this.RefreshFindCount();
             if (this.editor != null && this.editor.IsComposing)
+            {
+                if (this.liveTimer != null)
+                {
+                    this.liveTimer.Stop();
+                }
+
+                return;
+            }
+
+            if (this.IsDebugging())
             {
                 if (this.liveTimer != null)
                 {
@@ -4200,6 +4614,16 @@ namespace WindowsIDE.Ui
 
         private void OnLiveTick(object sender, EventArgs e)
         {
+            if (this.IsDebugging())
+            {
+                if (this.liveTimer != null)
+                {
+                    this.liveTimer.Stop();
+                }
+
+                return;
+            }
+
             if (this.editor != null && this.editor.IsComposing)
             {
                 if (this.liveTimer != null)
@@ -4465,6 +4889,15 @@ namespace WindowsIDE.Ui
                     this.cmdHost.Exited -= this.OnCmdExited;
                     this.cmdHost.StartFailed -= this.OnCmdStartFailed;
                     this.cmdHost.Kill();
+                }
+
+                if (this.psDebugger != null)
+                {
+                    this.psDebugger.Stopped -= this.OnDebugStopped;
+                    this.psDebugger.ConsoleLine -= this.OnDebugConsole;
+                    this.psDebugger.Ended -= this.OnDebugEnded;
+                    this.psDebugger.Dispose();
+                    this.psDebugger = null;
                 }
 
                 if (this.bottomPane != null)

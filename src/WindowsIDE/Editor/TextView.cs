@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.IO;
 using System.Windows.Forms;
 using WindowsIDE.Build;
 using WindowsIDE.Languages;
@@ -63,6 +64,29 @@ namespace WindowsIDE.Editor
     }
 
     /// <summary>
+    /// ガターのブレーク列クリック。行は 0 始まり。
+    /// </summary>
+    public sealed class GutterBreakpointEventArgs : EventArgs
+    {
+        private int line;
+
+        /// <summary>
+        /// 行を渡す。
+        /// </summary>
+        /// <param name="line">0 始まりの行。</param>
+        public GutterBreakpointEventArgs(int line)
+        {
+            this.line = line;
+        }
+
+        /// <summary>0 始まりの行。</summary>
+        public int Line
+        {
+            get { return this.line; }
+        }
+    }
+
+    /// <summary>
     /// Control 継承の行単位編集器。折り返し無し。RichTextBox は使わない。
     /// </summary>
     public sealed class TextView : Control, IImeClient
@@ -94,6 +118,7 @@ namespace WindowsIDE.Editor
         private int wheelLeftover;
         private readonly List<Token> paintTokens;
         private Diagnostic[] errorDiagnostics;
+        private int[] breakpointLines;
 
         /// <summary>
         /// 空の編集器を作る。
@@ -107,6 +132,7 @@ namespace WindowsIDE.Editor
             this.imeComposition = "";
             this.paintTokens = new List<Token>();
             this.errorDiagnostics = new Diagnostic[0];
+            this.breakpointLines = new int[0];
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable | ControlStyles.ResizeRedraw | ControlStyles.EnableNotifyMessage, true);
             this.TabStop = true;
             this.BackColor = Theme.EditorBackground;
@@ -147,6 +173,9 @@ namespace WindowsIDE.Editor
 
         /// <summary>ホバーを閉じるべきとき。</summary>
         public event EventHandler HoverCancel;
+
+        /// <summary>ガターのブレーク列をクリックしたとき（0 始まり行）。Debug は参照しない。</summary>
+        public event EventHandler<GutterBreakpointEventArgs> BreakpointToggleRequested;
 
         /// <summary>編集中の文書。</summary>
         public Document Document
@@ -224,6 +253,25 @@ namespace WindowsIDE.Editor
             else
             {
                 this.errorDiagnostics = diagnostics;
+            }
+
+            this.Invalidate();
+        }
+
+        /// <summary>
+        /// ブレーク印の行（0 始まり）。Debug は参照しない。null は空。
+        /// </summary>
+        /// <param name="lines">0 始まりの行。</param>
+        public void SetBreakpointLines(int[] lines)
+        {
+            if (lines == null)
+            {
+                this.breakpointLines = new int[0];
+            }
+            else
+            {
+                this.breakpointLines = new int[lines.Length];
+                Array.Copy(lines, this.breakpointLines, lines.Length);
             }
 
             this.Invalidate();
@@ -823,6 +871,14 @@ namespace WindowsIDE.Editor
             this.EnsureCaretVisible();
             this.Invalidate();
             this.RaiseCaretMoved();
+            if (this.IsBreakpointColumn(e.X) && this.IsPs1Document())
+            {
+                EventHandler<GutterBreakpointEventArgs> h = this.BreakpointToggleRequested;
+                if (h != null)
+                {
+                    h(this, new GutterBreakpointEventArgs(p.Line));
+                }
+            }
         }
 
         /// <summary>ドラッグ選択。非ドラッグではホバー用タイマー。</summary>
@@ -1009,6 +1065,7 @@ namespace WindowsIDE.Editor
 
             using (SolidBrush ln = new SolidBrush(Theme.LineNumber))
             {
+                int breakCol = this.GetBreakColumnWidth();
                 for (int i = first; i <= last; i++)
                 {
                     int y = (i - first) * this.lineHeight;
@@ -1020,14 +1077,17 @@ namespace WindowsIDE.Editor
                     }
 
                     float nx = this.gutterWidth - rightPad - numW;
-                    if (nx < leftPad)
+                    int minNx = breakCol + leftPad;
+                    if (nx < minNx)
                     {
-                        nx = leftPad;
+                        nx = minNx;
                     }
 
                     g.DrawString(num, this.halfFont, ln, nx, y + this.BaselineOffset(this.halfFont), this.typographic);
                 }
             }
+
+            this.PaintBreakMarks(g, first, last);
 
             using (Pen border = new Pen(Theme.Border))
             {
@@ -2219,7 +2279,100 @@ namespace WindowsIDE.Editor
                 gw = minGutter;
             }
 
-            return gw;
+            return this.GetBreakColumnWidth(dpi) + gw;
+        }
+
+        private int GetBreakColumnWidth()
+        {
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            return this.GetBreakColumnWidth(dpi);
+        }
+
+        private int GetBreakColumnWidth(int dpi)
+        {
+            int w = DpiUtil.ToPixels(DpiUtil.BreakMarkDip, dpi);
+            if (w < 1)
+            {
+                return 1;
+            }
+
+            return w;
+        }
+
+        private bool IsBreakpointColumn(int x)
+        {
+            return x >= 0 && x < this.GetBreakColumnWidth();
+        }
+
+        private bool IsPs1Document()
+        {
+            if (this.document == null || string.IsNullOrEmpty(this.document.FilePath))
+            {
+                return false;
+            }
+
+            return string.Equals(Path.GetExtension(this.document.FilePath), ".ps1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool HasBreakpoint(int line)
+        {
+            if (this.breakpointLines == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < this.breakpointLines.Length)
+            {
+                if (this.breakpointLines[i] == line)
+                {
+                    return true;
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
+        private void PaintBreakMarks(Graphics g, int first, int last)
+        {
+            int breakCol = this.GetBreakColumnWidth();
+            if (breakCol < 1)
+            {
+                return;
+            }
+
+            SmoothingMode old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            try
+            {
+                using (SolidBrush mark = new SolidBrush(Theme.Error))
+                {
+                    int d = breakCol - 4;
+                    if (d < 4)
+                    {
+                        d = breakCol;
+                    }
+
+                    int x = (breakCol - d) / 2;
+                    for (int i = first; i <= last; i++)
+                    {
+                        if (!this.HasBreakpoint(i))
+                        {
+                            continue;
+                        }
+
+                        int y = (i - first) * this.lineHeight;
+                        int yMark = y + ((this.lineHeight - d) / 2);
+                        g.FillEllipse(mark, x, yMark, d, d);
+                    }
+                }
+            }
+            finally
+            {
+                g.SmoothingMode = old;
+            }
         }
 
         private int GetTextInset()

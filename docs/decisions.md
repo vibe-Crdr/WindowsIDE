@@ -50,11 +50,11 @@
 | --- | --- |
 | P11 | 言語は拡張子のみ。無題・不明は Plain。字句は行開始状態 + 行スキャナ。Regex / Roslyn は使わない。キーワードはソース内静的表。 |
 | P12 | C# の識別子色は自前束縛（行レキサの上にオーバーレイ）。TokenKind Local / Instance / Method / Type。ファイル内シンボル表 + ワークスペース `.cs` 型名 + Framework Reflection（既存 `/r` と同じ DLL を LoadFrom）。F-GD / F-HOV の位置付き宣言も同じ再帰下降（`CSharpSemantic.Collect`。所属型・コンストラクタ・ジェネリックメソッドを含む）。Roslyn・Regex ホットパスは使わない。完全な型システムは作らない。VBA / PowerShell は行内ヒューリスティックを土台にし、型名は言語ごとの走査で Type にする。cmd は型なし（`%VAR%` / ラベルのみ）。Theme 色は tokyonight。Languages は Theme を参照しない。 |
-| P13 | PowerShell ハイライトだけ `System.Management.Automation.dll`（GAC `v4.0_3.0.0.0__31bf3856ad364e35`）を `/r` する。`Parser.ParseInput` の AST を使う。実行ホスト（Runspace）はこの参照ではまだ作らない。F-PS-RUN はこの SMA で Runspace を開かない。 |
+| P13 | PowerShell ハイライトだけ `System.Management.Automation.dll`（GAC `v4.0_3.0.0.0__31bf3856ad364e35`）を `/r` する。`Parser.ParseInput` の AST を使う。F-PS-RUN はこの SMA で Runspace を開かない（子プロセス）。P3 の F-DBG-PS は `WindowsIDE.Debug` だけが同一プロセスで Runspace を開く。Languages / Host.PowerShell は Runspace を開かない。行 BP は GAC 3.0 に公開 `SetLineBreakpoint` も公開 `LineBreakpoint` コンストラクタも無い。internal ctor + 公開 `SetBreakpoints`。powershell.exe が先に読む `$PSHome` の SMA 公開面と製品 `/r` を混同しない。 |
 
 ## フェーズ P7 で採用した提案
 
-採用済み提案 P7（UTF-8 BOM）とは別。P7-A / P7-B 完了。P7-C 着手。P14 を波 C で実装。P16/P17 は実装済み。P15/P18/P25 は確定しない。P19 は P7-B 済み。
+採用済み提案 P7（UTF-8 BOM）とは別。P7-A / P7-B 完了。P7-C 完了。P14 を波 C で実装。P16/P17 は実装済み。P15/P18/P25 は確定しない。P19 は P7-B 済み。
 
 | ID | 内容 |
 | --- | --- |
@@ -78,7 +78,7 @@
 
 [requirements.md](requirements.md) の **フェーズ P8**（Markdown／VBAProject 参照／マクロ）と、下表の **提案 P8**（F-CMP の P5 必須範囲）も別物である。混同しない。
 
-P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
+P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 / P35 / P36 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
 
 | ID | 提案 | 理由 | 代替 |
 | --- | --- | --- | --- |
@@ -101,6 +101,8 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 | P32 | VB.NET デバッグは独立 ID `F-DBG-VB`（ICorDebug）。F-DBG-CS に相乗りしない。P9 の受け入れにデバッグを入れない。時期は P4 の後 | C# デバッガ実装を VB で壊さない | F-DBG-CS に `.vb` を足す |
 | P33 | ワークスペース内ファイル作成は Ctrl+Alt+N、フォルダ作成は Ctrl+Shift+N。グローバル。`CreateDisplayCommand` + ProcessCmdKey（ShortcutKeys なし）。IME 変換中は奪わない。Ctrl+N 無題は維持。VS Code の Ctrl+Shift+N（New Window）は単一 WinExe（P6）のため使わず、Explorer の新フォルダに合わせる。Ctrl+Shift+F は使わない。確定しない。F-EXP 実装既定。 | D12 近傍かつ無題と衝突しない。フォルダは Explorer と同じ。 | 両方 Ctrl+Alt、ツリーフォーカス時のみ、ShortcutKeys、裸の N |
 | P34 | 編集器（TextView）へフォーカスは Ctrl+1。グローバル。CreateDisplayCommand + ProcessCmdKey（ShortcutKeys なし）。IME 変換中は奪わない。表示メニューはエクスプローラーの直後「編集器」Ctrl+1。左ペイン・下パネルは畳まない。FindBar は閉じない。ワークスペース無しでも可（無題 TextView）。NumPad1 は足さない。Ctrl+E は使わない（F-QO / Ctrl+P エイリアス）。確定しない。F-ED / F-EXP 実装既定。 | D12。VS Code の focusFirstEditorGroup。Ctrl+` の畳みと分離。 | Ctrl+E、Escape、F6、NumPad1、ShortcutKeys |
+| P35 | P3 の PowerShell デバッグは同一プロセス Runspace のまま。ユーザースクリプトが IDE を落とせることを隠さない。ヘルパー EXE への隔離は今は実装しない。確定しない | 同一プロセスが P3 の採用。隔離は確認待ち | ヘルパー EXE で SMA Debugger を隔離する |
+| P36 | P3 のブレーク印と停止行は既存 Error / CurrentLine。専用色は今は足さない。確定しない | ui.md の新色禁止を今は破らない | ブレーク専用 Theme 色 |
 
 ## まだ聞かないが後で決める
 

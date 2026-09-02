@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
+using WindowsIDE.Debug;
 using WindowsIDE.Editor;
 using WindowsIDE.Host.Cmd;
 using WindowsIDE.Host.Csharp;
@@ -80,6 +81,9 @@ namespace WindowsIDE.Tests
             RunTabSwitchScroll();
             RunDpiUtil();
             RunTabStripLayout();
+            RunBreakpointStore();
+            RunDebugSessionState();
+            RunPowerShellDebugger();
             RunDualFontPainter();
             RunUiMnemonic();
             RunDualFontMenuItemPreferredSize();
@@ -1166,6 +1170,7 @@ namespace WindowsIDE.Tests
             Check("TextBodyClip gutter covers Width==0", covered.Width == 0);
             Rectangle shifted = DpiUtil.TextBodyClip(48, new Rectangle(10, 20, 800, 400));
             Check("TextBodyClip inherits Y", shifted.Y == 20);
+            Check("BreakMarkDip", DpiUtil.BreakMarkDip == 12);
         }
 
         private static void RunTabStripLayout()
@@ -1206,6 +1211,259 @@ namespace WindowsIDE.Tests
             int showingLast = TabStripLayout.EnsureVisible(0, lastLeft, lastLeft + tabs[2], content, 100);
             int showingFirst = TabStripLayout.EnsureVisible(showingLast, 4, 4 + tabs[0], content, 100);
             Check("EnsureVisible last to first toward 0", showingFirst < showingLast && showingFirst == 4);
+        }
+
+        private static void RunBreakpointStore()
+        {
+            BreakpointStore store = new BreakpointStore();
+            Check("toggle on", store.Toggle(@"C:\work\a.ps1", 2));
+            int[] lines = store.GetLines(@"C:\work\a.ps1");
+            Check("get one line", lines.Length == 1 && lines[0] == 2);
+            Check("ordinal ignore case same line", !store.Toggle(@"c:\WORK\A.PS1", 2));
+            Check("same line no duplicate after off", store.GetLines(@"C:\work\a.ps1").Length == 0);
+            store.Toggle(@"C:\work\a.ps1", 2);
+            store.Toggle(@"C:\work\a.ps1", 2);
+            Check("second toggle clears", store.GetLines(@"C:\work\a.ps1").Length == 0);
+            store.Toggle(@"C:\work\a.ps1", 3);
+            store.Toggle(@"C:\work\a.ps1", 1);
+            store.Toggle(@"C:\work\a.ps1", 3);
+            int[] mixed = store.GetLines(@"C:\work\a.ps1");
+            Check("no duplicate line 3", mixed.Length == 1 && mixed[0] == 1);
+            store.Toggle(@"C:\work\a.ps1", 5);
+            int[] two = store.GetLines(@"C:\work\a.ps1");
+            Check("two lines sorted", two.Length == 2 && two[0] == 1 && two[1] == 5);
+            Check("other path empty", store.GetLines(@"C:\other.ps1").Length == 0);
+            Check("null path empty", store.GetLines(null).Length == 0);
+            Check("bad line ignored", !store.Toggle(@"C:\work\a.ps1", 0));
+        }
+
+        private static void RunDebugSessionState()
+        {
+            BreakpointStore store = new BreakpointStore();
+            PowerShellDebugger dbg = new PowerShellDebugger(store);
+            Check("idle after ctor", dbg.State == DebugSessionState.Idle);
+            dbg.Continue();
+            Check("idle continue noop", dbg.State == DebugSessionState.Idle);
+            dbg.StepOver();
+            Check("idle stepover noop", dbg.State == DebugSessionState.Idle);
+            dbg.StepInto();
+            Check("idle stepinto noop", dbg.State == DebugSessionState.Idle);
+            dbg.Stop();
+            Check("idle stop noop", dbg.State == DebugSessionState.Idle);
+
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-state-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string script = Path.Combine(dir, "sleep.ps1");
+            File.WriteAllText(script, "Start-Sleep -Seconds 60" + Environment.NewLine, new UTF8Encoding(true));
+            ManualResetEvent ended = new ManualResetEvent(false);
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            try
+            {
+                dbg.Start(script, dir, 1);
+                DateTime until = DateTime.UtcNow.AddSeconds(8);
+                bool running = false;
+                while (DateTime.UtcNow < until)
+                {
+                    if (dbg.State == DebugSessionState.Running)
+                    {
+                        running = true;
+                        break;
+                    }
+
+                    Thread.Sleep(50);
+                }
+
+                Check("start goes running", running);
+                dbg.Stop();
+                Check("stop ended within 8s", ended.WaitOne(8000));
+                Check("idle after stop", dbg.State == DebugSessionState.Idle);
+            }
+            finally
+            {
+                dbg.Stop();
+                if (!ended.WaitOne(2000))
+                {
+                }
+
+                dbg.Dispose();
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        private static void RunPowerShellDebugger()
+        {
+            RunPowerShellDebuggerNoBreakpoint();
+            RunPowerShellDebuggerHitLine("line2.ps1", 2, true, 8);
+            RunPowerShellDebuggerHitLine("line3.ps1", 3, false, 9);
+        }
+
+        private static string WriteThreeLineDebugScript(string dir, string fileName)
+        {
+            string script = Path.Combine(dir, fileName);
+            string body = "$x = 1" + Environment.NewLine + "$y = $x + 2" + Environment.NewLine + "Write-Output $y" + Environment.NewLine;
+            File.WriteAllText(script, body, new UTF8Encoding(true));
+            return script;
+        }
+
+        private static bool DebugHitHasLocal(DebugStoppedEventArgs hit, string name)
+        {
+            if (hit == null || hit.Variables == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < hit.Variables.Length)
+            {
+                DebugVariable v = hit.Variables[i];
+                i++;
+                if (v != null && string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void DisposePowerShellDebugger(PowerShellDebugger dbg, ManualResetEvent ended, string dir)
+        {
+            dbg.Stop();
+            ended.WaitOne(2000);
+            dbg.Dispose();
+            try
+            {
+                Directory.Delete(dir, true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private static void RunPowerShellDebuggerNoBreakpoint()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-ps-nobp-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string script = WriteThreeLineDebugScript(dir, "nobp.ps1");
+            PowerShellDebugger dbg = new PowerShellDebugger(new BreakpointStore());
+            ManualResetEvent stopped = new ManualResetEvent(false);
+            ManualResetEvent ended = new ManualResetEvent(false);
+            int firstStopLine = 0;
+            dbg.Stopped += delegate(object sender, DebugStoppedEventArgs e)
+            {
+                if (firstStopLine == 0 && e != null)
+                {
+                    firstStopLine = e.Line;
+                }
+
+                stopped.Set();
+            };
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            try
+            {
+                dbg.Start(script, dir, 7);
+                if (!ended.WaitOne(8000))
+                {
+                    dbg.Stop();
+                    Check("no-bp ended within 8s", false);
+                }
+                else
+                {
+                    Check("no-bp ended within 8s", true);
+                    Check("no-bp did not stop (not LocalScript-only)", firstStopLine == 0 && !stopped.WaitOne(0));
+                    Check("no-bp idle after end", dbg.State == DebugSessionState.Idle);
+                }
+            }
+            finally
+            {
+                DisposePowerShellDebugger(dbg, ended, dir);
+            }
+        }
+
+        private static void RunPowerShellDebuggerHitLine(string fileName, int line, bool checkLocalX, int generation)
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-ps-L" + line.ToString() + "-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string script = WriteThreeLineDebugScript(dir, fileName);
+            BreakpointStore store = new BreakpointStore();
+            Check("bp line " + line.ToString() + " " + fileName, store.Toggle(script, line));
+            PowerShellDebugger dbg = new PowerShellDebugger(store);
+            ManualResetEvent stopped = new ManualResetEvent(false);
+            ManualResetEvent ended = new ManualResetEvent(false);
+            DebugStoppedEventArgs hit = null;
+            dbg.Stopped += delegate(object sender, DebugStoppedEventArgs e)
+            {
+                if (hit == null)
+                {
+                    hit = e;
+                }
+
+                stopped.Set();
+            };
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            string tag = "line" + line.ToString();
+            try
+            {
+                dbg.Start(script, dir, generation);
+                if (!stopped.WaitOne(8000))
+                {
+                    dbg.Stop();
+                    Check(tag + " first stop within 8s", false);
+                }
+                else
+                {
+                    Check(tag + " first stop within 8s", true);
+                    Check(tag + " stopped state", dbg.State == DebugSessionState.Stopped);
+                    Check(tag + " first stop is " + line.ToString(), hit != null && hit.Line == line);
+                    if (line == 3)
+                    {
+                        Check(tag + " first stop is not 1", hit != null && hit.Line != 1);
+                        Check(tag + " first stop is not 2", hit != null && hit.Line != 2);
+                    }
+
+                    if (checkLocalX)
+                    {
+                        Check(tag + " locals contain x", DebugHitHasLocal(hit, "x"));
+                    }
+
+                    dbg.Continue();
+                    if (!ended.WaitOne(8000))
+                    {
+                        dbg.Stop();
+                        Check(tag + " continue ended within 8s", false);
+                    }
+                    else
+                    {
+                        Check(tag + " continue ended within 8s", true);
+                        Check(tag + " idle after continue", dbg.State == DebugSessionState.Idle);
+                    }
+                }
+            }
+            finally
+            {
+                DisposePowerShellDebugger(dbg, ended, dir);
+            }
         }
 
         private static void RunDualFontPainter()

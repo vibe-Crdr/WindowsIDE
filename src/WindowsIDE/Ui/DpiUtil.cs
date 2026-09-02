@@ -18,6 +18,9 @@ namespace WindowsIDE.Ui
         /// <summary>行番号ガターの左右余白（96dpi DIP）。</summary>
         public const int LineNumberPadDip = 8;
 
+        /// <summary>ガター左のブレーク印列（96dpi DIP）。</summary>
+        public const int BreakMarkDip = 12;
+
         /// <summary>行番号ガターから本文までのインセット（96dpi DIP）。</summary>
         public const int TextInsetDip = 4;
 

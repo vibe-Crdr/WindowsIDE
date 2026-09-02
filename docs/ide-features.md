@@ -121,15 +121,15 @@ R7 の VBA ディレクトリ ↔ Excel 明示プル／プッシュ。Compile / 
 | --- | --- | --- |
 | F-IG | 全ファイル形式（Plain / cmd / Markdown / 無題 / 全ホスト）で、先頭 `' '` と `'\t'` から `tabSize` 列ごとに 1 物理 px の縦線を本文へ描く。色は既存 LineNumber。常時オン。新 XML なし。規則は `WindowsIDE.Editor`（WinForms 非依存の計測 + `TextView` 描画）。`DpiUtil.TextBodyClip` 内。ガターへはみ出さない | F-SIND、F-IND の Enter/Tab 契約変更、Languages、新 Theme 色、アクティブガイド（P29）、XML トグル（P30）、空行継続の確定（P31）、U+3000 を数えること、列 0 の線、P7-A への混入 |
 
-## フェーズ P7（編集器インテリジェンス）— P7-B 完了。P7-C 着手（F-LIVE / F-SQU / F-VBA-BLD 手動。VBA ライブは今は実装しない）。F-CMP 拡張と F-SIG は今は実装しない。
+## フェーズ P7（編集器インテリジェンス）— P7-B 完了。P7-C 完了（F-LIVE / F-SQU / F-VBA-BLD 手動。VBA ライブは今は実装しない）。F-CMP 拡張と F-SIG は今は実装しない。
 
-P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「最初の利用可能 IDE」を壊さない。着手時期は採用済み P16（P2 完了の直後。波 C の F-LIVE / F-SQU / F-VBA-BLD は残 P1 の F-CS-BLD / F-PROB 待ち）。**P7-A（波 A）は完了。P7-B は完了。P7-C は F-LIVE / F-SQU / F-VBA-BLD 手動を着手する。VBA ライブは今は実装しない。F-CMP の P7 拡張と F-SIG は今は実装しない。** 設定 XML の新規属性は今増やさない。F-CMP の P5 基本はフェーズ順では P7 の後（P5）に実装される。
+P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「最初の利用可能 IDE」を壊さない。着手時期は採用済み P16（P2 完了の直後。波 C の F-LIVE / F-SQU / F-VBA-BLD は残 P1 の F-CS-BLD / F-PROB 待ち）。**P7-A（波 A）は完了。P7-B は完了。P7-C は完了（F-LIVE / F-SQU / F-VBA-BLD 手動。VBA ライブは今は実装しない）。F-CMP の P7 拡張と F-SIG は今は実装しない。** 設定 XML の新規属性は今増やさない。F-CMP の P5 基本はフェーズ順では P7 の後（P5）に実装される。
 
 | 波 | ID | 内容 | 依存 | 状態 |
 | --- | --- | --- | --- | --- |
 | A 構造 | F-BR、F-AC、F-SIND、F-VBA-CASE | 括弧強調、自動閉じ、スマートインデント、VBA キーワード大文字小文字 | Editor + Languages。Build 不要 | 完了 |
 | B ナビ | F-GD、F-HOV、F-DOC、F-CMP の P7 拡張、F-SIG（C） | 定義へ移動、ホバー、枠コメント、ワークスペース／メンバー補完、パラメータヒント。対象は C# / VBA / PowerShell / cmd。VB.NET はフェーズ P9 | 位置付きシンボル。csc 不要 | F-GD / F-HOV / F-DOC 着手。F-CMP 拡張と F-SIG は今は実装しない |
-| C 診断 | F-LIVE、F-SQU、F-VBA-BLD | 常時 csc、波線、VBA Compile 診断 | 残 P1 の F-CS-BLD / F-PROB の後。VBA はプッシュ後 | 着手（手動 Compile。ライブ VBA とブロック不一致波線は今は実装しない） |
+| C 診断 | F-LIVE、F-SQU、F-VBA-BLD | 常時 csc、波線、VBA Compile 診断 | 残 P1 の F-CS-BLD / F-PROB の後。VBA はプッシュ後 | 完了（手動 Compile。ライブ VBA とブロック不一致波線は今は実装しない） |
 
 | ID | P7 で対象 | 今の P1 および P7 でやらない |
 | --- | --- | --- |
@@ -255,6 +255,17 @@ VBA の終端は実際の語を使う（**`End For` は禁止**）。既存の�
 
 外部 LSP、Roslyn、NuGet、別 csc、C# 6+、pwsh、常時コンパイルによる EXE 自動起動、Excel の自動 `Application.Run`、Compile と Run の混同、キー入力ごとの同期 Excel Compile、Excel 未起動時のライブ Compile による自動起動、バックグラウンドスレッドの Excel COM、`MakeCompiledFile` / ダミー Run による Compile 代替、自前レキサを VBA コンパイラと呼ぶこと、COM HelpString、Object Browser、虹色括弧、Peek、Find All References、cmd の F12 / 波線 / 自動閉じ / スマートインデント、BCL へ F12、自前パーサを csc 診断と偽ること、今の P1 への混入、設定 XML の新規属性、製品への新しい `/r`、Markdown／VBAProject 参照／マクロ（それらはフェーズ P8）、VB.NET ホスト（フェーズ P9。今は実装しない）、インデント線（F-IG。P7-A に混ぜない）。STA の診断 Compile は対象外にしない。
 
+## フェーズ P3（PowerShell デバッグ）
+
+ディスク上の `.ps1` を IDE 同一プロセスの Runspace + SMA Debugger でデバッグする。F-PS-RUN（Ctrl+F5 の子プロセス）は変えない。Host.PowerShell と Languages は Runspace を開かない。PTY はデバッグ対象にも Kill 集合にも入れない。新しい M は作らない。
+
+| ID | P3 でやる | P3 でやらない |
+| --- | --- | --- |
+| F-DBG-PS | 行ブレーク（ストアは OrdinalIgnoreCase パス + 1 始まり行。二重なし。XML に書かない）。F5 は Idle+ディスク `.ps1` で開始（dirty ならそのタブだけ Save）、Stopped で続行（言語不問）、Running は no-op。Idle の F5 を 1 ショットにしない。Shift+F5 停止、F10 StepOver、F11 StepInto。Invoke はディスクパス（本文 AddScript は使わない）。cwd はスクリプトディレクトリ。`InitialSessionState.CreateDefault`、`ExecutionPolicy.Bypass` は ISS プロパティのみ。Apartment は MTA 既定。Excel COM は触らない。停止中 `ProcessCommand` の `Get-Variable`（name + ToString。null は `$null`。先頭 256 文字。ネスト展開しない）。ストリームはデバッグコンソールだけ（出力タブに混ぜない）。開始時にストアを Debugger へ載せる | Set-PSBreakpoint フォールバック、本文 AddScript、Languages の ParseInput 変更、Languages / Host.PowerShell への Runspace、Host.PowerShell 編集、Ctrl+F5 の子プロセス経路、PTY の Kill、pwsh、条件 BP、ステップアウト、ウォッチ、オブジェクト展開、F-DBG-CS / F-DBG-CMD / F-DBG-VBA / F-DBG-VB、ヘルパー EXE 隔離（提案 P35。今は実装しない） |
+| F-DBG-UI | 下パネル 4 タブ（問題 / 出力 / ターミナル / デバッグ）。デバッグは上ローカル・下コンソール（縦 SplitContainer はセッション内。XML に書かない）。12 DIP DualFont、ThemedScrollBar 10 DIP。コンソールは OutputPanelControl 再利用（4000 行、先頭 4096 文字。stdout=Foreground、stderr=Error、起動終了警告=Comment）。ShowDebug はフォーカスを奪わない。F5 開始でパネル展開＋デバッグチップ。× は畳むだけ（セッションも PTY も殺さない）。表示メニュー「デバッグ」（ShortcutKeys なし、表示文字列なし）。実行メニュー先頭: 開始/続行(F5)、停止(Shift+F5)、ステップ オーバー(F10)、ステップ イン(F11)、セパレータ、既存 2 項。CreateDisplayCommand。**F10 に ShortcutKeys を付けない。** ProcessCmdKey は F5 / Shift+F5 / F9 / F10 / F11（IME composing では奪わない。ターミナルフォーカス中もグローバル）。ガター左に 12 DIP のブレーク列（既存 min 36 DIP の左）。印は行中央の楕円、Theme.Error（新色なし。OnPaint 中だけ AntiAlias）。クリックは列内かつ `.ps1` ならその行をトグル。F9 は `.ps1` ならキャレット行トグル、それ以外は黙って消費。停止行は TryOpenFile + キャレット（CurrentLine）。TextView は Debug/SMA を参照しない（BP 行は 0 始まり int[]、トグルはイベント） | 空のデバッグタブ、ListView / DataGrid / RichTextBox、新 Theme 色、workspace.xml 属性、専用色（提案 P36。今は Error）、P4–P9、F-IG、F-PAL、F-CMP |
+
+デバッグ中（Idle 以外）: Ctrl+F5 / F8 / 1 ショット開始は ShowSynthetic で拒否しセッションは殺さない。Ctrl+Shift+B は可。live タイマーはセッション中 Stop、Idle 復帰後に再開可。開始時の排他は StartPs に合わせる（`buildGeneration++`、`cscRunner.Kill`、`InvalidateLiveCsc`、csharp/ps/cmd ホスト Kill。**PTY は殺さない。** 別 `debugGeneration`。`activeRunKind` に流用しない）。停止/Dispose は Runspace を閉じ、UI で Wait しない。PTY は閉じない。拒否（問題タブ、バケット置き換え）: 無題「無題はデバッグできない。」／非 `.ps1`（`.psm1` `.psd1` `.cs` `.cmd` 含む）「PowerShell のデバッグはディスク上の .ps1 だけです。」ユーザースクリプトは同一プロセスのため IDE を落とせる（隠さない。提案 P35 は確認待ち）。
+
 ## フェーズ P8（Markdown／参照／マクロ）— 今は実装しない
 
 P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。
@@ -355,12 +366,12 @@ P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の�
 
 | ID | 優先 | 言語 | 内容 | 受け入れ |
 | --- | --- | --- | --- | --- |
-| F-DBG-PS | S | PowerShell | 行ブレーク、ステップ、ローカル変数 | P3 |
+| F-DBG-PS | S | PowerShell | 行ブレーク、ステップ、ローカル変数 | P3。ディスク上 `.ps1` を同一プロセス Runspace + SMA Debugger で、行 BP・F5 開始/続行・Shift+F5 停止・F10 StepOver・F11 StepInto・停止時ローカル（Get-Variable）ができる |
 | F-DBG-CS | S | C# | PDB + ステップ、コールスタック、ローカル | P4。ICorDebug 等インボックス API のみ |
 | F-DBG-VB | S | VB.NET | PDB + ステップ、コールスタック、ローカル | 独立 ID。F-DBG-CS に相乗りしない。P9 の受け入れに含めない。時期は P4 の後（提案 P32） |
 | F-DBG-CMD | S | cmd | エコー実行、失敗行 | 本格ステップは必須にしない |
 | F-DBG-VBA | S | VBA | マクロ指定実行、COM エラー表示。可能なら VBE 連携 | P6 |
-| F-DBG-UI | S | 共通 | ブレークガター、続行/停止、デバッグコンソール | |
+| F-DBG-UI | S | 共通 | ブレークガター、続行/停止、デバッグコンソール | P3 最小。ガター左 12 DIP の Error 楕円、F9 トグル、下パネル実体デバッグタブ（ローカル + コンソール）。空タブは置かない。新色なし |
 
 実行（デバッグなし）は M。ステップ実行は S。
 

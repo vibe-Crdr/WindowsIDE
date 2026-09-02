@@ -45,7 +45,7 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.dll
 
 P0 では `Microsoft.CSharp.dll` / Office PIA / `System.Xml.Linq.dll` は足さない。後のフェーズで足すときは [decisions.md](decisions.md) を更新してから。
 
-P13: PowerShell ハイライト用にだけ次を `/r` する（実行ホストではない）。`WindowsIDE.Host.PowerShell` は `powershell.exe` 5.1 の子プロセスであり、この SMA 参照で Runspace を開かない。
+P13: PowerShell ハイライト用に SMA を `/r` する（GAC `v4.0_3.0.0.0__31bf3856ad364e35`）。P3 では同じ参照を `WindowsIDE.Debug` の実行ホスト（Runspace + Debugger）としても使う。`WindowsIDE.Languages` は `Parser.ParseInput` のみ（Runspace を開かない）。`WindowsIDE.Host.PowerShell` は `powershell.exe` 5.1 の子プロセスであり、この SMA 参照で Runspace を開かない。行 BP は GAC 3.0 に公開 `SetLineBreakpoint` が無い（指定 csc で CS1061）。internal `LineBreakpoint` ctor + 公開 `SetBreakpoints`。`$PSHome` の SMA を製品 `/r` と取り違えない。
 
 ```text
 C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll
@@ -66,7 +66,8 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 - `/r:` は Framework64 の 6 DLL のみ（mscorlib, System, System.Core, System.Drawing, System.Windows.Forms, System.Xml）。SMA / Microsoft.CSharp / Office は足さない。製品 `/r` は増やさない
 - `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。手動 csc は **`Process.Start` しない**
 - ユーザー EXE の起動と、そのプロセス参照だけの Kill は `WindowsIDE.Host.Csharp`。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
-- ユーザー `.ps1` の起動は `WindowsIDE.Host.PowerShell`（`SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe` 子プロセス）。SMA は実行ホストではない。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
+- ユーザー `.ps1` の起動は `WindowsIDE.Host.PowerShell`（`SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe` 子プロセス）。SMA は 1 ショット実行のホストではない。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
+- P3 の PowerShell デバッグは `WindowsIDE.Debug` が同一プロセスで Runspace を開く。`src\WindowsIDE\Debug\` を `Host\Cmd\CmdProcessHost.cs` の次に列挙する。`src\WindowsIDE\Ui\DebugPaneControl.cs` は BottomPane の次（製品 rsp。テスト rsp も BottomPane の次）。Languages / Host.PowerShell は Runspace を開かない
 - ユーザー `.cmd` / `.bat` の起動は `WindowsIDE.Host.Cmd`（`SpecialFolder.System` + `cmd.exe` 子プロセス）。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - 統合ターミナル（F-TERM）は `WindowsIDE.Terminal`（CreatePseudoConsole + CreateProcessW）。ソースは Host の次に列挙する。kernel32 の P/Invoke に追加 `/r` は不要。Host.* と混ぜない。1 ショットの Kill 集合には入れない。MainForm.Dispose で PTY も閉じる（UI で待たない）
 - `WindowsIDE.Vba` のソースは Terminal 9 本の次に列挙する。P2 も PIA `/r` なし。Microsoft.CSharp なし
@@ -86,7 +87,7 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 
 ## レスポンスファイル
 
-`build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。`src/WindowsIDE/Host/PowerShell/PowerShellProcessHost.cs` を `Host/Csharp/CsharpProcessHost.cs` の次に列挙する（`windows-ide-tests.rsp` も同じ）。`src/WindowsIDE/Host/Cmd/CmdProcessHost.cs` を PowerShell ホストの次に列挙する。`src/WindowsIDE/Terminal/` の 9 本を Cmd ホストの次に列挙する。`src/WindowsIDE/Vba/` を Terminal 9 本の次に同じ順で列挙する。`src/WindowsIDE/Ui/TerminalControl.cs` を BottomPane の次に列挙する。`src/WindowsIDE/Editor/CmdSelectionRules.cs` を `FindRules.cs` の次に `windows-ide.rsp` と `windows-ide-tests.rsp` へ列挙する。`src/WindowsIDE/Editor/SquiggleSpan.cs` を `FindRules.cs` / `CmdSelectionRules.cs` の近くに列挙する。`src/WindowsIDE/Languages/PowerShellParseErrors.cs` を `PowerShellSemantic.cs` の次に列挙する。`src/WindowsIDE/Build/LiveCompileUnit.cs` を `CompileUnit.cs` の次に列挙する。`src/WindowsIDE/Vba/VbaCompiler.cs` を `VbaSyncService.cs` の次に列挙する。`src/WindowsIDE/Ui/ChromeMark.cs` を FindBar.cs の次に列挙する。`src/WindowsIDE/Ui/CreateBarGlyph.cs` を ChromeMark.cs の次、FileTreeCreateBar.cs の前に列挙する。`FileTreeCreateBar.cs` をその近くに列挙する。`src/WindowsIDE/Workspace/WorkspaceItemRules.cs` を PathGuard.cs の次、`WorkspaceCreateRules.cs` をその次、`WorkspaceRecycle.cs` を CreateRules の次に列挙する（製品 rsp とテスト rsp）。shell32 の P/Invoke に追加 `/r` は不要。
+`build/windows-ide.rsp` にスイッチと `/r` とソース一覧と `/resource` を置く。`build/compile.ps1` は csc のフルパスと rsp だけを渡す。PowerShell 7 構文は使わない。`src/WindowsIDE/Ui/CommonItemDialog.cs` を rsp に含める。ole32 / shell32 の P/Invoke に追加 `/r` は不要。`src/WindowsIDE/Host/PowerShell/PowerShellProcessHost.cs` を `Host/Csharp/CsharpProcessHost.cs` の次に列挙する（`windows-ide-tests.rsp` も同じ）。`src/WindowsIDE/Host/Cmd/CmdProcessHost.cs` を PowerShell ホストの次に列挙する。`src/WindowsIDE/Debug/` を Cmd ホストの次に列挙する。`src/WindowsIDE/Terminal/` の 9 本を Debug の次に列挙する。`src/WindowsIDE/Vba/` を Terminal 9 本の次に同じ順で列挙する。`src/WindowsIDE/Ui/DebugPaneControl.cs` は BottomPane の次（製品 rsp。テスト rsp にも BottomPane があるので同様）。`src/WindowsIDE/Ui/TerminalControl.cs` はその次に列挙する。`src/WindowsIDE/Editor/CmdSelectionRules.cs` を `FindRules.cs` の次に `windows-ide.rsp` と `windows-ide-tests.rsp` へ列挙する。`src/WindowsIDE/Editor/SquiggleSpan.cs` を `FindRules.cs` / `CmdSelectionRules.cs` の近くに列挙する。`src/WindowsIDE/Languages/PowerShellParseErrors.cs` を `PowerShellSemantic.cs` の次に列挙する。`src/WindowsIDE/Build/LiveCompileUnit.cs` を `CompileUnit.cs` の次に列挙する。`src/WindowsIDE/Vba/VbaCompiler.cs` を `VbaSyncService.cs` の次に列挙する。`src/WindowsIDE/Ui/ChromeMark.cs` を FindBar.cs の次に列挙する。`src/WindowsIDE/Ui/CreateBarGlyph.cs` を ChromeMark.cs の次、FileTreeCreateBar.cs の前に列挙する。`FileTreeCreateBar.cs` をその近くに列挙する。`src/WindowsIDE/Workspace/WorkspaceItemRules.cs` を PathGuard.cs の次、`WorkspaceCreateRules.cs` をその次、`WorkspaceRecycle.cs` を CreateRules の次に列挙する（製品 rsp とテスト rsp）。shell32 の P/Invoke に追加 `/r` は不要。
 
 出力は `build/out/WindowsIDE.exe`。`bin/` や `obj/` は使ってもよいが git に入れない。
 

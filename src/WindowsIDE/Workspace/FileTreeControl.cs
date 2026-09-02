@@ -49,6 +49,7 @@ namespace WindowsIDE.Workspace
         private bool suppressBlurCancel;
         private bool ignoreThemedScroll;
         private bool chromeBusy;
+        private bool nativeBarBusy;
         private bool rebuildBusy;
         private int wheelLeftover;
         private Timer renameClickTimer;
@@ -109,6 +110,19 @@ namespace WindowsIDE.Workspace
         }
 
         /// <summary>
+        /// SysTreeView32 に TVS_NOHSCROLL を付ける。Scrollable は変えない。
+        /// </summary>
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.Style |= Native.TVS_NOHSCROLL;
+                return cp;
+            }
+        }
+
+        /// <summary>
         /// ツリー用の 12 DIP 双フォントを適用する。本文 fontSize には連動しない。
         /// </summary>
         /// <param name="fonts">同梱フォント。null ならシステム UI 単一。</param>
@@ -122,9 +136,11 @@ namespace WindowsIDE.Workspace
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+            this.SuppressNativeBars();
             Native.SendMessage(this.Handle, Native.TVM_SETEXTENDEDSTYLE, new IntPtr(Native.TVS_EX_DOUBLEBUFFER), new IntPtr(Native.TVS_EX_DOUBLEBUFFER));
             this.RecreateUiFont();
             this.RefreshChrome();
+            this.SuppressNativeBars();
         }
 
         /// <summary>フォント変更後に所有 UI フォント基準で行高を合わせる。</summary>
@@ -743,7 +759,7 @@ namespace WindowsIDE.Workspace
             this.Invalidate();
         }
 
-        /// <summary>HWHEEL は横、縦ホイール後は自前バーを同期する。</summary>
+        /// <summary>HWHEEL は横。NCCALCSIZE 前とスクロール後にネイティブバーを隠す。VSCROLL 系は nPos 取得（RefreshChrome）のあと Suppress。</summary>
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WM_MOUSEHWHEEL)
@@ -755,10 +771,23 @@ namespace WindowsIDE.Workspace
                 return;
             }
 
+            if (m.Msg == Native.WM_NCCALCSIZE)
+            {
+                this.SuppressNativeBars();
+                base.WndProc(ref m);
+                return;
+            }
+
             base.WndProc(ref m);
             if (m.Msg == WM_VSCROLL || m.Msg == WM_HSCROLL || m.Msg == WM_MOUSEWHEEL)
             {
                 this.RefreshChrome();
+            }
+
+            if (m.Msg == WM_VSCROLL || m.Msg == WM_HSCROLL || m.Msg == WM_MOUSEWHEEL
+                || m.Msg == Native.WM_SIZE || m.Msg == Native.WM_WINDOWPOSCHANGED)
+            {
+                this.SuppressNativeBars();
             }
         }
 
@@ -1201,7 +1230,7 @@ namespace WindowsIDE.Workspace
             {
                 Native.SCROLLINFO vInfo;
                 bool hasV = Native.TryGetScroll(this.Handle, Native.SB_VERT, out vInfo);
-                Native.ShowScrollBar(this.Handle, Native.SB_BOTH, false);
+                this.SuppressNativeBars();
 
                 int dpi = DpiUtil.GetDpi(this.Handle);
                 int bar = DpiUtil.ToPixels(DpiUtil.ScrollBarThicknessDip, dpi);
@@ -1286,7 +1315,7 @@ namespace WindowsIDE.Workspace
 
                 this.SetNativeScroll(Native.SB_HORZ, 0);
 
-                Native.ShowScrollBar(this.Handle, Native.SB_BOTH, false);
+                this.SuppressNativeBars();
             }
             finally
             {
@@ -1486,7 +1515,7 @@ namespace WindowsIDE.Workspace
             si.cbSize = (uint)Marshal.SizeOf(typeof(Native.SCROLLINFO));
             si.fMask = Native.SIF_POS;
             si.nPos = pos;
-            Native.SetScrollInfo(this.Handle, nBar, ref si, true);
+            Native.SetScrollInfo(this.Handle, nBar, ref si, false);
 
             int msg = (nBar == Native.SB_VERT) ? WM_VSCROLL : WM_HSCROLL;
             int wParam = SB_THUMBPOSITION | (pos << 16);
@@ -1500,8 +1529,32 @@ namespace WindowsIDE.Workspace
                 this.ignoreThemedScroll = false;
             }
 
-            Native.ShowScrollBar(this.Handle, Native.SB_BOTH, false);
+            this.SuppressNativeBars();
             this.Invalidate();
+        }
+
+        private void SuppressNativeBars()
+        {
+            if (this.nativeBarBusy || !this.IsHandleCreated)
+            {
+                return;
+            }
+
+            this.nativeBarBusy = true;
+            try
+            {
+                Native.ShowScrollBar(this.Handle, Native.SB_BOTH, false);
+                long style = Native.GetWindowLongPtr(this.Handle, Native.GWL_STYLE).ToInt64();
+                long next = style & ~((long)Native.WS_VSCROLL | (long)Native.WS_HSCROLL);
+                if (next != style)
+                {
+                    Native.SetWindowLongPtr(this.Handle, Native.GWL_STYLE, new IntPtr(next));
+                }
+            }
+            finally
+            {
+                this.nativeBarBusy = false;
+            }
         }
 
         /// <summary>所有している 12 DIP Pixel フォントを破棄する。作成欄とスクロールの購読も外す。</summary>
@@ -2004,6 +2057,13 @@ namespace WindowsIDE.Workspace
             public const uint SIF_ALL = 0x17;
             public const int TVM_SETEXTENDEDSTYLE = 0x1100 + 44;
             public const int TVS_EX_DOUBLEBUFFER = 0x0004;
+            public const int WM_NCCALCSIZE = 0x0083;
+            public const int WM_SIZE = 0x0005;
+            public const int WM_WINDOWPOSCHANGED = 0x0047;
+            public const int GWL_STYLE = -16;
+            public const int WS_HSCROLL = 0x00100000;
+            public const int WS_VSCROLL = 0x00200000;
+            public const int TVS_NOHSCROLL = 0x8000;
 
             [StructLayout(LayoutKind.Sequential)]
             public struct SCROLLINFO
@@ -2028,6 +2088,12 @@ namespace WindowsIDE.Workspace
 
             [DllImport("user32.dll")]
             public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+            [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+            public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+            [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+            public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
             public static bool TryGetScroll(IntPtr hwnd, int nBar, out SCROLLINFO info)
             {

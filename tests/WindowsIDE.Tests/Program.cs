@@ -69,6 +69,7 @@ namespace WindowsIDE.Tests
             RunWorkspaceCreateRules();
             RunWorkspaceItemRules();
             InspectFileTreeRenameDeleteSource();
+            InspectFileTreeNativeScrollSource();
             InspectLeftPaneStartupSource();
             RunWorkspaceSettings();
             RunVbaOffline();
@@ -784,6 +785,99 @@ namespace WindowsIDE.Tests
             Check("f-exp tree no Ctrl+Alt+N", tree.IndexOf("Keys.Control | Keys.Alt | Keys.N", StringComparison.Ordinal) < 0);
             Check("f-exp tree no Ctrl+Shift+N", tree.IndexOf("Keys.Control | Keys.Shift | Keys.N", StringComparison.Ordinal) < 0);
             Check("f-exp no Ctrl+Shift+F", main.IndexOf("Keys.Control | Keys.Shift | Keys.F", StringComparison.Ordinal) < 0);
+        }
+
+        /// <summary>
+        /// 16 進リテラルが、直後が 16 進数字でない形で含まれるか。
+        /// </summary>
+        /// <param name="text">ソース。</param>
+        /// <param name="hex">例: 0x8000。</param>
+        /// <returns>単語として見つかれば true。</returns>
+        private static bool ContainsHexToken(string text, string hex)
+        {
+            if (text == null || hex == null || hex.Length == 0)
+            {
+                return false;
+            }
+
+            int start = 0;
+            while (true)
+            {
+                int at = text.IndexOf(hex, start, StringComparison.OrdinalIgnoreCase);
+                if (at < 0)
+                {
+                    return false;
+                }
+
+                int after = at + hex.Length;
+                if (after >= text.Length)
+                {
+                    return true;
+                }
+
+                char next = text[after];
+                bool hexDigit = (next >= '0' && next <= '9') || (next >= 'A' && next <= 'F') || (next >= 'a' && next <= 'f');
+                if (!hexDigit)
+                {
+                    return true;
+                }
+
+                start = at + 1;
+            }
+        }
+
+        /// <summary>
+        /// ツリーのネイティブバー抑制（TVS_NOHSCROLL、NCCALCSIZE、redraw=false）。ThemedScrollBar 型は参照しない。
+        /// </summary>
+        private static void InspectFileTreeNativeScrollSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string treePath = Path.Combine(repo, "src", "WindowsIDE", "Workspace", "FileTreeControl.cs");
+            if (!File.Exists(treePath))
+            {
+                Check("f-exp native source readable", false);
+                return;
+            }
+
+            string tree = File.ReadAllText(treePath);
+            Check("f-exp native SetScrollInfo redraw false", tree.IndexOf("SetScrollInfo(this.Handle, nBar, ref si, false)", StringComparison.Ordinal) >= 0
+                && tree.IndexOf("SetScrollInfo(this.Handle, nBar, ref si, true)", StringComparison.Ordinal) < 0);
+            Check("f-exp native WM_NCCALCSIZE", tree.IndexOf("0x0083", StringComparison.Ordinal) >= 0);
+            Check("f-exp native ShowScrollBar", tree.IndexOf("ShowScrollBar", StringComparison.Ordinal) >= 0);
+            Check("f-exp native GetWindowLongPtr", tree.IndexOf("GetWindowLongPtr", StringComparison.Ordinal) >= 0
+                && tree.IndexOf("SetWindowLongPtr", StringComparison.Ordinal) >= 0
+                && tree.IndexOf("GetWindowLong(", StringComparison.Ordinal) < 0
+                && tree.IndexOf("SetWindowLong(", StringComparison.Ordinal) < 0);
+            Check("f-exp native TVS_NOHSCROLL", tree.IndexOf("TVS_NOHSCROLL", StringComparison.Ordinal) >= 0
+                || ContainsHexToken(tree, "0x8000"));
+            Check("f-exp native no TVS_NOSCROLL", tree.IndexOf("TVS_NOSCROLL", StringComparison.Ordinal) < 0
+                && tree.IndexOf("Scrollable = false", StringComparison.Ordinal) < 0
+                && !ContainsHexToken(tree, "0x2000"));
+            Check("f-exp native ThemedScrollBar overlay", tree.IndexOf("new ThemedScrollBar(true)", StringComparison.Ordinal) >= 0
+                && tree.IndexOf("new ThemedScrollBar(false)", StringComparison.Ordinal) >= 0);
+            int wheelAt = tree.IndexOf("protected override void OnMouseWheel(", StringComparison.Ordinal);
+            int downAt = tree.IndexOf("protected override void OnMouseDown(", StringComparison.Ordinal);
+            Check("f-exp native wheel no base", wheelAt >= 0 && downAt > wheelAt
+                && tree.Substring(wheelAt, downAt - wheelAt).IndexOf("base.OnMouseWheel", StringComparison.Ordinal) < 0);
+            Check("f-exp native HORZ zero", tree.IndexOf("SetNativeScroll(Native.SB_HORZ, 0)", StringComparison.Ordinal) >= 0);
+            Check("f-exp native need-bar CountVisibleNodes", tree.IndexOf("CountVisibleNodes", StringComparison.Ordinal) >= 0);
+            int wndAt = tree.IndexOf("protected override void WndProc(", StringComparison.Ordinal);
+            string wnd = "";
+            if (wndAt >= 0 && wheelAt > wndAt)
+            {
+                wnd = tree.Substring(wndAt, wheelAt - wndAt);
+            }
+
+            int lastBase = wnd.LastIndexOf("base.WndProc(ref m);", StringComparison.Ordinal);
+            string after = "";
+            if (lastBase >= 0)
+            {
+                after = wnd.Substring(lastBase);
+            }
+
+            int refreshAt = after.IndexOf("RefreshChrome(", StringComparison.Ordinal);
+            int suppressAt = after.IndexOf("SuppressNativeBars(", StringComparison.Ordinal);
+            Check("f-exp native RefreshChrome before Suppress on VSCROLL", refreshAt >= 0 && suppressAt >= 0 && refreshAt < suppressAt);
         }
 
         /// <summary>

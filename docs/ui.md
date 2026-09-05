@@ -141,7 +141,7 @@ VB.NET 字句は既存 TokenKind 色だけを使う。新しいテーマ色は�
 - 行番号ガターは狭く、現在行だけ少し明るく。数字はガター内で**右寄せ**し、左右に **8 DIP** の余白を取る。本文と選択はガター境界より左へ描かない（部分可視グリフはクリップ、省略記号なし）
 - カレント行ハイライト
 - ブロックカーソルではなく細いバー（neovim の insert に近い）。日本語 IME の未確定は自前描画（Selection 背景 + 下線）。システム変換窓は出さない。小さい既定箱が残る場合は隠す（START を DefWndProc に渡さない。保険の CompositionFont は IME 可視のシステム顔）。候補リストはシステム。変換中のバーキャレットは未確定内のカーソル位置に追従する
-- スクロールバーは自前 **10 DIP**（編集器・ツリー・About のライセンス欄・F-HOV ホバー）。矢印無し。内容がビューポートに収まるときは非表示（オートハイド）。横の必要判定は半角幅×文字数ではなく、描画と同じ双フォント計測（編集器は `MeasureRun`、ツリーは `DualFontPainter.Measure`）。ツリーの横位置は自前オフセットで、SysTreeView32 の横スクロールは使わない。ツリーのネイティブバーは出さない（TVS_NOSCROLL は使わない）。トラックはホスト背景（編集器 `EditorBackground`、ツリー `Background`、ホバー `Background`）。つまみ LineNumber、つまみホバー Comment、押下 Selection
+- スクロールバーは自前 **10 DIP**（編集器・ツリー・About のライセンス欄・F-HOV ホバー）。矢印無し。内容がビューポートに収まるときは非表示（オートハイド）。横の必要判定は半角幅×文字数ではなく、描画と同じ双フォント計測（編集器は `MeasureRun`、ツリーは `DualFontPainter.Measure`）。ツリーの横位置は自前オフセットで、SysTreeView32 の横スクロールは使わない。ツリーの縦 ThemedScrollBar は横が必要なときも Client 下端まで。右下角は縦が埋める。横 overlay は縦の幅を除く。ツリーのネイティブバーは出さない（TVS_NOSCROLL は使わない）。トラックはホスト背景（編集器 `EditorBackground`、ツリー `Background`、ホバー `Background`）。つまみ LineNumber、つまみホバー Comment、押下 Selection
 - ミニマップは初期対象外
 - タブはファイル名のみ。不要なアイコンを並べない。閉じる印はタブ矩形内に収め、題名との間と右端に各 6 DIP、色は Foreground、幾何 2 本線（幅 2、SmoothingMode は足さない）、一辺は 8 DIP、垂直中央、ヒットは描画と同じ矩形とする。溢れは横オフセット。バー高さは変えない。ThemedScrollBar を載せない。シェブロンを並べない。バー上の縦ホイールは横。閉じる印・12 DIP DualFont は現状維持。
 

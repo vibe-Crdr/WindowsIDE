@@ -141,6 +141,7 @@ namespace WindowsIDE.Workspace
             this.RecreateUiFont();
             this.RefreshChrome();
             this.SuppressNativeBars();
+            this.ApplyThemedBarBounds();
         }
 
         /// <summary>フォント変更後に所有 UI フォント基準で行高を合わせる。</summary>
@@ -759,7 +760,7 @@ namespace WindowsIDE.Workspace
             this.Invalidate();
         }
 
-        /// <summary>HWHEEL は横。NCCALCSIZE 前とスクロール後にネイティブバーを隠す。VSCROLL 系は nPos 取得（RefreshChrome）のあと Suppress。</summary>
+        /// <summary>HWHEEL は横。NCCALCSIZE 前とスクロール後にネイティブバーを隠す。VSCROLL 系は nPos 取得（RefreshChrome）のあと Suppress。SIZE/WINDOWPOSCHANGED は Suppress のあと ApplyThemedBarBounds。</summary>
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WM_MOUSEHWHEEL)
@@ -788,6 +789,15 @@ namespace WindowsIDE.Workspace
                 || m.Msg == Native.WM_SIZE || m.Msg == Native.WM_WINDOWPOSCHANGED)
             {
                 this.SuppressNativeBars();
+            }
+
+            if (m.Msg == Native.WM_SIZE || m.Msg == Native.WM_WINDOWPOSCHANGED)
+            {
+                this.ApplyThemedBarBounds();
+                if (this.IsInlineCreateActive)
+                {
+                    this.LayoutInlineCreateField();
+                }
             }
         }
 
@@ -1218,6 +1228,26 @@ namespace WindowsIDE.Workspace
             this.ItemHeight = DpiUtil.TreeItemHeight(fontHeight, dpi);
         }
 
+        /// <summary>
+        /// テーマバーの Bounds と Z 順を、Visible・ClientSize・10 DIP 幅だけで決める。スクロール値は変えない。
+        /// </summary>
+        private void ApplyThemedBarBounds()
+        {
+            if (this.vScroll == null || this.hScroll == null)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int bar = DpiUtil.ToPixels(DpiUtil.ScrollBarThicknessDip, dpi);
+            int vW = this.vScroll.Visible ? bar : 0;
+            int hH = this.hScroll.Visible ? bar : 0;
+            this.vScroll.Bounds = new Rectangle(this.ClientSize.Width - vW, 0, vW, this.ClientSize.Height);
+            this.hScroll.Bounds = new Rectangle(0, this.ClientSize.Height - hH, this.ClientSize.Width - vW, hH);
+            this.hScroll.BringToFront();
+            this.vScroll.BringToFront();
+        }
+
         private void RefreshChrome()
         {
             if (this.chromeBusy || !this.IsHandleCreated || this.vScroll == null || this.hScroll == null)
@@ -1301,12 +1331,7 @@ namespace WindowsIDE.Workspace
                     this.ignoreThemedScroll = false;
                 }
 
-                int vW = needV ? bar : 0;
-                int hH = needH ? bar : 0;
-                this.vScroll.Bounds = new Rectangle(this.ClientSize.Width - vW, 0, vW, Math.Max(0, this.ClientSize.Height - hH));
-                this.hScroll.Bounds = new Rectangle(0, this.ClientSize.Height - hH, Math.Max(0, this.ClientSize.Width - vW), hH);
-                this.vScroll.BringToFront();
-                this.hScroll.BringToFront();
+                this.ApplyThemedBarBounds();
                 this.LayoutInlineCreateField();
                 if (!needV)
                 {
@@ -1316,6 +1341,11 @@ namespace WindowsIDE.Workspace
                 this.SetNativeScroll(Native.SB_HORZ, 0);
 
                 this.SuppressNativeBars();
+                this.ApplyThemedBarBounds();
+                if (this.IsInlineCreateActive)
+                {
+                    this.LayoutInlineCreateField();
+                }
             }
             finally
             {

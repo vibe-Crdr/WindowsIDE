@@ -882,6 +882,47 @@ namespace WindowsIDE.Tests
             int refreshAt = after.IndexOf("RefreshChrome(", StringComparison.Ordinal);
             int suppressAt = after.IndexOf("SuppressNativeBars(", StringComparison.Ordinal);
             Check("f-exp native RefreshChrome before Suppress on VSCROLL", refreshAt >= 0 && suppressAt >= 0 && refreshAt < suppressAt);
+            int applyAt = after.IndexOf("ApplyThemedBarBounds(", StringComparison.Ordinal);
+            Check("f-exp after-base ApplyThemedBarBounds after Suppress", applyAt >= 0 && suppressAt >= 0 && applyAt > suppressAt);
+
+            Check("f-exp ApplyThemedBarBounds exists", tree.IndexOf("void ApplyThemedBarBounds(", StringComparison.Ordinal) >= 0);
+            Check("f-exp WndProc SIZE/WINDOWPOSCHANGED ApplyThemedBarBounds after Suppress",
+                after.IndexOf("Native.WM_SIZE", StringComparison.Ordinal) >= 0
+                && after.IndexOf("Native.WM_WINDOWPOSCHANGED", StringComparison.Ordinal) >= 0
+                && applyAt > suppressAt);
+
+            int vBoundsAt = tree.IndexOf("this.vScroll.Bounds = new Rectangle(", StringComparison.Ordinal);
+            Check("f-exp themed vScroll Bounds exists", vBoundsAt >= 0);
+            if (vBoundsAt >= 0)
+            {
+                int vBoundsEnd = tree.IndexOf(";", vBoundsAt, StringComparison.Ordinal);
+                string vBounds = "";
+                if (vBoundsEnd > vBoundsAt)
+                {
+                    vBounds = tree.Substring(vBoundsAt, vBoundsEnd - vBoundsAt);
+                }
+
+                Check("f-exp themed vScroll height ClientSize.Height",
+                    vBounds.IndexOf("this.ClientSize.Height", StringComparison.Ordinal) >= 0
+                    && vBounds.IndexOf("this.ClientSize.Height - hH", StringComparison.Ordinal) < 0);
+            }
+
+            int hBoundsAt = tree.IndexOf("this.hScroll.Bounds = new Rectangle(", StringComparison.Ordinal);
+            Check("f-exp themed hScroll Bounds exists", hBoundsAt >= 0);
+            if (hBoundsAt >= 0)
+            {
+                int hBoundsEnd = tree.IndexOf(";", hBoundsAt, StringComparison.Ordinal);
+                string hBounds = "";
+                if (hBoundsEnd > hBoundsAt)
+                {
+                    hBounds = tree.Substring(hBoundsAt, hBoundsEnd - hBoundsAt);
+                }
+
+                Check("f-exp themed hScroll y Height - hH",
+                    hBounds.IndexOf("this.ClientSize.Height - hH", StringComparison.Ordinal) >= 0);
+            }
+
+            Check("f-exp no SWP_FRAMECHANGED", tree.IndexOf("SWP_FRAMECHANGED", StringComparison.Ordinal) < 0);
         }
 
         /// <summary>

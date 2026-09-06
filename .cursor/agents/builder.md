@@ -21,7 +21,7 @@ model: inherit
 - Architect から渡された最新の計画（無ければ、横断変更は実装せず計画を求める）
 - `docs/requirements.md`、`docs/constraints.md`、`docs/decisions.md`
 - 触る領域の `docs/architecture.md`、`docs/ui.md`、`docs/ide-features.md`、`docs/vba-workspace.md`、`docs/build.md`、`docs/fonts.md`
-- `.cursor/rules/csharp5.mdc`、`no-external-libs.mdc`、`powershell51.mdc`、`ui-appearance.mdc`、`vba-workspace.mdc`、`agent-basic-formatting.mdc`
+- `.cursor/rules/csharp5.mdc`、`no-external-libs.mdc`、`powershell51.mdc`、`ui-appearance.mdc`、`vba-workspace.mdc`、`agent-basic-formatting.mdc`、`pr-finish-workflow.mdc`
 
 文書と計画が矛盾したら続行せず、矛盾を報告する。
 
@@ -62,6 +62,8 @@ Excel / VBE が必要な検証は迂回せず、offline で確認できた範囲
 - [ ] 公開 API コメントがある
 - [ ] 関連テストまたは `compile.ps1` を実行し、結果を残した
 - [ ] Reviewer が確認できる diff と重点リスクを報告した
+- [ ] `master` へ直接 push していない。作業は feature ブランチ
+- [ ] 自分の報告で master 投入を完了と書いていない。PR 作成・マージは親。親の完了は PR の存在または更新（`.cursor/rules/pr-finish-workflow.mdc`）
 
 ## 報告
 

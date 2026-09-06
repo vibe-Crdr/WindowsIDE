@@ -67,7 +67,7 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 - `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。手動 csc は **`Process.Start` しない**
 - ユーザー EXE の起動と、そのプロセス参照だけの Kill は `WindowsIDE.Host.Csharp`。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - ユーザー `.ps1` の起動は `WindowsIDE.Host.PowerShell`（`SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe` 子プロセス）。SMA は 1 ショット実行のホストではない。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
-- P3 の PowerShell デバッグは `WindowsIDE.Debug` が同一プロセスで Runspace を開く。`src\WindowsIDE\Debug\` を `Host\Cmd\CmdProcessHost.cs` の次に列挙する。`src\WindowsIDE\Ui\DebugPaneControl.cs` は BottomPane の次（製品 rsp。テスト rsp も BottomPane の次）。Languages / Host.PowerShell は Runspace を開かない
+- P3 の PowerShell デバッグは `WindowsIDE.Debug` が同一プロセスで Runspace を開く。`src\WindowsIDE\Debug\` を `Host\Cmd\CmdProcessHost.cs` の次に列挙する。P4-A は既存 Debug 4 本の次に `Debug\DebugStackFrame.cs` と `Debug\CorDebug\` 4 本（`CorDebugNative` / `CorDebugManagedCallback` / `PdbBinder` / `CorDebugSession`）を列挙する。製品 `/r` は増やさない（ICorDebug / ISymUnmanagedBinder は P/Invoke と CoCreateInstance。ISymWrapper は参照しない）。`src\WindowsIDE\Ui\DebugPaneControl.cs` は BottomPane の次（製品 rsp。テスト rsp も BottomPane の次）。Languages / Host.PowerShell は Runspace を開かない
 - ユーザー `.cmd` / `.bat` の起動は `WindowsIDE.Host.Cmd`（`SpecialFolder.System` + `cmd.exe` 子プロセス）。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - 統合ターミナル（F-TERM）は `WindowsIDE.Terminal`（CreatePseudoConsole + CreateProcessW）。ソースは Host の次に列挙する。kernel32 の P/Invoke に追加 `/r` は不要。Host.* と混ぜない。1 ショットの Kill 集合には入れない。MainForm.Dispose で PTY も閉じる（UI で待たない）
 - `WindowsIDE.Vba` のソースは Terminal 9 本の次に列挙する。P2 も PIA `/r` なし。Microsoft.CSharp なし

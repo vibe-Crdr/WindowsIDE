@@ -91,6 +91,11 @@ src\WindowsIDE\Debug\DebugSessionState.cs
 src\WindowsIDE\Debug\DebugVariable.cs
 src\WindowsIDE\Debug\BreakpointStore.cs
 src\WindowsIDE\Debug\PowerShellDebugger.cs
+src\WindowsIDE\Debug\DebugStackFrame.cs
+src\WindowsIDE\Debug\CorDebug\CorDebugNative.cs
+src\WindowsIDE\Debug\CorDebug\CorDebugManagedCallback.cs
+src\WindowsIDE\Debug\CorDebug\PdbBinder.cs
+src\WindowsIDE\Debug\CorDebug\CorDebugSession.cs
 src\WindowsIDE\Terminal\ShellKind.cs
 src\WindowsIDE\Terminal\ShellPaths.cs
 src\WindowsIDE\Terminal\CellWidth.cs

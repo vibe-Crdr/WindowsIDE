@@ -871,7 +871,7 @@ namespace WindowsIDE.Editor
             this.EnsureCaretVisible();
             this.Invalidate();
             this.RaiseCaretMoved();
-            if (this.IsBreakpointColumn(e.X) && this.IsPs1Document())
+            if (this.IsBreakpointColumn(e.X) && this.IsBreakpointDocument())
             {
                 EventHandler<GutterBreakpointEventArgs> h = this.BreakpointToggleRequested;
                 if (h != null)
@@ -2304,14 +2304,20 @@ namespace WindowsIDE.Editor
             return x >= 0 && x < this.GetBreakColumnWidth();
         }
 
-        private bool IsPs1Document()
+        private bool IsBreakpointDocument()
         {
             if (this.document == null || string.IsNullOrEmpty(this.document.FilePath))
             {
                 return false;
             }
 
-            return string.Equals(Path.GetExtension(this.document.FilePath), ".ps1", StringComparison.OrdinalIgnoreCase);
+            string ext = Path.GetExtension(this.document.FilePath);
+            if (string.Equals(ext, ".ps1", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(ext, ".cs", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool HasBreakpoint(int line)

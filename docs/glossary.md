@@ -22,13 +22,17 @@
 | インデント線 | F-IG。編集器本文の縦ガイド。言語非依存。全ファイル形式。色は行番号色。ツリーのインデントではない。今は実装しない。 |
 | 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。波 A（F-BR / F-AC / F-SIND / F-VBA-CASE）は完了。波 B（F-GD / F-HOV / F-DOC）は完了。波 C（F-LIVE / F-SQU / F-VBA-BLD 手動）は完了。ライブ VBA は今は実装しない。P0–P2 の必須には含めない。 |
 | フェーズ P3 | PowerShell デバッグ（F-DBG-PS / F-DBG-UI 最小）。ディスク上 `.ps1` を同一プロセスの Runspace + SMA Debugger で行 BP・ステップ・ローカル。Host.PowerShell の 1 ショットは子プロセスのまま。 |
+| フェーズ P4 | C# デバッグ（P4-A = F-DBG-CS）と cmd デバッグ（P4-B = F-DBG-CMD。今は実装しない）。P4-A は手動 csc の TEMP `out.exe` を ICorDebug.CreateProcess で別プロセスデバッグする。Ctrl+F5 は Host.Csharp のまま。 |
+| F-DBG-CS | C# の行ブレーク・ステップ・ローカル・粗いスタック。P4-A。PDB + ICorDebug（インボックス COM）。Host.Csharp の 1 ショット実行（F-CS-RUN）とは別。 |
 | フェーズ P8 | Markdown 字句とプレビュー、VBAProject 参照、キー記録マクロ。今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
 | フェーズ P9 | VB.NET ホスト（`.vb`、指定 `vbc.exe`、実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない。 |
 | 提案 P8 | F-CMP を P5 でキーワードと開いているファイルに限ること。ワークスペース拡張を P5 必須にしない。確定していない。フェーズ P8 ではない。 |
 | VBA Compile | Excel VBA コンパイラによる診断（F-VBA-BLD）。プッシュ後。Run しない。`WindowsIDE.Vba`。csc ではない。 |
+| 構造ヒント | 自前パーサ（D31）が見つけた構文・モジュール内構造の誤り。F-VBA-BLD のコンパイラ診断ではない。問題一覧に出すなら別バケット／別文言（「構造」）。波線は既存 Error 色でよい。F-SQU の C「ブロック不一致波線」と同系。今は実装しない。 |
+| VBA 構文解析 | IDE 知能用の自前構文解析（D30。製品 C# 5。`WindowsIDE.Languages`）。実装目標は D31（プッシュ前に VBE が構文・構造で落とす誤りをほぼ拾う。Excel 不要）。今は実装しない。VBA Compile（Excel）とは別。コンパイラ診断として問題一覧を埋めない。構造ヒントは可。プッシュはパーサ失敗で拒否しない。 |
 | F-DOC | 言語ごとの枠コメントを定義直前に 1 回入れること。ラベルは `summary` / `args` / `returns`（採用済み P19）。 |
 | 常時コンパイル | 入力停止後にデバウンスした Framework `csc.exe` で診断だけ再コンパイルすること。生成物は起動しない。手動ビルド（F-CS-BLD）とは別。VBA Compile は含めない。 |
-| 波線 | 診断位置の下に既存エラー色で付ける下線。C# は csc、PS は `ParseInput`、VBA は F-VBA-BLD。自前パーサをコンパイラ診断と偽らない。 |
+| 波線 | 診断位置の下に既存エラー色で付ける下線。C# は csc、PS は `ParseInput`、VBA のコンパイラ診断は F-VBA-BLD。構造ヒント（D31）も既存 Error 色でよいがコンパイラ診断と呼ばない。自前パーサをコンパイラ診断と偽らない。 |
 | F-DBG-PS | PowerShell の行ブレーク・ステップ・ローカル。P3。同一プロセス Runspace。Ctrl+F5 の子プロセス実行（F-PS-RUN）とは別。 |
 | クイックインフォ | F-HOV。P7-B は C# / VBA / PowerShell / cmd（cmd 含む）。VB.NET はフェーズ P9。解決できた定義のシグネチャ常時＋要約（F-DOC 枠 / `///` / 直前コメント / Framework XML）。Ctrl+K Ctrl+I 相当。スクロールバーのつまみホバーとは別。Object Browser ではない。 |
 | つまみホバー | スクロールバーつまみにマウスを乗せたときの色（Comment）。F-HOV ではない。 |

@@ -61,7 +61,11 @@ P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`T
 
 下パネルにデバッグタブの実体を足す。空のデバッグタブは置かない。順は問題 / 出力 / ターミナル / デバッグ（既存 0/1/2 を崩さない）。デバッグ内容は上ローカル・下コンソール。縦 SplitContainer はセッション内のみ（XML に書かない）。フォントは BottomPane と同じ **12 DIP** DualFont、ThemedScrollBar **10 DIP**。コンソールは出力と同じ契約（4000 行、先頭 4096 文字。stdout は `Foreground`、stderr は `Error`、起動／終了／警告は `Comment`）。ローカルは停止時の名前と ToString（null は `$null`、先頭 256 文字。ネスト展開しない）。ListView / DataGrid / RichTextBox は使わない。`ShowDebug` はフォーカスを奪わない。F5 開始でパネル展開＋デバッグチップ。× はパネルを畳むだけで、デバッグセッションも PTY も殺さない。表示メニューに「デバッグ」（ShortcutKeys なし、表示文字列なし）。実行メニュー先頭は開始/続行(F5)、停止(Shift+F5)、ステップ オーバー(F10)、ステップ イン(F11)。F10 に ShortcutKeys を付けない（ProcessCmdKey）。新しい Theme 色は足さない。
 
-行番号ガターの左にブレーク列 **12 DIP** を足す（その右が既存の行番号。min 36 DIP はブレーク列を足してから）。印は行中央の楕円、既存 Error `#f7768e`。OnPaint 中だけ SmoothingMode.AntiAlias、終了時に戻す。停止行はキャレット（CurrentLine）。専用色は提案 P36（今は Error）。
+行番号ガターの左にブレーク列 **12 DIP** を足す（その右が既存の行番号。min 36 DIP はブレーク列を足してから）。印は行中央の楕円、既存 Error `#f7768e`。OnPaint 中だけ SmoothingMode.AntiAlias、終了時に戻す。停止行はキャレット（CurrentLine）。専用色は提案 P36（今は Error）。ガターと F9 は `.ps1` / `.cs`。
+
+### フェーズ P4（C# デバッグ）
+
+デバッグタブの上ペインは停止時ローカルのまま。C# でフレームがあるときだけ先頭に Comment「コールスタック」と粗いフレーム行（メソッド名 + パス + 1 始まり行。上限 32）。PowerShell は Frames 空なので P3 の見た目を維持。ListView / DataGrid / RichTextBox は使わない。新しい Theme 色は足さない。F10 に ShortcutKeys を付けない。
 
 ### P2 F-VBA-SYNC（VBA メニュー）
 

@@ -84,6 +84,7 @@ namespace WindowsIDE.Tests
             RunBreakpointStore();
             RunDebugSessionState();
             RunPowerShellDebugger();
+            RunCsharpDebugger();
             RunDualFontPainter();
             RunUiMnemonic();
             RunDualFontMenuItemPreferredSize();
@@ -1276,6 +1277,11 @@ namespace WindowsIDE.Tests
             Check("other path empty", store.GetLines(@"C:\other.ps1").Length == 0);
             Check("null path empty", store.GetLines(null).Length == 0);
             Check("bad line ignored", !store.Toggle(@"C:\work\a.ps1", 0));
+            store.Toggle(@"C:\work\a.ps1", 4);
+            store.Toggle(@"C:\work\a.cs", 2);
+            Check("ps1 and cs coexist ps1", store.GetLines(@"C:\work\a.ps1").Length == 3);
+            int[] csLines = store.GetLines(@"C:\work\a.cs");
+            Check("ps1 and cs coexist cs", csLines.Length == 1 && csLines[0] == 2);
         }
 
         private static void RunDebugSessionState()
@@ -1504,6 +1510,201 @@ namespace WindowsIDE.Tests
             finally
             {
                 DisposePowerShellDebugger(dbg, ended, dir);
+            }
+        }
+
+        private static void RunCsharpDebugger()
+        {
+            RunCsharpDebuggerNoBreakpoint();
+            RunCsharpDebuggerHitLine();
+        }
+
+        private static string CsharpDebugFixtureSource()
+        {
+            return "class Program { static int Main() { int x = 1;" + Environment.NewLine + "int y = x + 2;" + Environment.NewLine + "return y; } }" + Environment.NewLine;
+        }
+
+        private static void DisposeCsharpDebugger(CorDebugSession dbg, ManualResetEvent ended, string dir)
+        {
+            dbg.Stop();
+            ended.WaitOne(2000);
+            dbg.Dispose();
+            try
+            {
+                Directory.Delete(dir, true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private static bool TryBuildCsharpDebugFixture(string dir, out string exePath, out string error)
+        {
+            exePath = null;
+            error = null;
+            if (!TryCompileTempExe(dir, "out", CsharpDebugFixtureSource(), out exePath, out error))
+            {
+                return false;
+            }
+
+            string pdbPath = Path.ChangeExtension(exePath, ".pdb");
+            if (!File.Exists(pdbPath))
+            {
+                error = "pdb missing";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void RunCsharpDebuggerNoBreakpoint()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-cs-nobp-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string exePath;
+            string compileError;
+            if (!TryBuildCsharpDebugFixture(dir, out exePath, out compileError))
+            {
+                Check("cs no-bp compiled: " + compileError, false);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                return;
+            }
+
+            Check("cs no-bp compiled", true);
+            CorDebugSession dbg = new CorDebugSession(new BreakpointStore());
+            ManualResetEvent stopped = new ManualResetEvent(false);
+            ManualResetEvent ended = new ManualResetEvent(false);
+            int firstStopLine = 0;
+            dbg.Stopped += delegate(object sender, DebugStoppedEventArgs e)
+            {
+                if (firstStopLine == 0 && e != null)
+                {
+                    firstStopLine = e.Line;
+                }
+
+                stopped.Set();
+            };
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            try
+            {
+                dbg.Start(exePath, dir, 10);
+                if (!ended.WaitOne(8000))
+                {
+                    dbg.Stop();
+                    Check("cs no-bp ended within 8s", false);
+                }
+                else
+                {
+                    Check("cs no-bp ended within 8s", true);
+                    Check("cs no-bp did not stop", firstStopLine == 0 && !stopped.WaitOne(0));
+                    Check("cs no-bp idle after end", dbg.State == DebugSessionState.Idle);
+                }
+            }
+            finally
+            {
+                DisposeCsharpDebugger(dbg, ended, dir);
+            }
+        }
+
+        private static void RunCsharpDebuggerHitLine()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-cs-L2-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string exePath;
+            string compileError;
+            if (!TryBuildCsharpDebugFixture(dir, out exePath, out compileError))
+            {
+                Check("cs line2 compiled: " + compileError, false);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                return;
+            }
+
+            Check("cs line2 compiled", true);
+            string srcPath = Path.Combine(dir, "out.cs");
+            BreakpointStore store = new BreakpointStore();
+            Check("cs bp line 2 out.cs", store.Toggle(srcPath, 2));
+            CorDebugSession dbg = new CorDebugSession(store);
+            ManualResetEvent stopped = new ManualResetEvent(false);
+            ManualResetEvent ended = new ManualResetEvent(false);
+            DebugStoppedEventArgs hit = null;
+            string consoleDump = "";
+            dbg.Stopped += delegate(object sender, DebugStoppedEventArgs e)
+            {
+                if (hit == null)
+                {
+                    hit = e;
+                }
+
+                stopped.Set();
+            };
+            dbg.ConsoleLine += delegate(object sender, DebugConsoleEventArgs e)
+            {
+                if (e != null && !string.IsNullOrEmpty(e.Line))
+                {
+                    consoleDump = consoleDump + e.Line + " | ";
+                }
+            };
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            try
+            {
+                dbg.Start(exePath, dir, 11);
+                if (!stopped.WaitOne(8000))
+                {
+                    bool endedAlready = ended.WaitOne(0);
+                    dbg.Stop();
+                    Check("cs line2 first stop within 8s ended=" + endedAlready.ToString() + " " + consoleDump, false);
+                }
+                else
+                {
+                    Check("cs line2 first stop within 8s", true);
+                    Check("cs line2 stopped state", dbg.State == DebugSessionState.Stopped);
+                    Check("cs line2 first stop is 2", hit != null && hit.Line == 2);
+                    Check("cs line2 locals contain x", DebugHitHasLocal(hit, "x"));
+                    dbg.Continue();
+                    if (!ended.WaitOne(8000))
+                    {
+                        dbg.Stop();
+                        Check("cs line2 continue ended within 8s", false);
+                    }
+                    else
+                    {
+                        Check("cs line2 continue ended within 8s", true);
+                        Check("cs line2 idle after continue", dbg.State == DebugSessionState.Idle);
+                    }
+                }
+            }
+            finally
+            {
+                DisposeCsharpDebugger(dbg, ended, dir);
             }
         }
 
@@ -5747,8 +5948,8 @@ namespace WindowsIDE.Tests
 
             Check("term OnRun no pty kill", MethodHasNoPtyKill(src, "private void OnRun(", "private void OnRunSelection("));
             Check("term StartPs no pty kill", MethodHasNoPtyKill(src, "private void StartPs(", "private void StartCmd("));
-            Check("term StartCmd no pty kill", MethodHasNoPtyKill(src, "private void StartCmd(", "private void StartManualBuild("));
-            Check("term StartManualBuild no pty kill", MethodHasNoPtyKill(src, "private void StartManualBuild(", "private bool IsCurrentBuild("));
+            Check("term StartCmd no pty kill", MethodHasNoPtyKill(src, "private void StartCmd(", "private bool StartManualBuild("));
+            Check("term StartManualBuild no pty kill", MethodHasNoPtyKill(src, "private bool StartManualBuild(", "private bool IsCurrentBuild("));
             Check("term TerminalSelected subscribe", src.IndexOf("this.bottomPane.TerminalSelected += this.OnBottomPaneTerminalSelected", StringComparison.Ordinal) >= 0);
             Check("term TerminalSelected starts pty", MethodCallsShowTerminalPanelOrStartIfNeeded(src, "private void OnBottomPaneTerminalSelected(", "private void OnToggleTerminal("));
         }

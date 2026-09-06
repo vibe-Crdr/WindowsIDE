@@ -28,7 +28,7 @@ P1 最初のスライスは字句ハイライト 4 言語（R3 / F-HL）。`Wind
 | --- | --- | --- |
 | F-HL | 拡張子だけで C# / VBA / PowerShell / cmd / Plain を判定（無題・不明は Plain）。行開始状態 + 行スキャナで Keyword / String / Comment / Number / Text / Local / Instance / Method / Type を区別。C# は自前束縛オーバーレイ（ファイル内シンボル + ワークスペース型名 + BCL Reflection）。VBA / PowerShell は IdentifierClassifier に加え型名走査。cmd は IdentifierClassifier のみ（型なし）。Theme に Local `#7dcfff` / Instance `#2ac3de` / Method `#e0af68` / Type `#73daca` を足す。ステータス先頭に言語名。`HighlightSession` は Document に持ち、タブ切替で捨てない。キーワードはソース内静的表 | 検索、Ctrl+F/P、下パネル、問題一覧、csc/PS/cmd 実行、ターミナル、Enter 自動インデント、複数行一括インデント、補完、Roslyn、折りたたみ、括弧強調、RichTextBox 着色、Regex ホットパス、言語手動切替、workspace.xml 言語キー、FileKind 削除/言語化、メニュー「ファイルを開く」、D&D、VBA 同期、Excel COM |
 
-C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、ユーザーコードの C# 6 以降、読み込んでいないアセンブリ、Excel 未起動の COM 型。cmd にクラスはない。VBA は文頭の識別子で次が文字列／識別子なら Method。
+C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、ユーザーコードの C# 6 以降、読み込んでいないアセンブリ、Excel 未起動の COM 型。cmd にクラスはない。VBA は文頭の識別子で次が文字列／識別子なら Method。（D30 実装までの現行）
 
 括弧強調（F-BR）は本スライスでも残 P1 でもやらず、フェーズ P7-A へ送る。Enter 後の自動インデントは **P1 F-IND スライスで入れる**（直前行の先頭空白コピー、言語非依存）。言語対応スマートインデントは **F-SIND**（P7-A）であり F-IND と同居しない。
 
@@ -140,7 +140,7 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 | F-GD | F12 でユーザーソース上の定義へ | Peek、Find All References、BCL / cmd へ F12 |
 | F-HOV | 現行ホスト（C# / VBA / PowerShell / cmd。cmd 含む）。解決できたユーザー定義はシグネチャ常時。説明は定義直前の F-DOC 枠または従来コメント。VB.NET はフェーズ P9 | Object Browser、COM HelpString、無い XML をエラーにする。ホバー内クリックで定義へ |
 | F-DOC | ショートカット 1 つで言語の枠コメントを定義直前に 1 回入れる | 既存枠の二重挿入。C# の `///` `<summary>` を生成すること。キーを確定すること（提案 P20 は確認待ち） |
-| F-CMP | P7 でワークスペースのユーザーシンボルと `.` 後のメンバー候補（P12 束縛／ヒューリスティック） | Roslyn。オーバーロード解決・変換・definite assignment。Excel 未起動の COM 型。P5 必須の拡大（提案 P8 は未確定） |
+| F-CMP | P7 でワークスペースのユーザーシンボルと `.` 後のメンバー候補（P12 束縛／ヒューリスティック）。VBA は D30 実装後にその構造を使う。今はヒューリスティックのまま。 | Roslyn。オーバーロード解決・変換・definite assignment。Excel 未起動の COM 型。P5 必須の拡大（提案 P8 は未確定） |
 | F-SIG | （C）呼び出し中の粗い引数リスト | P5 必須にすること。完全な型システム |
 | F-LIVE | デバウンスした Framework `csc.exe` の診断のみ。生成物は起動しない。C# タブの入力停止後だけ live csc。PS は ParseInput。VBA ライブは今は実装しない | EXE 自動起動、キー入力ごとの同期 csc、C# 以外への csc、ホスト Kill、UI スレッドでの WaitForExit |
 | F-SQU | C# は csc、PS は `ParseInput`、VBA は手動 F-VBA-BLD の位置。error のみ。既存 Error 色。新色なし | 自前パーサをコンパイラ診断と偽る。cmd 波線。warning 波線。ブロック不一致波線（今は実装しない） |
@@ -149,13 +149,13 @@ P3–P6（デバッガ / パレット）に押し込まない。P0–P2 の「�
 | F-LSP | 変えない（W） | 外部 LSP / Roslyn を上げること |
 | F-CS-BLD | 手動ビルドのまま | 常時コンパイルと同一コマンドにすること |
 
-層: 構造は行レキサの TokenKind（Regex ホットパスと Roslyn 禁止。描画/挿入は Editor、規則は Languages。Languages をコンパイラと呼ばない）。ナビは P12 束縛（`CSharpSemantic.Collect`）に定義位置とシグネチャを足す（完全型システムは作らない。BCL は F12 しない）。診断の正は言語別（C# は指定 `csc.exe`＝Build。VBA は Excel Compile＝`WindowsIDE.Vba`。PS は `ParseInput`＝Languages。EXE 起動は Host.Csharp）。
+層: 構造は行レキサの TokenKind（Regex ホットパスと Roslyn 禁止。描画/挿入は Editor、規則は Languages。Languages をコンパイラと呼ばない）。ナビは P12 束縛（`CSharpSemantic.Collect`）に定義位置とシグネチャを足す（完全型システムは作らない。BCL は F12 しない）。診断の正は言語別（C# は指定 `csc.exe`＝Build。VBA は Excel Compile＝`WindowsIDE.Vba`。PS は `ParseInput`＝Languages。EXE 起動は Host.Csharp）。VBA の知能の正は D30（今は実装しない）。現行は行レキサ + `VbaSemantic` / `CollectVba`。診断の正は Excel Compile のまま。構造ヒント（D31）は F-VBA-BLD と並べて偽らない。
 
 ### 常時コンパイル（F-LIVE）
 
 入力停止後にデバウンス（MainForm の定数。XML に書かない）。前回の **csc プロセスだけ** を Kill（csharpHost / powershellHost / cmdHost / PTY は Kill しない）。UI スレッドで csc を待たない。一時出力へ書き、診断後に削除する。`Process.Start` しない。C# 以外に csc しない。手動ビルドと常時が競合したら **新しい方** で問題一覧を置き換える。コンパイル単位は採用済み P14（ワークスペース内すべての `.cs`。無題 C# は一時ファイル）。ユーザー `/r` は提案 P15（確定しない）。live rsp は `/target:library`（debug スイッチ無し）。起動しない。
 
-PS の波線は `Parser.ParseInput` の構文エラー位置で可（Runspace は開始しない）。VBA の波線は F-VBA-BLD（Excel Compile）の位置。ディスク上の粗いブロック不一致を波線にするのは C で、UI 上は「構造ヒント」としコンパイラと並べて偽らない。cmd は波線なし（W）。
+PS の波線は `Parser.ParseInput` の構文エラー位置で可（Runspace は開始しない）。VBA のコンパイラ診断の波線は F-VBA-BLD（Excel Compile）の位置。ディスク上の粗いブロック不一致を波線にするのは C で、UI 上は「構造ヒント」としコンパイラと並べて偽らない（D31。問題一覧に出すなら別バケット／別文言「構造」。プッシュはパーサ失敗で拒否しない。今は実装しない）。cmd は波線なし（W）。
 
 ### VBA Compile 診断（F-VBA-BLD）
 
@@ -177,7 +177,7 @@ COM は STA / UI。VBIDE に診断リストを返す `Compile()` は無い、と
 
 ### 定義へ移動（F-GD）とホバー（F-HOV）
 
-F-HOV は S。P7-B の対象は C# / VBA / PowerShell / cmd。cmd を対象外にしない。VB.NET はフェーズ P9。F12（F-GD）の cmd 対象外は維持。コメントの有無は F12 に影響しない。ホバー表示順: シグネチャ（ユーザー定義が解決できたとき常時）→ 定義直前の F-DOC 枠 → 従来の連続コメント → C# BCL は Framework XML（無ければ出さない。エラーにしない）。C# 宣言は `CSharpSemantic.Collect`（コンストラクタとクラスは別。`.` の左が既知の型名ならそのメンバー。開いているバッファをディスクより優先）。新規フルパーサは作らない。
+F-HOV は S。P7-B の対象は C# / VBA / PowerShell / cmd。cmd を対象外にしない。VB.NET はフェーズ P9。F12（F-GD）の cmd 対象外は維持。コメントの有無は F12 に影響しない。ホバー表示順: シグネチャ（ユーザー定義が解決できたとき常時）→ 定義直前の F-DOC 枠 → 従来の連続コメント → C# BCL は Framework XML（無ければ出さない。エラーにしない）。C# 宣言は `CSharpSemantic.Collect`（D26。コンストラクタとクラスは別。`.` の左が既知の型名ならそのメンバー。開いているバッファをディスクより優先。新規フルパーサは作らない）。VBA の構造の正は D30（今は実装しない。現行はディスク木の行スキャン）。
 
 | 言語 | F12（F-GD） | ホバー（F-HOV） |
 | --- | --- | --- |
@@ -253,7 +253,7 @@ VBA の終端は実際の語を使う（**`End For` は禁止**）。既存の�
 
 ### フェーズ P7 の非対象
 
-外部 LSP、Roslyn、NuGet、別 csc、C# 6+、pwsh、常時コンパイルによる EXE 自動起動、Excel の自動 `Application.Run`、Compile と Run の混同、キー入力ごとの同期 Excel Compile、Excel 未起動時のライブ Compile による自動起動、バックグラウンドスレッドの Excel COM、`MakeCompiledFile` / ダミー Run による Compile 代替、自前レキサを VBA コンパイラと呼ぶこと、COM HelpString、Object Browser、虹色括弧、Peek、Find All References、cmd の F12 / 波線 / 自動閉じ / スマートインデント、BCL へ F12、自前パーサを csc 診断と偽ること、今の P1 への混入、設定 XML の新規属性、製品への新しい `/r`、Markdown／VBAProject 参照／マクロ（それらはフェーズ P8）、VB.NET ホスト（フェーズ P9。今は実装しない）、インデント線（F-IG。P7-A に混ぜない）。STA の診断 Compile は対象外にしない。
+外部 LSP、Roslyn、NuGet、別 csc、C# 6+、pwsh、常時コンパイルによる EXE 自動起動、Excel の自動 `Application.Run`、Compile と Run の混同、キー入力ごとの同期 Excel Compile、Excel 未起動時のライブ Compile による自動起動、バックグラウンドスレッドの Excel COM、`MakeCompiledFile` / ダミー Run による Compile 代替、自前レキサを VBA コンパイラと呼ぶこと、COM HelpString、Object Browser、虹色括弧、Peek、Find All References、cmd の F12 / 波線 / 自動閉じ / スマートインデント、BCL へ F12、自前パーサを csc 診断と偽ること、D30 の VBA パーサ本体を今書くこと、D31 のパーサ本体を今書くこと、今の P1 への混入、設定 XML の新規属性、製品への新しい `/r`、Markdown／VBAProject 参照／マクロ（それらはフェーズ P8）、VB.NET ホスト（フェーズ P9。今は実装しない）、インデント線（F-IG。P7-A に混ぜない）。STA の診断 Compile は対象外にしない。
 
 ## フェーズ P3（PowerShell デバッグ）
 
@@ -261,10 +261,22 @@ VBA の終端は実際の語を使う（**`End For` は禁止**）。既存の�
 
 | ID | P3 でやる | P3 でやらない |
 | --- | --- | --- |
-| F-DBG-PS | 行ブレーク（ストアは OrdinalIgnoreCase パス + 1 始まり行。二重なし。XML に書かない）。F5 は Idle+ディスク `.ps1` で開始（dirty ならそのタブだけ Save）、Stopped で続行（言語不問）、Running は no-op。Idle の F5 を 1 ショットにしない。Shift+F5 停止、F10 StepOver、F11 StepInto。Invoke はディスクパス（本文 AddScript は使わない）。cwd はスクリプトディレクトリ。`InitialSessionState.CreateDefault`、`ExecutionPolicy.Bypass` は ISS プロパティのみ。Apartment は MTA 既定。Excel COM は触らない。停止中 `ProcessCommand` の `Get-Variable`（name + ToString。null は `$null`。先頭 256 文字。ネスト展開しない）。ストリームはデバッグコンソールだけ（出力タブに混ぜない）。開始時にストアを Debugger へ載せる | Set-PSBreakpoint フォールバック、本文 AddScript、Languages の ParseInput 変更、Languages / Host.PowerShell への Runspace、Host.PowerShell 編集、Ctrl+F5 の子プロセス経路、PTY の Kill、pwsh、条件 BP、ステップアウト、ウォッチ、オブジェクト展開、F-DBG-CS / F-DBG-CMD / F-DBG-VBA / F-DBG-VB、ヘルパー EXE 隔離（提案 P35。今は実装しない） |
-| F-DBG-UI | 下パネル 4 タブ（問題 / 出力 / ターミナル / デバッグ）。デバッグは上ローカル・下コンソール（縦 SplitContainer はセッション内。XML に書かない）。12 DIP DualFont、ThemedScrollBar 10 DIP。コンソールは OutputPanelControl 再利用（4000 行、先頭 4096 文字。stdout=Foreground、stderr=Error、起動終了警告=Comment）。ShowDebug はフォーカスを奪わない。F5 開始でパネル展開＋デバッグチップ。× は畳むだけ（セッションも PTY も殺さない）。表示メニュー「デバッグ」（ShortcutKeys なし、表示文字列なし）。実行メニュー先頭: 開始/続行(F5)、停止(Shift+F5)、ステップ オーバー(F10)、ステップ イン(F11)、セパレータ、既存 2 項。CreateDisplayCommand。**F10 に ShortcutKeys を付けない。** ProcessCmdKey は F5 / Shift+F5 / F9 / F10 / F11（IME composing では奪わない。ターミナルフォーカス中もグローバル）。ガター左に 12 DIP のブレーク列（既存 min 36 DIP の左）。印は行中央の楕円、Theme.Error（新色なし。OnPaint 中だけ AntiAlias）。クリックは列内かつ `.ps1` ならその行をトグル。F9 は `.ps1` ならキャレット行トグル、それ以外は黙って消費。停止行は TryOpenFile + キャレット（CurrentLine）。TextView は Debug/SMA を参照しない（BP 行は 0 始まり int[]、トグルはイベント） | 空のデバッグタブ、ListView / DataGrid / RichTextBox、新 Theme 色、workspace.xml 属性、専用色（提案 P36。今は Error）、P4–P9、F-IG、F-PAL、F-CMP |
+| F-DBG-PS | 行ブレーク（ストアは OrdinalIgnoreCase パス + 1 始まり行。二重なし。XML に書かない）。F5 は Idle+ディスク `.ps1` で開始（dirty ならそのタブだけ Save）、Stopped で続行（言語不問）、Running は no-op。Idle の F5 を 1 ショットにしない。Shift+F5 停止、F10 StepOver、F11 StepInto。Invoke はディスクパス（本文 AddScript は使わない）。cwd はスクリプトディレクトリ。`InitialSessionState.CreateDefault`、`ExecutionPolicy.Bypass` は ISS プロパティのみ。Apartment は MTA 既定。Excel COM は触らない。停止中 `ProcessCommand` の `Get-Variable`（name + ToString。null は `$null`。先頭 256 文字。ネスト展開しない）。ストリームはデバッグコンソールだけ（出力タブに混ぜない）。開始時にストアを Debugger へ載せる | Set-PSBreakpoint フォールバック、本文 AddScript、Languages の ParseInput 変更、Languages / Host.PowerShell への Runspace、Host.PowerShell 編集、Ctrl+F5 の子プロセス経路、PTY の Kill、pwsh、条件 BP、ステップアウト、ウォッチ、オブジェクト展開、F-DBG-CMD / F-DBG-VBA / F-DBG-VB、ヘルパー EXE 隔離（提案 P35。今は実装しない） |
+| F-DBG-UI | 下パネル 4 タブ（問題 / 出力 / ターミナル / デバッグ）。デバッグは上ローカル・下コンソール（縦 SplitContainer はセッション内。XML に書かない）。12 DIP DualFont、ThemedScrollBar 10 DIP。コンソールは OutputPanelControl 再利用（4000 行、先頭 4096 文字。stdout=Foreground、stderr=Error、起動終了警告=Comment）。ShowDebug はフォーカスを奪わない。F5 開始でパネル展開＋デバッグチップ。× は畳むだけ（セッションも PTY も殺さない）。表示メニュー「デバッグ」（ShortcutKeys なし、表示文字列なし）。実行メニュー先頭: 開始/続行(F5)、停止(Shift+F5)、ステップ オーバー(F10)、ステップ イン(F11)、セパレータ、既存 2 項。CreateDisplayCommand。**F10 に ShortcutKeys を付けない。** ProcessCmdKey は F5 / Shift+F5 / F9 / F10 / F11（IME composing では奪わない。ターミナルフォーカス中もグローバル）。ガター左に 12 DIP のブレーク列（既存 min 36 DIP の左）。印は行中央の楕円、Theme.Error（新色なし。OnPaint 中だけ AntiAlias）。クリックは列内かつ `.ps1` / `.cs` ならその行をトグル。F9 は `.ps1` / `.cs` ならキャレット行トグル、それ以外は黙って消費。停止行は TryOpenFile + キャレット（CurrentLine）。TextView は Debug/SMA を参照しない（BP 行は 0 始まり int[]、トグルはイベント） | 空のデバッグタブ、ListView / DataGrid / RichTextBox、新 Theme 色、workspace.xml 属性、専用色（提案 P36。今は Error）、P4-B–P9、F-IG、F-PAL、F-CMP |
 
-デバッグ中（Idle 以外）: Ctrl+F5 / F8 / 1 ショット開始は ShowSynthetic で拒否しセッションは殺さない。Ctrl+Shift+B は可。live タイマーはセッション中 Stop、Idle 復帰後に再開可。開始時の排他は StartPs に合わせる（`buildGeneration++`、`cscRunner.Kill`、`InvalidateLiveCsc`、csharp/ps/cmd ホスト Kill。**PTY は殺さない。** 別 `debugGeneration`。`activeRunKind` に流用しない）。停止/Dispose は Runspace を閉じ、UI で Wait しない。PTY は閉じない。拒否（問題タブ、バケット置き換え）: 無題「無題はデバッグできない。」／非 `.ps1`（`.psm1` `.psd1` `.cs` `.cmd` 含む）「PowerShell のデバッグはディスク上の .ps1 だけです。」ユーザースクリプトは同一プロセスのため IDE を落とせる（隠さない。提案 P35 は確認待ち）。
+デバッグ中（Idle 以外）: Ctrl+F5 / F8 / 1 ショット開始は ShowSynthetic で拒否しセッションは殺さない。PS デバッグ中の Ctrl+Shift+B は可（C# デバッグ中の拒否は P4-A）。live タイマーはセッション中 Stop、Idle 復帰後に再開可。開始時の排他は StartPs に合わせる（`buildGeneration++`、`cscRunner.Kill`、`InvalidateLiveCsc`、csharp/ps/cmd ホスト Kill。**PTY は殺さない。** 別 `debugGeneration`。`activeRunKind` に流用しない）。停止/Dispose は Runspace を閉じ、UI で Wait しない。PTY は閉じない。Idle の F5 拒否文言は P4-A（無題／`.ps1`／`.cs`／その他）。ユーザースクリプトは同一プロセスのため IDE を落とせる（隠さない。提案 P35 は確認待ち）。
+
+## フェーズ P4（C# デバッグ）
+
+P4-A は F-DBG-CS。ディスク上 `.cs` を手動 csc と同じ単位（`/target:exe /debug+`）でビルドし、成功時だけ TEMP の `out.exe` を ICorDebug.CreateProcess で別プロセスデバッグする。Ctrl+F5 は従来どおり出力タブ + `Host.Csharp`。P4-B は F-DBG-CMD（今は実装しない）。Host.Csharp の起動ロジックは変えない。live csc 成果物は起動しない。ユーザー EXE を IDE に Load しない。TextView は `WindowsIDE.Debug` を参照しない。新しい Theme 色・XML・製品 `/r` は足さない。F10 に ShortcutKeys を付けない。
+
+| ID | P4-A でやる | P4-A でやらない |
+| --- | --- | --- |
+| F-DBG-CS | 手動と同じ csc（`CscArgumentBuilder` / TEMP `build\manual\<key>\out.exe` と隣 PDB。第3の debug ディレクトリは作らない）。成功かつ exe+pdb なら `CorDebugSession.Start`（exe パス + cwd + generation）。失敗は問題タブ・セッション無し。pdb 無しは合成診断。行 BP は CreateProcess 前に PDB を開き token+IL を計算。LoadModule では ISym を開かず `GetFunctionFromToken` + IL `CreateBreakpoint`。native `GetILToNativeMapping` はフォールバック。ストアの `.cs` だけ ICorDebug に載せる（`.ps1` は載せない）。ユーザーモジュールは exe フルパス OrdinalIgnoreCase（`out.exe`）。フルパス不一致でもファイル名 `out.exe` 同士なら載せる。BCL には BP を載せない。専用 MTA スレッド。UI で Initialize/CreateProcess/Wait しない。コールバックから COM を UI に渡さない。`dwCreationFlags` は CREATE_NO_WINDOW のみ（DEBUG_ONLY_THIS_PROCESS / DEBUG_PROCESS は付けない。managed-only。Win32 フラグは unmanaged callback が必要）。アタッチ禁止。パイプ。stdout/stderr はデバッグコンソール（kind 0/1、ACP）。stdin 閉じる。エントリで Stopped にしない。Breakpoint / StepComplete / 未処理 second-chance だけ Stopped。Locals はプリミティブ値、string 先頭 256、null は `"null"`、その他は型名。FuncEval 禁止。スタック上限 32（メソッド名 + パス + 1 始まり行）。Shift+F5 は保持プロセスだけ Terminate（GetProcessesByName 禁止） | ISymWrapper / ClrMD / Roslyn / NuGet / 第三者 DLL、新しい製品 `/r`、Host.Csharp 編集、live 成果物の起動、ユーザー EXE の IDE Load、F-DBG-CMD / F-IG / P5 / P8 / P9 / F-DBG-VB / Excel / D30 パーサ、条件 BP、ウォッチ、FuncEval、例外 UI、アタッチ |
+| F-DBG-CMD | （P4-B。今は実装しない） | P4-A に混ぜない |
+| F-DBG-UI | ガター / F9 は `.ps1` と `.cs`。ストアはパス別に共存。停止時にフレームがあればローカル上ペイン先頭へ Comment「コールスタック」とフレーム行。PS は Frames 空なので見た目維持。ListView 禁止。新色なし | 新 Theme、F10 の ShortcutKeys |
+
+PS と CS は同時セッション禁止。Stopped の F5 は止まっているエンジンへ Continue。Idle F5: 無題「無題はデバッグできない。」／ディスク `.ps1` は P3／ディスク `.cs` は pendingDebugAfterBuild + `StartManualBuild`／その他「C# のデバッグはディスク上の .cs、PowerShell はディスク上の .ps1 だけです。」CS デバッグ中（Idle 以外、または pendingDebugAfterBuild）の Ctrl+Shift+B は拒否。PS デバッグ中のビルドは現行どおり可。デバッグ中 Ctrl+F5/F8 は現行「デバッグ中は実行できない。」
 
 ## フェーズ P8（Markdown／参照／マクロ）— 今は実装しない
 
@@ -367,11 +379,11 @@ P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の�
 | ID | 優先 | 言語 | 内容 | 受け入れ |
 | --- | --- | --- | --- | --- |
 | F-DBG-PS | S | PowerShell | 行ブレーク、ステップ、ローカル変数 | P3。ディスク上 `.ps1` を同一プロセス Runspace + SMA Debugger で、行 BP・F5 開始/続行・Shift+F5 停止・F10 StepOver・F11 StepInto・停止時ローカル（Get-Variable）ができる |
-| F-DBG-CS | S | C# | PDB + ステップ、コールスタック、ローカル | P4。ICorDebug 等インボックス API のみ |
+| F-DBG-CS | S | C# | PDB + ステップ、コールスタック、ローカル | P4-A。ディスク `.cs` を手動 csc と同じ単位でビルドし、成功時だけ TEMP `out.exe` を ICorDebug.CreateProcess。ICorDebug 等インボックス API のみ。製品 `/r` なし |
 | F-DBG-VB | S | VB.NET | PDB + ステップ、コールスタック、ローカル | 独立 ID。F-DBG-CS に相乗りしない。P9 の受け入れに含めない。時期は P4 の後（提案 P32） |
-| F-DBG-CMD | S | cmd | エコー実行、失敗行 | 本格ステップは必須にしない |
+| F-DBG-CMD | S | cmd | エコー実行、失敗行 | P4-B。今は実装しない。本格ステップは必須にしない |
 | F-DBG-VBA | S | VBA | マクロ指定実行、COM エラー表示。可能なら VBE 連携 | P6 |
-| F-DBG-UI | S | 共通 | ブレークガター、続行/停止、デバッグコンソール | P3 最小。ガター左 12 DIP の Error 楕円、F9 トグル、下パネル実体デバッグタブ（ローカル + コンソール）。空タブは置かない。新色なし |
+| F-DBG-UI | S | 共通 | ブレークガター、続行/停止、デバッグコンソール | P3 最小 + P4-A ガター `.ps1` / `.cs`。ガター左 12 DIP の Error 楕円、F9 トグル、下パネル実体デバッグタブ（ローカル + コンソール）。空タブは置かない。新色なし |
 
 実行（デバッグなし）は M。ステップ実行は S。
 

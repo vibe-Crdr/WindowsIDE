@@ -34,7 +34,7 @@ flowchart LR
   ui -->|"COM"| xl
 ```
 
-図の `ui --> child` は手動ビルド成功後の `WindowsIDE.Host.Csharp`（およびフェーズ P9 の `WindowsIDE.Host.VbNet`）起動。csc / vbc は起動しない。常時コンパイルの一時生成物は起動しない。`vbc.exe` 経路はフェーズ P9（今は実装しない）。P3 の PowerShell デバッグは子プロセスではなく、デバッグ中だけ図の `ui`（`WindowsIDE.exe`）内の Runspace で動く。`Host.PowerShell` の 1 ショット実行は子のまま。
+図の `ui --> child` は手動ビルド成功後の `WindowsIDE.Host.Csharp`（Ctrl+F5。およびフェーズ P9 の `WindowsIDE.Host.VbNet`）起動と、P4-A の `WindowsIDE.Debug.CorDebugSession` による ICorDebug.CreateProcess（F5）。csc / vbc は起動しない。常時コンパイルの一時生成物は起動しない。`vbc.exe` 経路はフェーズ P9（今は実装しない）。P3 の PowerShell デバッグは子プロセスではなく、デバッグ中だけ図の `ui`（`WindowsIDE.exe`）内の Runspace で動く。`Host.PowerShell` の 1 ショット実行は子のまま。C# デバッグの起動は Host.Csharp ではなく Debug の CreateProcess。
 
 - UI は WinForms。メインは STA（Excel COM のため `[STAThread]`）。
 - ユーザー C# プログラムは別プロセス。IDE を落とさない。手動ビルド成功後の起動だけが `WindowsIDE.Host.Csharp`（csc は持たない）。常時コンパイル（F-LIVE）の一時生成物は起動しない。
@@ -54,12 +54,12 @@ flowchart LR
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）、対括弧の FillRectangle（F-BR。Selection / Error）、自動閉じと F-SIND / VBA 終端の挿入、F-DOC の挿入、ホバー枠のホスト、Document.Retarget（ディスク移動後のパス追従。本文は書かない）、波線（`SquiggleSpan` + TextView。error のみ。既存 Error。WinForms 非依存の区間計算）。将来: インデント線（F-IG。LineNumber。TextBodyClip 内。今は実装しない）、キー記録（P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML、WorkspaceItemRules（名前検証・リネームパス・ディレクトリ境界）、WorkspaceCreateRules（新規作成。検証は ItemRules へ委譲）、WorkspaceRecycle（shell32 SHFileOperation ごみ箱。追加 /r なし）。ツリーは ThemedScrollBar overlay。縦 overlay は Client 高さいっぱい。横は縦幅を除く。SysTreeView32 バーは TVS_NOHSCROLL + NCCALCSIZE/ShowScrollBar。TVS_NOSCROLL は使わない |
-| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名。宣言は `CSharpSemantic.Collect`）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード、対括弧照合（`BraceMatch`）、自動閉じ規則（`AutoCloseRules`）、F-SIND デルタ（`SmartIndentRules`）、VBA ブロック終端（`VbaBlockRules`）、F-VBA-CASE（`VbaKeywordCase`）、位置付きシンボル（`DeclaredSymbol` / `CSharpSymbols` / `WorkspaceSymbols` / `DefinitionResolver`。PS はファイル内 function と変数）、F-DOC 規則（`DocCommentRules`）、F-HOV 抽出（`HoverText` / `BclXmlDocs`。シグネチャ常時）、PS `ParseInput` エラー位置（`PowerShellParseErrors`。Build.Diagnostic は作らない。Runspace は開かない）。Theme / WinForms は参照しない。将来: `VbNetLexer`（P9。今は実装しない）、`MarkdownLexer`（P8。今は実装しない） |
+| `WindowsIDE.Languages` | 言語判定（`LanguageDetector`）、字句解析（`ILineLexer` / 各レキサ）、識別子分類（`IdentifierClassifier`）、C# 束縛（`CSharpSemantic` / `BclTypeCache` / ワークスペース型名。宣言は `CSharpSemantic.Collect`）、行開始状態と識別子オーバーレイ（`HighlightSession`）、キーワード、対括弧照合（`BraceMatch`）、自動閉じ規則（`AutoCloseRules`）、F-SIND デルタ（`SmartIndentRules`）、VBA ブロック終端（`VbaBlockRules`）、F-VBA-CASE（`VbaKeywordCase`）、位置付きシンボル（`DeclaredSymbol` / `CSharpSymbols` / `WorkspaceSymbols` / `DefinitionResolver`。PS はファイル内 function と変数）、F-DOC 規則（`DocCommentRules`）、F-HOV 抽出（`HoverText` / `BclXmlDocs`。シグネチャ常時）、PS `ParseInput` エラー位置（`PowerShellParseErrors`。Build.Diagnostic は作らない。Runspace は開かない）。Theme / WinForms は参照しない。将来: `VbNetLexer`（P9。今は実装しない）、`MarkdownLexer`（P8。今は実装しない）。将来: D30 の VBA 自前パーサ（実装目標は D31。今は実装しない。現行は `VbaLexer` / `VbaSemantic` / `CollectVba`）。`WindowsIDE.Vba` には置かない。 |
 | `WindowsIDE.Build` | 手動 csc（指定 Framework パス、6 DLL、rsp、`CscRunner`、診断パース）。生成 EXE は TEMP に出す。`Process.Start` しない。起動は持たない。VBA Compile は置かない。常時コンパイル（csc と live rsp / 一時出力。デバウンスは Ui。Editor.Document は参照しない。バッファは Ui が `LiveBuffer` で渡す）。将来の手動 vbc（`VbcRunner`。F-VB-BLD。P9。今は実装しない）もここ。csc に `.vb` を渡さない |
-| `WindowsIDE.Debug` | 実装済み（P3）。PS デバッグセッション（Idle / Running / Stopped）、行 BP ストア、SMA Debugger（同一プロセス Runspace。ディスクパス Invoke）。Languages / Host.PowerShell は Runspace を開かない |
+| `WindowsIDE.Debug` | 実装済み（P3+P4-A）。PS デバッグセッション（Idle / Running / Stopped）、行 BP ストア、SMA Debugger（同一プロセス Runspace。ディスクパス Invoke）。C# は `CorDebugSession`（ICorDebug.CreateProcess。`dwCreationFlags` は CREATE_NO_WINDOW のみ。手動 TEMP の `out.exe`。PDB は CreateProcess 前にディスクから開く。行 BP は IL `CreateBreakpoint` 優先。製品 `/r` なし）。Languages / Host.PowerShell は Runspace を開かない。TextView は Debug を参照しない |
 | `WindowsIDE.Host.PowerShell` | P1 は `powershell.exe` 5.1 子プロセスでユーザー `.ps1` を実行する。同一プロセス Runspace は開かない（P3 の F-DBG-PS は `WindowsIDE.Debug`）。波線のために Runspace を増やさない。Parse は Languages |
 | `WindowsIDE.Host.Cmd` | P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `System32\cmd.exe` の子プロセス。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話は `WindowsIDE.Terminal`（ConPTY）。C# / PowerShell / cmd の 3 つの 1 ショットは同時に走らせない |
-| `WindowsIDE.Host.Csharp` | 手動ビルド成功後のユーザー EXE 起動と stdout/stderr。csc は持たない。常時コンパイル（F-LIVE）はここに置かない。のち CLR デバッグ。VBA Compile は置かない。vbc も持たない |
+| `WindowsIDE.Host.Csharp` | 手動ビルド成功後のユーザー EXE 起動と stdout/stderr（Ctrl+F5）。csc は持たない。常時コンパイル（F-LIVE）はここに置かない。C# デバッグ起動は持たない（P4-A は `WindowsIDE.Debug` の CreateProcess）。VBA Compile は置かない。vbc も持たない |
 | `WindowsIDE.Host.VbNet` | フェーズ P9。手動 vbc 成功後のユーザー EXE 起動。vbc は持たない。名前は `Host.VisualBasic` にしない。今は実装しない |
 | `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期（P2 F-VBA-SYNC 実装済み）。ツリーのディスクリネーム／削除はマップ Ok なら relpath 更新またはエントリ削除（COM 無し。推測紐付けしない）。Compile 手動（F-VBA-BLD。`VbaCompiler`。プッシュ成功と同じセッション解放前。WinForms 非依存）。ライブ Compile は今は実装しない。References（F-VBA-REF）/ `Application.Run` は将来 |
 | `WindowsIDE.Macro` | フェーズ P8。キー記録の再生と、パレットコマンド名を PowerShell 5.1 から呼ぶ薄い面。拡張ホストではない |
@@ -79,7 +79,7 @@ flowchart LR
 | PowerShell | `Parser.ParseInput`（実行しない） | `WindowsIDE.Languages` |
 | cmd | 波線なし（W） | |
 
-`CSharpSemantic` など自前パーサの失敗をコンパイラエラーとして問題一覧に出さない。VbaLexer の推測を VBA コンパイラと呼ばない。常時コンパイル（F-LIVE）は `WindowsIDE.Build` が担い、起動は `WindowsIDE.Host.Csharp` ではない。F-LIVE は csc 専用のまま。VB.NET の常時診断は F-VB-LIVE（P9。今は実装しない）であり F-LIVE に足さない。
+`CSharpSemantic` および D30 の VBA 自前パーサの失敗をコンパイラエラーとして問題一覧に出さない。D31 の構造ヒントはコンパイラ診断と別バケット／別文言で出してよい（今は実装しない）。プッシュはパーサ失敗で拒否しない。VbaLexer の推測を VBA コンパイラと呼ばない。常時コンパイル（F-LIVE）は `WindowsIDE.Build` が担い、起動は `WindowsIDE.Host.Csharp` ではない。F-LIVE は csc 専用のまま。VB.NET の常時診断は F-VB-LIVE（P9。今は実装しない）であり F-LIVE に足さない。
 
 ユーザー C# の常時コンパイル単位は、採用済み提案 P14 どおりワークスペース内すべての `.cs` を 1 単位とする。複数 `Main` は csc エラー。無題 C# は一時ファイルで含める。フェーズ P7 では csproj を作らない。`.vb` を csc 単位に混ぜない（提案 P28）。
 

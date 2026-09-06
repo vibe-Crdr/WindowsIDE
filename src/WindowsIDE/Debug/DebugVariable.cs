@@ -43,15 +43,29 @@ namespace WindowsIDE.Debug
         private string path;
         private int line;
         private DebugVariable[] variables;
+        private DebugStackFrame[] frames;
 
         /// <summary>
-        /// 世代・パス・1 始まり行・ローカルを渡す。
+        /// 世代・パス・1 始まり行・ローカルを渡す。Frames は空。
         /// </summary>
         /// <param name="generation">Start に渡した世代。</param>
         /// <param name="path">停止スクリプト。無ければ null。</param>
         /// <param name="line">1 始まりの行。無ければ 0。</param>
         /// <param name="variables">ローカル。null は空。</param>
         public DebugStoppedEventArgs(int generation, string path, int line, DebugVariable[] variables)
+            : this(generation, path, line, variables, null)
+        {
+        }
+
+        /// <summary>
+        /// 世代・パス・1 始まり行・ローカル・スタックを渡す。
+        /// </summary>
+        /// <param name="generation">Start に渡した世代。</param>
+        /// <param name="path">停止位置のパス。無ければ null。</param>
+        /// <param name="line">1 始まりの行。無ければ 0。</param>
+        /// <param name="variables">ローカル。null は空。</param>
+        /// <param name="frames">コールスタック。null は空。</param>
+        public DebugStoppedEventArgs(int generation, string path, int line, DebugVariable[] variables, DebugStackFrame[] frames)
         {
             this.generation = generation;
             this.path = path;
@@ -63,6 +77,15 @@ namespace WindowsIDE.Debug
             else
             {
                 this.variables = variables;
+            }
+
+            if (frames == null)
+            {
+                this.frames = new DebugStackFrame[0];
+            }
+            else
+            {
+                this.frames = frames;
             }
         }
 
@@ -88,6 +111,12 @@ namespace WindowsIDE.Debug
         public DebugVariable[] Variables
         {
             get { return this.variables; }
+        }
+
+        /// <summary>コールスタック。無ければ空。</summary>
+        public DebugStackFrame[] Frames
+        {
+            get { return this.frames; }
         }
     }
 

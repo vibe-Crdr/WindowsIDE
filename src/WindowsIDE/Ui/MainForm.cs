@@ -64,8 +64,10 @@ namespace WindowsIDE.Ui
         private ActiveRunKind activeRunKind;
         private BreakpointStore breakpointStore;
         private PowerShellDebugger psDebugger;
+        private CorDebugSession corDebug;
         private string lastManualOutputExe;
         private bool pendingLaunchAfterBuild;
+        private bool pendingDebugAfterBuild;
         private bool bottomSplitterInitialized;
         private StatusStrip status;
         private ToolStripStatusLabel statusLang;
@@ -121,6 +123,10 @@ namespace WindowsIDE.Ui
             this.psDebugger.Stopped += this.OnDebugStopped;
             this.psDebugger.ConsoleLine += this.OnDebugConsole;
             this.psDebugger.Ended += this.OnDebugEnded;
+            this.corDebug = new CorDebugSession(this.breakpointStore);
+            this.corDebug.Stopped += this.OnDebugStopped;
+            this.corDebug.ConsoleLine += this.OnDebugConsole;
+            this.corDebug.Ended += this.OnDebugEnded;
             this.BuildMenu();
             this.BuildStatus();
             this.BuildBody();
@@ -2470,7 +2476,14 @@ namespace WindowsIDE.Ui
         private void OnFindCloseRequested(object sender, EventArgs e) { this.CloseFindBar(); }
         private void OnBuild(object sender, EventArgs e)
         {
+            if (this.IsCsDebugging())
+            {
+                this.ShowSynthetic("C# のデバッグ中はビルドできない。");
+                return;
+            }
+
             this.pendingLaunchAfterBuild = false;
+            this.pendingDebugAfterBuild = false;
             if (this.csharpHost != null)
             {
                 this.csharpHost.Kill();
@@ -2571,6 +2584,7 @@ namespace WindowsIDE.Ui
             if (string.Equals(ext, ".cs", StringComparison.OrdinalIgnoreCase))
             {
                 this.pendingLaunchAfterBuild = true;
+                this.pendingDebugAfterBuild = false;
                 if (this.powershellHost != null)
                 {
                     this.powershellHost.Kill();
@@ -2836,7 +2850,7 @@ namespace WindowsIDE.Ui
             }
         }
 
-        private void StartManualBuild()
+        private bool StartManualBuild()
         {
             this.buildGeneration++;
             if (this.csharpHost != null)
@@ -2872,20 +2886,20 @@ namespace WindowsIDE.Ui
             if (sources == null || sources.Length == 0)
             {
                 this.ShowSynthetic("C# ソースがありません。");
-                return;
+                return false;
             }
 
             string saveError;
             if (!this.TrySaveDirtySources(sources, out saveError))
             {
                 this.ShowSynthetic(saveError);
-                return;
+                return false;
             }
 
             if (!FrameworkCsc.CompilerExists())
             {
                 this.ShowSynthetic("csc.exe が見つかりません。");
-                return;
+                return false;
             }
 
             string keyPath = workspaceRoot;
@@ -2905,7 +2919,7 @@ namespace WindowsIDE.Ui
             catch (Exception ex)
             {
                 this.ShowSynthetic("応答ファイルの作成に失敗した: " + ex.Message);
-                return;
+                return false;
             }
 
             int gen = this.buildGeneration;
@@ -2917,6 +2931,7 @@ namespace WindowsIDE.Ui
             Thread thread = new Thread(this.BuildWorkerProc);
             thread.IsBackground = true;
             thread.Start(req);
+            return true;
         }
 
         private void BuildWorkerProc(object state)
@@ -3012,6 +3027,7 @@ namespace WindowsIDE.Ui
 
             if (!string.IsNullOrEmpty(result.StartError))
             {
+                this.pendingDebugAfterBuild = false;
                 this.ShowSynthetic(result.StartError);
                 return;
             }
@@ -3024,6 +3040,41 @@ namespace WindowsIDE.Ui
             }
 
             this.ShowBuildDiagnostics(parsed);
+            if (this.pendingDebugAfterBuild)
+            {
+                this.pendingDebugAfterBuild = false;
+                if (result.ExitCode != 0)
+                {
+                    return;
+                }
+
+                if (this.corDebug == null)
+                {
+                    return;
+                }
+
+                string pdbPath = null;
+                if (!string.IsNullOrEmpty(req.OutputExe))
+                {
+                    pdbPath = Path.ChangeExtension(req.OutputExe, ".pdb");
+                }
+
+                if (string.IsNullOrEmpty(req.OutputExe) || !File.Exists(req.OutputExe) || string.IsNullOrEmpty(pdbPath) || !File.Exists(pdbPath))
+                {
+                    this.ShowSynthetic("デバッグ用の exe または pdb がありません。");
+                    return;
+                }
+
+                this.ShowDebugPanel();
+                if (this.bottomPane != null)
+                {
+                    this.bottomPane.DebugPane.ConsolePanel.AppendStatus("起動: " + req.OutputExe);
+                }
+
+                this.corDebug.Start(req.OutputExe, req.WorkingDirectory, this.debugGeneration);
+                return;
+            }
+
             if (!this.pendingLaunchAfterBuild || result.ExitCode != 0)
             {
                 return;
@@ -4239,7 +4290,38 @@ namespace WindowsIDE.Ui
 
         private bool IsDebugging()
         {
+            return this.IsPsDebugging() || this.IsCsDebugging();
+        }
+
+        private bool IsPsDebugging()
+        {
             return this.psDebugger != null && this.psDebugger.State != DebugSessionState.Idle;
+        }
+
+        private bool IsCsDebugging()
+        {
+            if (this.pendingDebugAfterBuild)
+            {
+                return true;
+            }
+
+            return this.corDebug != null && this.corDebug.State != DebugSessionState.Idle;
+        }
+
+        private static bool IsBreakpointPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            string ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".ps1", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(ext, ".cs", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsPs1Path(string path)
@@ -4250,6 +4332,16 @@ namespace WindowsIDE.Ui
             }
 
             return string.Equals(Path.GetExtension(path), ".ps1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsCsPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            return string.Equals(Path.GetExtension(path), ".cs", StringComparison.OrdinalIgnoreCase);
         }
 
         private void RefreshBreakpointMarks()
@@ -4301,7 +4393,7 @@ namespace WindowsIDE.Ui
             }
 
             string path = this.editor.Document.FilePath;
-            if (!IsPs1Path(path))
+            if (!IsBreakpointPath(path))
             {
                 return;
             }
@@ -4318,7 +4410,7 @@ namespace WindowsIDE.Ui
             }
 
             string path = this.editor.Document.FilePath;
-            if (!IsPs1Path(path))
+            if (!IsBreakpointPath(path))
             {
                 return;
             }
@@ -4330,20 +4422,22 @@ namespace WindowsIDE.Ui
 
         private void OnDebugStartContinue(object sender, EventArgs e)
         {
-            if (this.psDebugger == null)
+            DebugSessionState ps = (this.psDebugger == null) ? DebugSessionState.Idle : this.psDebugger.State;
+            DebugSessionState cs = (this.corDebug == null) ? DebugSessionState.Idle : this.corDebug.State;
+            if (ps == DebugSessionState.Running || cs == DebugSessionState.Running || this.pendingDebugAfterBuild)
             {
                 return;
             }
 
-            DebugSessionState st = this.psDebugger.State;
-            if (st == DebugSessionState.Running)
-            {
-                return;
-            }
-
-            if (st == DebugSessionState.Stopped)
+            if (ps == DebugSessionState.Stopped)
             {
                 this.psDebugger.Continue();
+                return;
+            }
+
+            if (cs == DebugSessionState.Stopped)
+            {
+                this.corDebug.Continue();
                 return;
             }
 
@@ -4359,38 +4453,76 @@ namespace WindowsIDE.Ui
                 return;
             }
 
-            if (!IsPs1Path(path))
+            if (IsPs1Path(path))
             {
-                this.ShowSynthetic("PowerShell のデバッグはディスク上の .ps1 だけです。");
+                this.StartPsDebug(path);
                 return;
             }
 
-            this.StartPsDebug(path);
+            if (IsCsPath(path))
+            {
+                this.StartCsDebug(path);
+                return;
+            }
+
+            this.ShowSynthetic("C# のデバッグはディスク上の .cs、PowerShell はディスク上の .ps1 だけです。");
         }
 
         private void OnDebugStop(object sender, EventArgs e)
         {
-            if (this.psDebugger == null || this.psDebugger.State == DebugSessionState.Idle)
+            if (this.psDebugger != null && this.psDebugger.State != DebugSessionState.Idle)
             {
-                return;
+                this.psDebugger.Stop();
             }
 
-            this.psDebugger.Stop();
+            if (this.corDebug != null && this.corDebug.State != DebugSessionState.Idle)
+            {
+                this.corDebug.Stop();
+            }
+
+            if (this.pendingDebugAfterBuild)
+            {
+                this.pendingDebugAfterBuild = false;
+                this.buildGeneration++;
+                if (this.cscRunner != null)
+                {
+                    this.cscRunner.Kill();
+                }
+            }
+
+            if (this.liveTimer != null && !this.IsDebugging())
+            {
+                this.liveTimer.Interval = LiveDiagnoseDebounceMs;
+                this.liveTimer.Stop();
+                this.liveTimer.Start();
+            }
         }
 
         private void OnDebugStepOver(object sender, EventArgs e)
         {
-            if (this.psDebugger != null)
+            if (this.psDebugger != null && this.psDebugger.State == DebugSessionState.Stopped)
             {
                 this.psDebugger.StepOver();
+                return;
+            }
+
+            if (this.corDebug != null && this.corDebug.State == DebugSessionState.Stopped)
+            {
+                this.corDebug.StepOver();
             }
         }
 
         private void OnDebugStepInto(object sender, EventArgs e)
         {
-            if (this.psDebugger != null)
+            if (this.psDebugger != null && this.psDebugger.State == DebugSessionState.Stopped)
             {
                 this.psDebugger.StepInto();
+                return;
+            }
+
+            if (this.corDebug != null && this.corDebug.State == DebugSessionState.Stopped)
+            {
+                this.corDebug.StepInto();
             }
         }
 
@@ -4432,6 +4564,7 @@ namespace WindowsIDE.Ui
             }
 
             this.pendingLaunchAfterBuild = false;
+            this.pendingDebugAfterBuild = false;
             this.buildGeneration++;
             if (this.cscRunner != null)
             {
@@ -4459,6 +4592,11 @@ namespace WindowsIDE.Ui
                 this.cmdHost.Kill();
             }
 
+            if (this.corDebug != null)
+            {
+                this.corDebug.Stop();
+            }
+
             this.ShowDebugPanel();
             if (this.bottomPane != null)
             {
@@ -4470,6 +4608,102 @@ namespace WindowsIDE.Ui
             this.debugGeneration++;
             string scriptDir = Path.GetDirectoryName(full);
             this.psDebugger.Start(full, scriptDir, this.debugGeneration);
+        }
+
+        private void StartCsDebug(string path)
+        {
+            string full;
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch (Exception)
+            {
+                this.ShowSynthetic("C# のデバッグはディスク上の .cs、PowerShell はディスク上の .ps1 だけです。");
+                return;
+            }
+
+            if (!File.Exists(full))
+            {
+                this.ShowSynthetic("C# のデバッグはディスク上の .cs、PowerShell はディスク上の .ps1 だけです。");
+                return;
+            }
+
+            if (this.editor != null && this.editor.Document != null && this.editor.Document.IsDirty)
+            {
+                try
+                {
+                    if (!this.editor.Document.Save())
+                    {
+                        this.ShowSynthetic("保存に失敗した: " + this.editor.Document.FilePath);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    this.ShowSynthetic("保存に失敗した: " + ex.Message);
+                    return;
+                }
+
+                if (this.tabs != null)
+                {
+                    this.tabs.RefreshTabs();
+                }
+
+                this.UpdateStatus();
+            }
+
+            this.pendingLaunchAfterBuild = false;
+            this.pendingDebugAfterBuild = true;
+            if (this.cscRunner != null)
+            {
+                this.cscRunner.Kill();
+            }
+
+            this.InvalidateLiveCsc();
+            if (this.liveTimer != null)
+            {
+                this.liveTimer.Stop();
+            }
+
+            if (this.csharpHost != null)
+            {
+                this.csharpHost.Kill();
+            }
+
+            if (this.powershellHost != null)
+            {
+                this.powershellHost.Kill();
+            }
+
+            if (this.cmdHost != null)
+            {
+                this.cmdHost.Kill();
+            }
+
+            if (this.psDebugger != null)
+            {
+                this.psDebugger.Stop();
+            }
+
+            this.ShowDebugPanel();
+            if (this.bottomPane != null)
+            {
+                this.bottomPane.DebugPane.ClearLocals();
+                this.bottomPane.DebugPane.ConsolePanel.Clear();
+            }
+
+            this.debugGeneration++;
+            if (!this.StartManualBuild())
+            {
+                this.pendingDebugAfterBuild = false;
+                if (this.liveTimer != null)
+                {
+                    this.liveTimer.Interval = LiveDiagnoseDebounceMs;
+                    this.liveTimer.Stop();
+                    this.liveTimer.Start();
+                }
+            }
         }
 
         private void OnDebugStopped(object sender, DebugStoppedEventArgs e)
@@ -4487,7 +4721,7 @@ namespace WindowsIDE.Ui
 
             if (this.bottomPane != null)
             {
-                this.bottomPane.DebugPane.SetLocals(e.Variables);
+                this.bottomPane.DebugPane.SetStoppedInfo(e.Frames, e.Variables);
             }
 
             string stopPath = e.Path;
@@ -4898,6 +5132,15 @@ namespace WindowsIDE.Ui
                     this.psDebugger.Ended -= this.OnDebugEnded;
                     this.psDebugger.Dispose();
                     this.psDebugger = null;
+                }
+
+                if (this.corDebug != null)
+                {
+                    this.corDebug.Stopped -= this.OnDebugStopped;
+                    this.corDebug.ConsoleLine -= this.OnDebugConsole;
+                    this.corDebug.Ended -= this.OnDebugEnded;
+                    this.corDebug.Dispose();
+                    this.corDebug = null;
                 }
 
                 if (this.bottomPane != null)

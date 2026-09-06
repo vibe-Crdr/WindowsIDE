@@ -31,10 +31,12 @@
 | D23 | ユーザー `.cmd` / `.bat` は新規・0 バイト Open・無題 SaveAs が CP932 BOM なし CRLF。保存時は BOM を書かない。非空 UTF-8 BOM の Open は検出どおり UTF-8 のまま、Save で BOM だけ落とす（本文は再エンコードしない）。TryDecode は変えない。 |
 | D24 | このチャットで D4 を覆し、VB.NET を第5のホストに加える。拡張子は `.vb` のみ（`.vbs` は Plain。`.bas` / `.cls` は VBA）。診断の正は指定 `vbc.exe`。表示名は `VB.NET`。実装はフェーズ P9。今はコードを書かない |
 | D25 | F-IG（編集器本文のインデント線）。言語非依存。全ファイル形式（Plain / cmd / Markdown / 無題を含む）。色は既存 LineNumber。常時オン。新 XML なし。`WindowsIDE.Editor`。P7-A に混ぜない。P9 より先でよい。今は実装しない |
-| D26 | F-HOV は Visual Studio クイックインフォのサブセット。ユーザー定義が解決できたらシグネチャを常時出し、説明（F-DOC / `///` / 直前コメント / BCL XML）はあればその下。新 Theme 色は足さない（既存 Keyword / Type / Method / Local / Foreground）。ホバー窓は `WS_EX_NOACTIVATE` と `ShowWindow(SW_SHOWNOACTIVATE)`。ツリー再読込（F-EXP）は他プロセスからフォアグラウンドに戻ったときだけ（`WM_ACTIVATEAPP`）。自前ホバーでは `OnActivated` から Rebuild しない。C# 宣言インデックスの正は `CSharpSemantic.Collect`（P12 束縛の延長。新規フルパーサは作らない） |
+| D26 | F-HOV は Visual Studio クイックインフォのサブセット。ユーザー定義が解決できたらシグネチャを常時出し、説明（F-DOC / `///` / 直前コメント / BCL XML）はあればその下。新 Theme 色は足さない（既存 Keyword / Type / Method / Local / Foreground）。ホバー窓は `WS_EX_NOACTIVATE` と `ShowWindow(SW_SHOWNOACTIVATE)`。ツリー再読込（F-EXP）は他プロセスからフォアグラウンドに戻ったときだけ（`WM_ACTIVATEAPP`）。自前ホバーでは `OnActivated` から Rebuild しない。C# 宣言インデックスの正は `CSharpSemantic.Collect`（P12 束縛の延長。新規フルパーサは作らない。C# 限定。VBA の構文解析は D30） |
 | D27 | F-EXP のリネームと削除を実装する（以前の「今は実装しない」を覆す）。ツリーフォーカスは Ctrl+Shift+E（ProcessCmdKey、ShortcutKeys なし、IME 中は奪わない）。削除は SHFileOperation FO_DELETE + FOF_ALLOWUNDO（確認付きごみ箱）。Shift+Delete の完全削除は今やらない。ウォッチとツリーからのワークスペース外オープンはやらない。.bas / .cls のディスクリネーム／削除はマップがあれば relpath 更新またはエントリ削除。Excel COM は走らせない。推測紐付けしない。 |
 | D28 | 起動時は `split.Panel1Collapsed = true`。`TryBindWorkspace` 成功で展開し、閉じるまで畳まない。左ペイン 260 DIP は初回展開のみ（幅が足りるとき）。幅は XML に書かない。無引数・ファイル引数（D20）では左ペインを出さない。起動直後フォーカスは常に TextView。Ctrl+Shift+E はワークスペース無しで no-op。OpenFolder 直後は編集器のまま。 |
 | D29 | `.bas` / `.cls` のディスクは本文のみでよい。`Attribute VB_Name` は不要（禁止ではない）。新規 Import は TEMP 直前に `VbaExportText.EnsureForImport` でヘッダを合成し、VB_Name は namingMode の excelName が勝つ。ディスクは書き換えない。プルは Export 生ではなく `StripForCodeModule` を書く。既存は Strip + CodeModule 置換。document は Import しない。クラス Instancing はマップに残さない。 |
+| D30 | VBA の構文解析（IDE 知能: 識別子束縛・F-GD / F-HOV / 将来 F-CMP の構造）の正は、製品 C# 5 の自前パーサ（指定 Framework `csc.exe`）。置く名前空間は `WindowsIDE.Languages`。`WindowsIDE.Vba` は COM / 同期 / `VbaCompiler` のまま。ANTLR、Irony、言語ワークベンチ、Rubberduck、Roslyn、指定外コンパイラ、指定 `vbc.exe`、Excel / VBIDE の構文木、第三者 DLL、Python は使わない。診断の正は Excel Compile（F-VBA-BLD）のまま。自前パーサの失敗を問題一覧・波線のコンパイラ診断として出さない。完全な型システムは作らない（P12 と同型）。実装は今しない。現行は `VbaLexer` + `VbaSemantic` ヒューリスティック + `WorkspaceSymbols.CollectVba` の行スキャン。構造ヒントの表示は D31。 |
+| D31 | D30 パーサの実装目標は、プッシュ前に VBE が構文・モジュール内構造で落とす誤りをディスク上でほぼ拾うこと（未閉じブロック、不正な構文、同一モジュールの手続き名衝突など。Excel COM 不要）。100% は保証しない。拾えないもの（保証しない）: 参照欠け、Excel/COM 型、ドキュメントモジュールとディスクの差、`#If` と実機ビット数、完全な型システム、UserForm。表示は構造ヒント。F-VBA-BLD（Excel Compile）のコンパイラ診断と並べて偽らない。問題一覧に出すなら別バケット／別文言（「構造」）。波線は既存 Error 色でよいがコンパイラ診断と呼ばない（F-SQU の C「ブロック不一致波線」と同系）。プッシュはパーサ失敗で拒否しない（偽陽性と Excel 依存の誤りが残る。期待経路は直してからプッシュ。ゲートの正はプッシュ後の Excel Compile）。完全な型システムは作らない（D30 / P12）。実装は今しない。第1スライスは構文・ブロック（Excel 不要）。Option Explicit 未宣言とワークスペース横断解決は第1スライス必須にしない。 |
 
 ## P0 で採用した提案
 
@@ -49,7 +51,7 @@
 | ID | 内容 |
 | --- | --- |
 | P11 | 言語は拡張子のみ。無題・不明は Plain。字句は行開始状態 + 行スキャナ。Regex / Roslyn は使わない。キーワードはソース内静的表。 |
-| P12 | C# の識別子色は自前束縛（行レキサの上にオーバーレイ）。TokenKind Local / Instance / Method / Type。ファイル内シンボル表 + ワークスペース `.cs` 型名 + Framework Reflection（既存 `/r` と同じ DLL を LoadFrom）。F-GD / F-HOV の位置付き宣言も同じ再帰下降（`CSharpSemantic.Collect`。所属型・コンストラクタ・ジェネリックメソッドを含む）。Roslyn・Regex ホットパスは使わない。完全な型システムは作らない。VBA / PowerShell は行内ヒューリスティックを土台にし、型名は言語ごとの走査で Type にする。cmd は型なし（`%VAR%` / ラベルのみ）。Theme 色は tokyonight。Languages は Theme を参照しない。 |
+| P12 | C# の識別子色は自前束縛（行レキサの上にオーバーレイ）。TokenKind Local / Instance / Method / Type。ファイル内シンボル表 + ワークスペース `.cs` 型名 + Framework Reflection（既存 `/r` と同じ DLL を LoadFrom）。F-GD / F-HOV の位置付き宣言も同じ再帰下降（`CSharpSemantic.Collect`。所属型・コンストラクタ・ジェネリックメソッドを含む）。Roslyn・Regex ホットパスは使わない。完全な型システムは作らない。VBA の知能の正は D30（自前パーサ。今は実装しない）。現行は行内ヒューリスティックと型名走査（`VbaSemantic` / `CollectVba`）。PowerShell は P13（SMA `Parser.ParseInput`）のまま。cmd は型なし（`%VAR%` / ラベルのみ）。Theme 色は tokyonight。Languages は Theme を参照しない。 |
 | P13 | PowerShell ハイライトだけ `System.Management.Automation.dll`（GAC `v4.0_3.0.0.0__31bf3856ad364e35`）を `/r` する。`Parser.ParseInput` の AST を使う。F-PS-RUN はこの SMA で Runspace を開かない（子プロセス）。P3 の F-DBG-PS は `WindowsIDE.Debug` だけが同一プロセスで Runspace を開く。Languages / Host.PowerShell は Runspace を開かない。行 BP は GAC 3.0 に公開 `SetLineBreakpoint` も公開 `LineBreakpoint` コンストラクタも無い。internal ctor + 公開 `SetBreakpoints`。powershell.exe が先に読む `$PSHome` の SMA 公開面と製品 `/r` を混同しない。 |
 
 ## フェーズ P7 で採用した提案
@@ -78,7 +80,7 @@
 
 [requirements.md](requirements.md) の **フェーズ P8**（Markdown／VBAProject 参照／マクロ）と、下表の **提案 P8**（F-CMP の P5 必須範囲）も別物である。混同しない。
 
-P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 / P35 / P36 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
+P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 / P35 / P36 / P37 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
 
 | ID | 提案 | 理由 | 代替 |
 | --- | --- | --- | --- |
@@ -103,6 +105,7 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 | P34 | 編集器（TextView）へフォーカスは Ctrl+1。グローバル。CreateDisplayCommand + ProcessCmdKey（ShortcutKeys なし）。IME 変換中は奪わない。表示メニューはエクスプローラーの直後「編集器」Ctrl+1。左ペイン・下パネルは畳まない。FindBar は閉じない。ワークスペース無しでも可（無題 TextView）。NumPad1 は足さない。Ctrl+E は使わない（F-QO / Ctrl+P エイリアス）。確定しない。F-ED / F-EXP 実装既定。 | D12。VS Code の focusFirstEditorGroup。Ctrl+` の畳みと分離。 | Ctrl+E、Escape、F6、NumPad1、ShortcutKeys |
 | P35 | P3 の PowerShell デバッグは同一プロセス Runspace のまま。ユーザースクリプトが IDE を落とせることを隠さない。ヘルパー EXE への隔離は今は実装しない。確定しない | 同一プロセスが P3 の採用。隔離は確認待ち | ヘルパー EXE で SMA Debugger を隔離する |
 | P36 | P3 のブレーク印と停止行は既存 Error / CurrentLine。専用色は今は足さない。確定しない | ui.md の新色禁止を今は破らない | ブレーク専用 Theme 色 |
+| P37 | P4-A（F-DBG-CS）実装既定: スライスは P4-A のみ（F-DBG-CMD は P4-B、今は書かない）。FuncEval 禁止。手動 TEMP `%TEMP%\WindowsIDE\build\manual\<key>\out.exe` を再利用し第3の debug ディレクトリは作らない。確定しない | 手動ビルドとデバッグ生成物を分けない | 専用 debug TEMP、FuncEval で ToString |
 
 ## まだ聞かないが後で決める
 
@@ -114,3 +117,5 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 - 単一インスタンス（二重起動の集約）
 - ユーザー csc の追加 `/r`（製品 `/r` とは別。当面は提案 P15）
 - 常時コンパイルのデバウンス数値（実装時の定数でよい）
+- VBA 自前パーサの第1スライスは D31（構文・ブロック。Excel 不要）。「ほぼ」に含める文の細目は実装時
+- その実装を載せるフェーズ番号（P7 追記にはしない。独立スライスを推奨）

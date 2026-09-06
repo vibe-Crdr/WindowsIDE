@@ -1,7 +1,7 @@
 ﻿namespace WindowsIDE.Debug
 {
     /// <summary>
-    /// PowerShell デバッグセッションの状態。
+    /// デバッグセッションの状態。言語に依存しない。
     /// </summary>
     public enum DebugSessionState
     {

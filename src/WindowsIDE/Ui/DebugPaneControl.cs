@@ -65,7 +65,46 @@ namespace WindowsIDE.Ui
         /// <param name="variables">停止時の変数。null は空。</param>
         public void SetLocals(DebugVariable[] variables)
         {
+            this.SetStoppedInfo(null, variables);
+        }
+
+        /// <summary>
+        /// 停止時のスタックとローカルを上ペインへ出す。フレームが空ならローカルのみ。
+        /// </summary>
+        /// <param name="frames">コールスタック。null または空なら見出しを出さない。</param>
+        /// <param name="variables">停止時の変数。null は空。</param>
+        public void SetStoppedInfo(DebugStackFrame[] frames, DebugVariable[] variables)
+        {
             this.locals.Clear();
+            if (frames != null && frames.Length > 0)
+            {
+                this.locals.AppendStatus("コールスタック");
+                int f = 0;
+                while (f < frames.Length)
+                {
+                    DebugStackFrame frame = frames[f];
+                    f++;
+                    if (frame == null)
+                    {
+                        continue;
+                    }
+
+                    string method = frame.Method;
+                    if (method == null)
+                    {
+                        method = "";
+                    }
+
+                    string path = frame.Path;
+                    if (path == null)
+                    {
+                        path = "";
+                    }
+
+                    this.locals.Append(method + "  " + path + "  " + frame.Line.ToString(), false);
+                }
+            }
+
             if (variables == null)
             {
                 return;

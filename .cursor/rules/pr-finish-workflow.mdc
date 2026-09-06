@@ -11,5 +11,5 @@ alwaysApply: true
 - 依頼された実装が終わったら（architect → builder → reviewer の後も含む）`master` 向け GitHub pull request を開く。開くのは親。マージはしない。
 - PR の title / body は変更内容と検証方法を要約する。
 - 未完了の同一タスクに追加コミットが乗ったら、新しい PR を増やさず同じ PR ブランチへ push する（PR の更新で足りる）。
-- PR の open / update が外部実機テストを起こす。エージェントはそのテスターを自分で走らせる必要はない。
+- PR の open / update が外部実機テストを起こす。エージェントはそのテスターを自分で走らせない。
 - 変更が無いセッションでは PR を開かない。GitHub Actions は足さない。

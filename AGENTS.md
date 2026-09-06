@@ -9,7 +9,7 @@
 3. [docs/constraints.md](docs/constraints.md)
 4. [docs/decisions.md](docs/decisions.md)
 5. 該当する [docs/architecture.md](docs/architecture.md)、[docs/ui.md](docs/ui.md)、[docs/ide-features.md](docs/ide-features.md)、[docs/vba-workspace.md](docs/vba-workspace.md)、[docs/build.md](docs/build.md)
-6. `.cursor/rules/`（とくに `windows-ide-requirements.mdc`）
+6. `.cursor/rules/`（とくに `windows-ide-requirements.mdc`。完了時は `pr-finish-workflow.mdc`）
 
 文書と実装が食い違ったら、勝手に片方へ寄せず、食い違いを書いてから文書か実装を直す。
 
@@ -35,7 +35,11 @@
 | `/builder` | 計画後の実装。指定 `csc.exe` で検証する |
 | `/reviewer` | 実装後・完了前の独立レビュー。読み取り専用。修正は Builder へ返す |
 
-横断変更は architect → builder → reviewer の順。親が「完了」と自己申告しない。
+横断変更は architect → builder → reviewer の順。親が「完了」と自己申告しない。実装セッションの完了は `master` 向け PR を開くか更新すること。詳細は `.cursor/rules/pr-finish-workflow.mdc`。
+
+## Git / PR
+
+実装の完了は `master` への直接 push ではない。feature ブランチで作業し、architect → builder → reviewer のあと親が `master` 向け GitHub pull request を開く（同一タスクの続きは同じ PR を更新）。マージしない。規則の正は `.cursor/rules/pr-finish-workflow.mdc`。
 
 ## MCP
 

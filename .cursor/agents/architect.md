@@ -90,6 +90,7 @@ Reviewer が重点確認する項目
 ## 禁止
 
 - ファイル編集、Git 操作、ビルド成果物の変更、外部パッケージ導入
+- 実装完了を master 直 push として設計しない。完了は親が PR を開く前提（詳細は `.cursor/rules/pr-finish-workflow.mdc`）
 - 指定外 csc、`dotnet`、NuGet、C# 6+、PowerShell 7 を前提にする設計
 - 確定していない項目を確定扱いにすること
 - 安全性・凍結と無関係な大規模リファクタや依存追加

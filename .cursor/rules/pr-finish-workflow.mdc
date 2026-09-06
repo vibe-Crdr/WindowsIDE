@@ -1,0 +1,15 @@
+---
+description: 作業完了は GitHub pull request。master へ直接 push しない
+alwaysApply: true
+---
+
+# PR finish workflow
+
+機能作業・修正・エージェントセッションのコミットを `master`（デフォルトブランチ）へ直接 push しない。
+
+- 作業は feature ブランチで行う。
+- 依頼された実装が終わったら（architect → builder → reviewer の後も含む）`master` 向け GitHub pull request を開く。開くのは親。マージはしない。
+- PR の title / body は変更内容と検証方法を要約する。
+- 未完了の同一タスクに追加コミットが乗ったら、新しい PR を増やさず同じ PR ブランチへ push する（PR の更新で足りる）。
+- PR の open / update が外部実機テストを起こす。エージェントはそのテスターを自分で走らせる必要はない。
+- 変更が無いセッションでは PR を開かない。GitHub Actions は足さない。

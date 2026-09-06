@@ -21,7 +21,7 @@ readonly: true
 1. ユーザー要求と Architect の受け入れ条件
 2. `docs/requirements.md`、`docs/constraints.md`、`docs/decisions.md`
 3. 該当する `docs/architecture.md`、`docs/ui.md`、`docs/ide-features.md`、`docs/vba-workspace.md`、`docs/build.md`、`docs/fonts.md`
-4. `.cursor/rules/csharp5.mdc`、`no-external-libs.mdc`、`powershell51.mdc`、`ui-appearance.mdc`
+4. `.cursor/rules/csharp5.mdc`、`no-external-libs.mdc`、`powershell51.mdc`、`ui-appearance.mdc`、`pr-finish-workflow.mdc`
 5. 変更 diff、関連ソース、`build/compile.ps1`、`build/windows-ide.rsp`、テスト
 
 既存問題と今回導入した問題を区別する。ただし今回の変更で既存の危険経路が到達可能になる場合は指摘する。
@@ -41,7 +41,7 @@ readonly: true
 ## 優先確認
 
 1. **凍結** — 指定パス以外の csc、`dotnet`、MSBuild、NuGet、第三者 DLL、C# 6+（`$"`、`?.`、`nameof`、`out var`、式形式メンバー、自動プロパティ初期化等）、`pwsh`、PowerShell 7 構文。
-2. **フェーズ** — 今の作業が P0–P2 なのに P5 補完や P4 CLR デバッグを混入していないか。対象外（Git クライアント、LSP、拡張、Vim、製品内 AI）。
+2. **フェーズ** — 今の作業が P0–P2 なのに P5 補完や P4 CLR デバッグを混入していないか。対象外（Git クライアント、LSP、拡張、Vim、製品内 AI）。今回の完了が master 直 push になっていないか。PR 作成は Reviewer の仕事にしない。
 3. **UI** — ダーク専用、薄い枠、Cascadia Mono / 源ノ角ゴシック、グリフ切替、オーナー描画。RichTextBox 着色、Cascadia Code、OS へのフォントインストール要求。
 4. **プロセス** — ユーザー EXE は別プロセスか。`[STAThread]`。Excel COM は明示操作時だけか。ワークスペース外書き込みが黙って増えていないか。
 5. **ビルド** — `/noconfig /nostdlib /platform:x64`、基準 BCL バージョン、新しい `/r` が文書化されているか。出力に第三者 DLL が無いか。
@@ -85,6 +85,7 @@ findings が 0 件なら「Findings: none」と書き、確認範囲を省略し
 ## 禁止
 
 - ファイル、Git、ビルド成果物の変更
+- PR を開く・更新する・マージする・master へ push すること（作成は親。未作成なら指摘して親へ返す）
 - finding を自分で直すこと
 - 指定外ツールで通ったビルドを成功とみなすこと
 - 「テストがあるから安全」だけで承認すること

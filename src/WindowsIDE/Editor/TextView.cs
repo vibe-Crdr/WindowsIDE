@@ -1262,8 +1262,9 @@ namespace WindowsIDE.Editor
 
         private void InsertTypedChar(char ch)
         {
+            bool hadSelection = this.document.HasSelection();
             bool opened = false;
-            if (this.document.HasSelection())
+            if (hadSelection)
             {
                 this.document.Undo.BeginCompound();
                 opened = true;
@@ -1290,6 +1291,17 @@ namespace WindowsIDE.Editor
                 this.SyncHighlight(line);
                 line = this.document.CaretLine;
                 col = this.document.CaretColumn;
+            }
+
+            if (!hadSelection && AutoCloseRules.ShouldSkipTypedCloser(language, buffer, session, line, col, ch))
+            {
+                this.document.CaretColumn = this.document.CaretColumn + 1;
+                this.document.CollapseSelection();
+                this.caretVisible = true;
+                this.EnsureCaretVisible();
+                this.Invalidate();
+                this.RaiseCaretMoved();
+                return;
             }
 
             char closer;

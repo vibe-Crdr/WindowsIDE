@@ -2435,6 +2435,54 @@ namespace WindowsIDE.Tests
             Check("ac compound inserted", buf.GetText() == "{}");
             undo.Undo(buf);
             Check("ac compound undo both", buf.GetText() == "");
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip )", AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 1, ')'));
+
+            buf.SetText("[]");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip ]", AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 1, ']'));
+
+            buf.SetText("{}");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip }", AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 1, '}'));
+
+            buf.SetText("");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip empty )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 0, ')'));
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip ] vs )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 1, ']'));
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip opener (", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 0, '('));
+
+            buf.SetText("\"()\"");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip string )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 2, ')'));
+
+            buf.SetText("// )");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            Check("ac skip comment )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.CSharp, buf, session, 0, 3, ')'));
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.Vba, buf);
+            Check("ac skip vba )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.Vba, buf, session, 0, 1, ')'));
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.Cmd, buf);
+            Check("ac skip cmd )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.Cmd, buf, session, 0, 1, ')'));
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.Plain, buf);
+            Check("ac skip plain )", !AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.Plain, buf, session, 0, 1, ')'));
+
+            buf.SetText("()");
+            session = MakeP7Session(LanguageKind.PowerShell, buf);
+            Check("ac skip ps )", AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.PowerShell, buf, session, 0, 1, ')'));
         }
 
         private static void RunSmartIndent()

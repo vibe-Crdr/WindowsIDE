@@ -19,6 +19,9 @@ namespace WindowsIDE.Debug
         internal const int HrOk = 0;
         internal const int HrFalse = 1;
         internal const uint HiddenSequencePoint = 0x00FEEFEE;
+        internal const int StepReasonNormal = 0;
+        internal const int StepReasonExit = 6;
+        internal const int MaxSameLineSteps = 64;
         internal const uint IlOffsetNoMapping = 0xFFFFFFFF;
         internal const uint IlOffsetProlog = 0xFFFFFFFE;
         internal const uint IlOffsetEpilog = 0xFFFFFFFD;
@@ -181,7 +184,7 @@ namespace WindowsIDE.Debug
         public uint nativeEndOffset;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
     internal struct CorDebugStepRange
     {
         public uint startOffset;
@@ -854,7 +857,10 @@ namespace WindowsIDE.Debug
         int Step(int bStepIn);
 
         [PreserveSig]
-        int StepRange(int bStepIn, [In] CorDebugStepRange[] ranges, uint cRangeCount);
+        int StepRange(
+            int bStepIn,
+            [In, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2)] CorDebugStepRange[] ranges,
+            uint cRangeCount);
 
         [PreserveSig]
         int StepOut();

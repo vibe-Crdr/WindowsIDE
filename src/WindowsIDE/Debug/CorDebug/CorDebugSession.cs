@@ -32,6 +32,10 @@ namespace WindowsIDE.Debug
         private ICorDebugProcess process;
         private ICorDebugThread lastThread;
         private ICorDebugStepper lastStepper;
+        private string lastShownPath;
+        private int lastShownLine;
+        private int sameLineStepCount;
+        private bool lastStepIn;
         private PdbBinder pdb;
         private CorDebugManagedCallback callback;
         private PendingLineBp[] pendingLineBps;
@@ -212,8 +216,13 @@ namespace WindowsIDE.Debug
             this.StopAt(thread);
         }
 
-        void ICorDebugCallbackSink.HandleStepComplete(ICorDebugAppDomain appDomain, ICorDebugThread thread)
+        void ICorDebugCallbackSink.HandleStepComplete(ICorDebugAppDomain appDomain, ICorDebugThread thread, int reason)
         {
+            if (this.TryContinueSameSourceStep(appDomain, thread, reason))
+            {
+                return;
+            }
+
             this.StopAt(thread);
         }
 
@@ -970,6 +979,7 @@ namespace WindowsIDE.Debug
                 gen = this.generation;
                 this.state = DebugSessionState.Stopped;
                 this.lastThread = thread;
+                this.sameLineStepCount = 0;
             }
 
             string path = null;
@@ -982,6 +992,12 @@ namespace WindowsIDE.Debug
             }
             catch (Exception)
             {
+            }
+
+            lock (this.gate)
+            {
+                this.lastShownPath = path;
+                this.lastShownLine = line;
             }
 
             this.RaiseStopped(gen, path, line, vars, frames);
@@ -998,59 +1014,56 @@ namespace WindowsIDE.Debug
                 return;
             }
 
-            ICorDebugFrame frame;
+            ICorDebugFrame frame = null;
             int hr = thread.GetActiveFrame(out frame);
-            ICorDebugILFrame ilFrame = null;
-            if (CorDebugNative.Succeeded(hr) && frame != null)
+            try
             {
-                ilFrame = frame as ICorDebugILFrame;
-                if (ilFrame == null)
+                ICorDebugILFrame ilFrame = null;
+                if (CorDebugNative.Succeeded(hr) && frame != null)
                 {
-                    try
+                    ilFrame = TryCast<ICorDebugILFrame>(frame);
+                }
+
+                uint token = 0;
+                uint ip = 0;
+                PdbBinder binder;
+                lock (this.gate)
+                {
+                    binder = this.pdb;
+                }
+
+                if (ilFrame != null)
+                {
+                    int map;
+                    ilFrame.GetIP(out ip, out map);
+                    ICorDebugFunction fn;
+                    hr = ilFrame.GetFunction(out fn);
+                    if (CorDebugNative.Succeeded(hr) && fn != null)
                     {
-                        ilFrame = (ICorDebugILFrame)frame;
+                        fn.GetToken(out token);
+                        ReleaseCom(fn);
                     }
-                    catch (InvalidCastException)
+
+                    if (binder != null && token != 0)
                     {
+                        binder.TryGetSource(token, ip, out path, out line);
+                        vars = this.ReadLocals(ilFrame, binder, token, ip);
+                    }
+                }
+
+                frames = this.ReadStack(thread, binder);
+                if (string.IsNullOrEmpty(path) && frames.Length > 0)
+                {
+                    path = frames[0].Path;
+                    if (line < 1)
+                    {
+                        line = frames[0].Line;
                     }
                 }
             }
-
-            uint token = 0;
-            uint ip = 0;
-            PdbBinder binder;
-            lock (this.gate)
+            finally
             {
-                binder = this.pdb;
-            }
-
-            if (ilFrame != null)
-            {
-                int map;
-                ilFrame.GetIP(out ip, out map);
-                ICorDebugFunction fn;
-                hr = ilFrame.GetFunction(out fn);
-                if (CorDebugNative.Succeeded(hr) && fn != null)
-                {
-                    fn.GetToken(out token);
-                    ReleaseCom(fn);
-                }
-
-                if (binder != null && token != 0)
-                {
-                    binder.TryGetSource(token, ip, out path, out line);
-                    vars = this.ReadLocals(ilFrame, binder, token, ip);
-                }
-            }
-
-            frames = this.ReadStack(thread, binder);
-            if (string.IsNullOrEmpty(path) && frames.Length > 0)
-            {
-                path = frames[0].Path;
-                if (line < 1)
-                {
-                    line = frames[0].Line;
-                }
+                ReleaseCom(frame);
             }
         }
 
@@ -1536,48 +1549,183 @@ namespace WindowsIDE.Debug
         private void ResumeStep(bool stepIn, ICorDebugProcess proc)
         {
             ICorDebugThread thread;
-            PdbBinder binder;
             lock (this.gate)
             {
                 thread = this.lastThread;
-                binder = this.pdb;
-                this.lastThread = null;
+                this.lastStepIn = stepIn;
             }
 
-            if (thread == null)
+            if (thread == null || !this.TryArmStep(thread, stepIn))
             {
-                this.SafeContinue(proc);
+                this.RestoreStoppedAfterFailedStep();
                 return;
             }
 
+            this.SafeContinue(proc);
+        }
+
+        private bool TryContinueSameSourceStep(ICorDebugAppDomain appDomain, ICorDebugThread thread, int reason)
+        {
+            if (reason != CorDebugNative.StepReasonNormal)
+            {
+                return false;
+            }
+
+            lock (this.gate)
+            {
+                if (this.disposed || this.stopRequested)
+                {
+                    return false;
+                }
+            }
+
+            string path = null;
+            int line = 0;
             try
             {
-                ICorDebugStepper old;
-                lock (this.gate)
+                DebugVariable[] vars;
+                DebugStackFrame[] frames;
+                this.CollectStopped(thread, out path, out line, out vars, out frames);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            string shownPath;
+            int shownLine;
+            int count;
+            bool stepIn;
+            lock (this.gate)
+            {
+                shownPath = this.lastShownPath;
+                shownLine = this.lastShownLine;
+                count = this.sameLineStepCount;
+                stepIn = this.lastStepIn;
+            }
+
+            if (line < 1 || shownLine < 1 || line != shownLine)
+            {
+                return false;
+            }
+
+            if (!this.SameDebugPath(path, shownPath))
+            {
+                return false;
+            }
+
+            if (count >= CorDebugNative.MaxSameLineSteps)
+            {
+                return false;
+            }
+
+            lock (this.gate)
+            {
+                this.sameLineStepCount = count + 1;
+                this.state = DebugSessionState.Running;
+                this.lastThread = thread;
+            }
+
+            if (!this.TryArmStep(thread, stepIn))
+            {
+                this.RestoreStoppedAfterFailedStep();
+                return false;
+            }
+
+            if (appDomain != null)
+            {
+                try
                 {
-                    old = this.lastStepper;
-                    this.lastStepper = null;
+                    appDomain.Continue(0);
+                    return true;
+                }
+                catch (Exception)
+                {
+                    this.RestoreStoppedAfterFailedStep();
+                    return false;
+                }
+            }
+
+            ICorDebugProcess proc;
+            lock (this.gate)
+            {
+                proc = this.process;
+            }
+
+            this.SafeContinue(proc);
+            return true;
+        }
+
+        private void RestoreStoppedAfterFailedStep()
+        {
+            lock (this.gate)
+            {
+                if (!this.disposed && !this.stopRequested && this.state == DebugSessionState.Running)
+                {
+                    this.state = DebugSessionState.Stopped;
+                }
+            }
+        }
+
+        private bool SameDebugPath(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) && string.IsNullOrEmpty(b))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+            {
+                return false;
+            }
+
+            return string.Equals(NormalizePath(a), NormalizePath(b), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool TryArmStep(ICorDebugThread thread, bool stepIn)
+        {
+            if (thread == null)
+            {
+                return false;
+            }
+
+            ICorDebugStepper old;
+            lock (this.gate)
+            {
+                old = this.lastStepper;
+                this.lastStepper = null;
+            }
+
+            if (old != null)
+            {
+                try
+                {
+                    old.Deactivate();
+                }
+                catch (Exception)
+                {
                 }
 
-                if (old != null)
-                {
-                    try
-                    {
-                        old.Deactivate();
-                    }
-                    catch (Exception)
-                    {
-                    }
+                ReleaseCom(old);
+            }
 
-                    ReleaseCom(old);
+            ICorDebugILFrame ilFrame = TryGetIlFrame(thread);
+            ICorDebugStepper stepper = null;
+            int hr;
+            try
+            {
+                if (ilFrame != null)
+                {
+                    hr = ilFrame.CreateStepper(out stepper);
+                }
+                else
+                {
+                    hr = thread.CreateStepper(out stepper);
                 }
 
-                ICorDebugStepper stepper;
-                int hr = thread.CreateStepper(out stepper);
                 if (!CorDebugNative.Succeeded(hr) || stepper == null)
                 {
-                    this.SafeContinue(proc);
-                    return;
+                    return false;
                 }
 
                 lock (this.gate)
@@ -1588,73 +1736,170 @@ namespace WindowsIDE.Debug
                 stepper.SetInterceptMask(0);
                 stepper.SetUnmappedStopMask(0);
                 stepper.SetRangeIL(1);
-                bool ranged = this.TryStepRange(thread, stepper, binder, stepIn);
-                if (!ranged)
+                if (this.TryStepRange(ilFrame, stepper, stepIn))
                 {
-                    stepper.Step(stepIn ? 1 : 0);
+                    return true;
                 }
+
+                hr = stepper.Step(stepIn ? 1 : 0);
+                return CorDebugNative.Succeeded(hr);
             }
             catch (Exception)
             {
+                return false;
             }
-
-            this.SafeContinue(proc);
+            finally
+            {
+                ReleaseCom(ilFrame);
+            }
         }
 
-        private bool TryStepRange(ICorDebugThread thread, ICorDebugStepper stepper, PdbBinder binder, bool stepIn)
+        private static ICorDebugILFrame TryGetIlFrame(ICorDebugThread thread)
         {
-            if (binder == null)
+            if (thread == null)
             {
-                return false;
+                return null;
             }
 
             ICorDebugFrame frame;
             int hr = thread.GetActiveFrame(out frame);
             if (!CorDebugNative.Succeeded(hr) || frame == null)
             {
+                return null;
+            }
+
+            int hops = 0;
+            while (frame != null && hops < CorDebugNative.StackFrameLimit)
+            {
+                hops++;
+                ICorDebugILFrame il = TryCast<ICorDebugILFrame>(frame);
+                if (il != null)
+                {
+                    return il;
+                }
+
+                ICorDebugFrame caller = null;
+                try
+                {
+                    hr = frame.GetCaller(out caller);
+                }
+                catch (Exception)
+                {
+                    caller = null;
+                }
+
+                ReleaseCom(frame);
+                if (!CorDebugNative.Succeeded(hr) || caller == null)
+                {
+                    return null;
+                }
+
+                frame = caller;
+            }
+
+            ReleaseCom(frame);
+            return null;
+        }
+
+        private bool TryStepRange(ICorDebugILFrame ilFrame, ICorDebugStepper stepper, bool stepIn)
+        {
+            if (ilFrame == null || stepper == null)
+            {
+                return false;
+            }
+
+            PdbBinder binder;
+            lock (this.gate)
+            {
+                binder = this.pdb;
+            }
+
+            if (binder == null)
+            {
+                return false;
+            }
+
+            uint ip;
+            int map;
+            int hr = ilFrame.GetIP(out ip, out map);
+            if (!CorDebugNative.Succeeded(hr))
+            {
+                return false;
+            }
+
+            uint token;
+            hr = ilFrame.GetFunctionToken(out token);
+            if (!CorDebugNative.Succeeded(hr) || token == 0)
+            {
+                return false;
+            }
+
+            uint methodSize = ReadIlCodeSize(ilFrame);
+            ISymUnmanagedMethod method = binder.TryGetMethod(token);
+            if (method == null)
+            {
                 return false;
             }
 
             try
             {
-                ICorDebugILFrame ilFrame = TryCast<ICorDebugILFrame>(frame);
-                if (ilFrame == null)
+                CorDebugStepRange[] ranges = PdbBinder.BuildStepRanges(method, ip, methodSize);
+                if (ranges == null || ranges.Length == 0)
                 {
                     return false;
                 }
 
-                uint ip;
-                int map;
-                ilFrame.GetIP(out ip, out map);
-                uint token;
-                ilFrame.GetFunctionToken(out token);
-                ISymUnmanagedMethod method = binder.TryGetMethod(token);
-                if (method == null)
+                hr = stepper.StepRange(stepIn ? 1 : 0, ranges, (uint)ranges.Length);
+                return CorDebugNative.Succeeded(hr);
+            }
+            finally
+            {
+                ReleaseCom(method);
+            }
+        }
+
+        private static uint ReadIlCodeSize(ICorDebugILFrame ilFrame)
+        {
+            if (ilFrame == null)
+            {
+                return 0;
+            }
+
+            ICorDebugFunction fn;
+            int hr = ilFrame.GetFunction(out fn);
+            if (!CorDebugNative.Succeeded(hr) || fn == null)
+            {
+                return 0;
+            }
+
+            try
+            {
+                ICorDebugCode ilCode;
+                hr = fn.GetILCode(out ilCode);
+                if (!CorDebugNative.Succeeded(hr) || ilCode == null)
                 {
-                    return false;
+                    return 0;
                 }
 
                 try
                 {
-                    CorDebugStepRange range;
-                    if (!PdbBinder.TryCurrentRange(method, ip, out range))
+                    uint size;
+                    hr = ilCode.GetSize(out size);
+                    if (!CorDebugNative.Succeeded(hr))
                     {
-                        return false;
+                        return 0;
                     }
 
-                    CorDebugStepRange[] ranges = new CorDebugStepRange[1];
-                    ranges[0] = range;
-                    hr = stepper.StepRange(stepIn ? 1 : 0, ranges, 1);
-                    return CorDebugNative.Succeeded(hr);
+                    return size;
                 }
                 finally
                 {
-                    ReleaseCom(method);
+                    ReleaseCom(ilCode);
                 }
             }
             finally
             {
-                ReleaseCom(frame);
+                ReleaseCom(fn);
             }
         }
 

@@ -1515,8 +1515,12 @@ namespace WindowsIDE.Tests
 
         private static void RunCsharpDebugger()
         {
+            RunCorDebugStepRanges();
+            RunCsharpDebuggerIdleStepNoop();
             RunCsharpDebuggerNoBreakpoint();
             RunCsharpDebuggerHitLine();
+            RunCsharpDebuggerStepOver();
+            RunCsharpDebuggerStepInto();
         }
 
         private static string CsharpDebugFixtureSource()
@@ -1699,6 +1703,231 @@ namespace WindowsIDE.Tests
                     {
                         Check("cs line2 continue ended within 8s", true);
                         Check("cs line2 idle after continue", dbg.State == DebugSessionState.Idle);
+                    }
+                }
+            }
+            finally
+            {
+                DisposeCsharpDebugger(dbg, ended, dir);
+            }
+        }
+
+        private static void RunCorDebugStepRanges()
+        {
+            uint hidden = CorDebugNative.HiddenSequencePoint;
+            CorDebugStepRange[] r = PdbBinder.BuildStepRanges(new uint[] { 0, 1, 8 }, new uint[] { 11, 12, 13 }, 0, 20);
+            Check("step range `{` is [0,1)", r != null && r.Length == 1 && r[0].startOffset == 0 && r[0].endOffset == 1);
+            r = PdbBinder.BuildStepRanges(new uint[] { 0, 1, 8 }, new uint[] { 11, 12, 13 }, 1, 20);
+            Check("step range line12 is [1,8)", r != null && r.Length == 1 && r[0].startOffset == 1 && r[0].endOffset == 8);
+            r = PdbBinder.BuildStepRanges(new uint[] { 0, 1, 8 }, new uint[] { 11, 12, 13 }, 8, 20);
+            Check("last range uses method IL size", r != null && r.Length == 1 && r[0].startOffset == 8 && r[0].endOffset == 20);
+            r = PdbBinder.BuildStepRanges(new uint[] { 4 }, new uint[] { 9 }, 4, 0);
+            Check("last range without size is +1", r != null && r.Length == 1 && r[0].startOffset == 4 && r[0].endOffset == 5);
+            r = PdbBinder.BuildStepRanges(new uint[] { 0, 1, 4 }, new uint[] { 10, hidden, 11 }, 0, 20);
+            Check("hidden SP skipped as range end", r != null && r.Length == 1 && r[0].startOffset == 0 && r[0].endOffset == 4);
+            r = PdbBinder.BuildStepRanges(new uint[] { 0, 2, 10, 14 }, new uint[] { 5, 5, 6, 5 }, 0, 30);
+            Check("same source line keeps all disjoint ranges", r != null && r.Length == 3 && r[0].startOffset == 0 && r[0].endOffset == 2 && r[1].startOffset == 2 && r[1].endOffset == 10 && r[2].startOffset == 14 && r[2].endOffset == 30);
+            r = PdbBinder.BuildStepRanges(new uint[0], new uint[0], 0, 10);
+            Check("empty sequence points", r != null && r.Length == 0);
+            r = PdbBinder.BuildStepRanges(null, null, 0, 10);
+            Check("null sequence points", r != null && r.Length == 0);
+        }
+
+        private static void RunCsharpDebuggerIdleStepNoop()
+        {
+            CorDebugSession dbg = new CorDebugSession(new BreakpointStore());
+            try
+            {
+                dbg.StepOver();
+                Check("cs idle stepover noop", dbg.State == DebugSessionState.Idle);
+                dbg.StepInto();
+                Check("cs idle stepinto noop", dbg.State == DebugSessionState.Idle);
+                dbg.Continue();
+                Check("cs idle continue noop", dbg.State == DebugSessionState.Idle);
+            }
+            finally
+            {
+                dbg.Dispose();
+            }
+        }
+
+        private static void RunCsharpDebuggerStepOver()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-cs-step-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string exePath;
+            string compileError;
+            if (!TryBuildCsharpDebugFixture(dir, out exePath, out compileError))
+            {
+                Check("cs stepover compiled: " + compileError, false);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                return;
+            }
+
+            Check("cs stepover compiled", true);
+            string srcPath = Path.Combine(dir, "out.cs");
+            BreakpointStore store = new BreakpointStore();
+            Check("cs stepover bp line 2", store.Toggle(srcPath, 2));
+            CorDebugSession dbg = new CorDebugSession(store);
+            ManualResetEvent stopped = new ManualResetEvent(false);
+            ManualResetEvent ended = new ManualResetEvent(false);
+            List<DebugStoppedEventArgs> stops = new List<DebugStoppedEventArgs>();
+            dbg.Stopped += delegate(object sender, DebugStoppedEventArgs e)
+            {
+                if (e != null)
+                {
+                    stops.Add(e);
+                }
+
+                stopped.Set();
+            };
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            try
+            {
+                dbg.Start(exePath, dir, 12);
+                if (!stopped.WaitOne(8000))
+                {
+                    bool endedAlready = ended.WaitOne(0);
+                    dbg.Stop();
+                    Check("cs stepover first stop within 8s ended=" + endedAlready.ToString(), false);
+                }
+                else
+                {
+                    Check("cs stepover first stop within 8s", true);
+                    Check("cs stepover first stop is 2", stops.Count >= 1 && stops[0] != null && stops[0].Line == 2);
+                    Check("cs stepover first locals contain x", DebugHitHasLocal(stops[0], "x"));
+                    stopped.Reset();
+                    dbg.StepOver();
+                    if (!stopped.WaitOne(8000))
+                    {
+                        bool endedAlready = ended.WaitOne(0);
+                        dbg.Stop();
+                        Check("cs stepover second stop within 8s ended=" + endedAlready.ToString(), false);
+                    }
+                    else
+                    {
+                        DebugStoppedEventArgs second = stops[stops.Count - 1];
+                        Check("cs stepover stayed stopped", dbg.State == DebugSessionState.Stopped);
+                        Check("cs stepover advanced source line", second != null && second.Line > 2);
+                        Check("cs stepover locals still visible", second != null && second.Variables != null && second.Variables.Length > 0);
+                        dbg.Continue();
+                        if (!ended.WaitOne(8000))
+                        {
+                            dbg.Stop();
+                            Check("cs stepover continue ended within 8s", false);
+                        }
+                        else
+                        {
+                            Check("cs stepover continue ended within 8s", true);
+                            Check("cs stepover idle after continue", dbg.State == DebugSessionState.Idle);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                DisposeCsharpDebugger(dbg, ended, dir);
+            }
+        }
+
+        private static string CsharpDebugStepIntoFixtureSource()
+        {
+            return "class Program { static int Main() { int x = 1;" + Environment.NewLine + "int y = Add(x, 2);" + Environment.NewLine + "return y; }" + Environment.NewLine + "static int Add(int a, int b) { return a + b; } }" + Environment.NewLine;
+        }
+
+        private static void RunCsharpDebuggerStepInto()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-dbg-cs-into-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string exePath;
+            string compileError;
+            if (!TryCompileTempExe(dir, "into", CsharpDebugStepIntoFixtureSource(), out exePath, out compileError))
+            {
+                Check("cs stepinto compiled: " + compileError, false);
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                return;
+            }
+
+            Check("cs stepinto compiled", true);
+            string srcPath = Path.Combine(dir, "into.cs");
+            BreakpointStore store = new BreakpointStore();
+            Check("cs stepinto bp line 2", store.Toggle(srcPath, 2));
+            CorDebugSession dbg = new CorDebugSession(store);
+            ManualResetEvent stopped = new ManualResetEvent(false);
+            ManualResetEvent ended = new ManualResetEvent(false);
+            List<DebugStoppedEventArgs> stops = new List<DebugStoppedEventArgs>();
+            dbg.Stopped += delegate(object sender, DebugStoppedEventArgs e)
+            {
+                if (e != null)
+                {
+                    stops.Add(e);
+                }
+
+                stopped.Set();
+            };
+            dbg.Ended += delegate
+            {
+                ended.Set();
+            };
+            try
+            {
+                dbg.Start(exePath, dir, 13);
+                if (!stopped.WaitOne(8000))
+                {
+                    bool endedAlready = ended.WaitOne(0);
+                    dbg.Stop();
+                    Check("cs stepinto first stop within 8s ended=" + endedAlready.ToString(), false);
+                }
+                else
+                {
+                    Check("cs stepinto first stop within 8s", true);
+                    Check("cs stepinto first stop is 2", stops.Count >= 1 && stops[0] != null && stops[0].Line == 2);
+                    stopped.Reset();
+                    dbg.StepInto();
+                    if (!stopped.WaitOne(8000))
+                    {
+                        bool endedAlready = ended.WaitOne(0);
+                        dbg.Stop();
+                        Check("cs stepinto second stop within 8s ended=" + endedAlready.ToString(), false);
+                    }
+                    else
+                    {
+                        DebugStoppedEventArgs second = stops[stops.Count - 1];
+                        Check("cs stepinto stayed stopped", dbg.State == DebugSessionState.Stopped);
+                        Check("cs stepinto entered Add", second != null && second.Line >= 4);
+                        dbg.Continue();
+                        if (!ended.WaitOne(8000))
+                        {
+                            dbg.Stop();
+                            Check("cs stepinto continue ended within 8s", false);
+                        }
+                        else
+                        {
+                            Check("cs stepinto continue ended within 8s", true);
+                        }
                     }
                 }
             }

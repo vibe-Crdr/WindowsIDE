@@ -703,16 +703,64 @@ namespace WindowsIDE.Debug
             return result;
         }
 
-        internal static bool TryCurrentRange(ISymUnmanagedMethod method, uint ilOffset, out CorDebugStepRange range)
+        /// <summary>
+        /// 現在 IP が属するソース行の IL ステップ範囲（半開区間）。同一行の複数 SP をすべて含める。
+        /// </summary>
+        /// <param name="method">ISym メソッド。</param>
+        /// <param name="ilOffset">現在の IL オフセット。</param>
+        /// <param name="methodIlSize">メソッド IL サイズ。0 なら末尾 SP は +1。</param>
+        /// <returns>範囲。無ければ空配列。</returns>
+        internal static CorDebugStepRange[] BuildStepRanges(ISymUnmanagedMethod method, uint ilOffset, uint methodIlSize)
         {
-            range = new CorDebugStepRange();
             SequencePoint[] points = ReadSequencePoints(method);
-            int current = -1;
+            if (points == null || points.Length == 0)
+            {
+                return new CorDebugStepRange[0];
+            }
+
+            uint[] offsets = new uint[points.Length];
+            uint[] lines = new uint[points.Length];
             int i = 0;
             while (i < points.Length)
             {
                 SequencePoint sp = points[i];
-                if (sp != null && sp.Line != CorDebugNative.HiddenSequencePoint && sp.Offset <= ilOffset)
+                if (sp == null)
+                {
+                    offsets[i] = 0;
+                    lines[i] = CorDebugNative.HiddenSequencePoint;
+                }
+                else
+                {
+                    offsets[i] = sp.Offset;
+                    lines[i] = sp.Line;
+                }
+
+                i++;
+            }
+
+            return BuildStepRanges(offsets, lines, ilOffset, methodIlSize);
+        }
+
+        /// <summary>
+        /// シーケンスポイント配列からソース行ステップ範囲を作る。テストからも呼ぶ。
+        /// </summary>
+        /// <param name="offsets">各 SP の IL オフセット。</param>
+        /// <param name="lines">各 SP の 1 始まり行。隠しは HiddenSequencePoint。</param>
+        /// <param name="ilOffset">現在の IL オフセット。</param>
+        /// <param name="methodIlSize">メソッド IL サイズ。0 なら末尾は start+1。</param>
+        /// <returns>半開区間 [start, end)。無ければ空。</returns>
+        internal static CorDebugStepRange[] BuildStepRanges(uint[] offsets, uint[] lines, uint ilOffset, uint methodIlSize)
+        {
+            if (offsets == null || lines == null || offsets.Length == 0 || offsets.Length != lines.Length)
+            {
+                return new CorDebugStepRange[0];
+            }
+
+            int current = -1;
+            int i = 0;
+            while (i < offsets.Length)
+            {
+                if (lines[i] != CorDebugNative.HiddenSequencePoint && offsets[i] <= ilOffset)
                 {
                     current = i;
                 }
@@ -722,26 +770,53 @@ namespace WindowsIDE.Debug
 
             if (current < 0)
             {
-                return false;
+                return new CorDebugStepRange[0];
             }
 
-            range.startOffset = points[current].Offset;
-            int next = current + 1;
-            while (next < points.Length && (points[next] == null || points[next].Line == CorDebugNative.HiddenSequencePoint))
+            uint line = lines[current];
+            List<CorDebugStepRange> list = new List<CorDebugStepRange>();
+            i = 0;
+            while (i < offsets.Length)
             {
-                next++;
+                if (lines[i] == CorDebugNative.HiddenSequencePoint || lines[i] != line)
+                {
+                    i++;
+                    continue;
+                }
+
+                uint start = offsets[i];
+                int next = i + 1;
+                while (next < offsets.Length && lines[next] == CorDebugNative.HiddenSequencePoint)
+                {
+                    next++;
+                }
+
+                uint end;
+                if (next < offsets.Length)
+                {
+                    end = offsets[next];
+                }
+                else if (methodIlSize > start)
+                {
+                    end = methodIlSize;
+                }
+                else
+                {
+                    end = start + 1;
+                }
+
+                if (end > start)
+                {
+                    CorDebugStepRange range = new CorDebugStepRange();
+                    range.startOffset = start;
+                    range.endOffset = end;
+                    list.Add(range);
+                }
+
+                i = next;
             }
 
-            if (next < points.Length)
-            {
-                range.endOffset = points[next].Offset;
-            }
-            else
-            {
-                range.endOffset = points[current].Offset + 1;
-            }
-
-            return true;
+            return list.ToArray();
         }
 
         internal ISymUnmanagedMethod TryGetMethod(uint token)

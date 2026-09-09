@@ -2605,6 +2605,11 @@ namespace WindowsIDE.Tests
             session = MakeP7Session(LanguageKind.PowerShell, buf);
             hit = BraceMatch.Find(LanguageKind.PowerShell, buf, session, 0, 1);
             Check("br ps {} match", hit.Found && hit.Matched);
+
+            buf.SetText("class test\n{\n    public int ok()\n    {\n}");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            hit = BraceMatch.Find(LanguageKind.CSharp, buf, session, 3, 5);
+            Check("br inner { outer } matched", hit.Found && hit.Matched && hit.PairLine == 4 && hit.PairColumn == 0);
         }
 
         private static void RunAutoClose()
@@ -2712,6 +2717,27 @@ namespace WindowsIDE.Tests
             buf.SetText("()");
             session = MakeP7Session(LanguageKind.PowerShell, buf);
             Check("ac skip ps )", AutoCloseRules.ShouldSkipTypedCloser(LanguageKind.PowerShell, buf, session, 0, 1, ')'));
+
+            buf.SetText("class test\n{\n    public void WriteMessage()\n    {\n        Console.WriteLine(\"hello\");\n    }\n\n    public int ok()\n    \n}");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            int blankLine = 8;
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, blankLine, 4, '{', out closer);
+            Check("ac outer class } no steal", insert && closer == '}');
+
+            buf.SetText("class C\n{\n    public void M()\n    \n    }\n}");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 3, 4, '{', out closer);
+            Check("ac same indent } no double", !insert);
+
+            buf.SetText("function Foo\n{\n    function Bar\n    \n}");
+            session = MakeP7Session(LanguageKind.PowerShell, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.PowerShell, buf, session, 3, 4, '{', out closer);
+            Check("ac ps nested { insert", insert && closer == '}');
+
+            buf.SetText("    Foo(\n        \n    )");
+            session = MakeP7Session(LanguageKind.CSharp, buf);
+            insert = AutoCloseRules.ShouldInsertCloser(LanguageKind.CSharp, buf, session, 1, 8, '(', out closer);
+            Check("ac outer ) no steal", insert && closer == ')');
         }
 
         private static void RunSmartIndent()

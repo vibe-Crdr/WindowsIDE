@@ -32,7 +32,6 @@ namespace WindowsIDE.Debug
         private ICorDebugProcess process;
         private ICorDebugThread lastThread;
         private ICorDebugStepper lastStepper;
-        private ICorDebugILFrame lastIlFrame;
         private string lastShownPath;
         private int lastShownLine;
         private int sameLineStepCount;
@@ -1015,59 +1014,56 @@ namespace WindowsIDE.Debug
                 return;
             }
 
-            ICorDebugFrame frame;
+            ICorDebugFrame frame = null;
             int hr = thread.GetActiveFrame(out frame);
-            ICorDebugILFrame ilFrame = null;
-            if (CorDebugNative.Succeeded(hr) && frame != null)
+            try
             {
-                ilFrame = frame as ICorDebugILFrame;
-                if (ilFrame == null)
+                ICorDebugILFrame ilFrame = null;
+                if (CorDebugNative.Succeeded(hr) && frame != null)
                 {
-                    try
+                    ilFrame = TryCast<ICorDebugILFrame>(frame);
+                }
+
+                uint token = 0;
+                uint ip = 0;
+                PdbBinder binder;
+                lock (this.gate)
+                {
+                    binder = this.pdb;
+                }
+
+                if (ilFrame != null)
+                {
+                    int map;
+                    ilFrame.GetIP(out ip, out map);
+                    ICorDebugFunction fn;
+                    hr = ilFrame.GetFunction(out fn);
+                    if (CorDebugNative.Succeeded(hr) && fn != null)
                     {
-                        ilFrame = (ICorDebugILFrame)frame;
+                        fn.GetToken(out token);
+                        ReleaseCom(fn);
                     }
-                    catch (InvalidCastException)
+
+                    if (binder != null && token != 0)
                     {
+                        binder.TryGetSource(token, ip, out path, out line);
+                        vars = this.ReadLocals(ilFrame, binder, token, ip);
+                    }
+                }
+
+                frames = this.ReadStack(thread, binder);
+                if (string.IsNullOrEmpty(path) && frames.Length > 0)
+                {
+                    path = frames[0].Path;
+                    if (line < 1)
+                    {
+                        line = frames[0].Line;
                     }
                 }
             }
-
-            uint token = 0;
-            uint ip = 0;
-            PdbBinder binder;
-            lock (this.gate)
+            finally
             {
-                binder = this.pdb;
-            }
-
-            if (ilFrame != null)
-            {
-                int map;
-                ilFrame.GetIP(out ip, out map);
-                ICorDebugFunction fn;
-                hr = ilFrame.GetFunction(out fn);
-                if (CorDebugNative.Succeeded(hr) && fn != null)
-                {
-                    fn.GetToken(out token);
-                    ReleaseCom(fn);
-                }
-
-                if (binder != null && token != 0)
-                {
-                    binder.TryGetSource(token, ip, out path, out line);
-                    vars = this.ReadLocals(ilFrame, binder, token, ip);
-                }
-            }
-
-            frames = this.ReadStack(thread, binder);
-            if (string.IsNullOrEmpty(path) && frames.Length > 0)
-            {
-                path = frames[0].Path;
-                if (line < 1)
-                {
-                    line = frames[0].Line;
-                }
+                ReleaseCom(frame);
             }
         }
 
@@ -1732,22 +1728,15 @@ namespace WindowsIDE.Debug
                     return false;
                 }
 
-                ICorDebugILFrame armedFrame = ilFrame;
-                ICorDebugILFrame oldFrame;
                 lock (this.gate)
                 {
                     this.lastStepper = stepper;
-                    oldFrame = this.lastIlFrame;
-                    this.lastIlFrame = armedFrame;
-                    ilFrame = null;
                 }
-
-                ReleaseCom(oldFrame);
 
                 stepper.SetInterceptMask(0);
                 stepper.SetUnmappedStopMask(0);
                 stepper.SetRangeIL(1);
-                if (this.TryStepRange(armedFrame, stepper, stepIn))
+                if (this.TryStepRange(ilFrame, stepper, stepIn))
                 {
                     return true;
                 }
@@ -1976,13 +1965,6 @@ namespace WindowsIDE.Debug
                 if (step != null)
                 {
                     alive.Add(step);
-                }
-
-                ICorDebugILFrame ilf = this.lastIlFrame;
-                this.lastIlFrame = null;
-                if (ilf != null)
-                {
-                    alive.Add(ilf);
                 }
             }
 

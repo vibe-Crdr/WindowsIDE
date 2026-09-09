@@ -10,7 +10,7 @@ namespace WindowsIDE.Debug
     {
         void HandleBreakpoint(ICorDebugAppDomain appDomain, ICorDebugThread thread);
 
-        void HandleStepComplete(ICorDebugAppDomain appDomain, ICorDebugThread thread);
+        void HandleStepComplete(ICorDebugAppDomain appDomain, ICorDebugThread thread, int reason);
 
         void HandleUnhandledException(ICorDebugAppDomain appDomain, ICorDebugThread thread);
 
@@ -275,7 +275,7 @@ namespace WindowsIDE.Debug
             {
                 if (this.IsAlive())
                 {
-                    this.sink.HandleStepComplete(pAppDomain, pThread);
+                    this.sink.HandleStepComplete(pAppDomain, pThread, reason);
                     return CorDebugNative.HrOk;
                 }
             }

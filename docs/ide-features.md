@@ -268,7 +268,7 @@ VBA の終端は実際の語を使う（**`End For` は禁止**）。既存の�
 
 ## フェーズ P4（C# デバッグ）
 
-P4-A は F-DBG-CS。ディスク上 `.cs` を手動 csc と同じ単位（`/target:exe /debug+`）でビルドし、成功時だけ TEMP の `out.exe` を ICorDebug.CreateProcess で別プロセスデバッグする。Ctrl+F5 は従来どおり出力タブ + `Host.Csharp`。P4-B は F-DBG-CMD（今は実装しない）。Host.Csharp の起動ロジックは変えない。live csc 成果物は起動しない。ユーザー EXE を IDE に Load しない。TextView は `WindowsIDE.Debug` を参照しない。新しい Theme 色・XML・製品 `/r` は足さない。F10 に ShortcutKeys を付けない。
+P4-A は F-DBG-CS。ディスク上 `.cs` を手動 csc と同じ単位（`/target:exe /debug+`）でビルドし、成功時だけ TEMP の `out.exe` を ICorDebug.CreateProcess で別プロセスデバッグする。Ctrl+F5 は従来どおり出力タブ + `Host.Csharp`。P4-B は F-DBG-CMD（今は実装しない）。Host.Csharp の起動ロジックは変えない。live csc 成果物は起動しない。ユーザー EXE を IDE に Load しない。TextView は `WindowsIDE.Debug` を参照しない。新しい Theme 色・XML・製品 `/r` は足さない。F10 に ShortcutKeys を付けない。F10 はソース行 StepRange（同一行の nop / プロログはデバッガが続けて踏む）。ステップ準備に失敗したら Continue しない。F11 はユーザーメソッドへ入る。JMC は使わないので Framework メソッドへ入ることがある。
 
 | ID | P4-A でやる | P4-A でやらない |
 | --- | --- | --- |

@@ -3,7 +3,7 @@
 namespace WindowsIDE.Languages
 {
     /// <summary>
-    /// C# / PowerShell の対括弧自動閉じ可否（P17）。VBA / cmd / Plain は入れない。
+    /// C# / PowerShell の対括弧自動閉じ可否と閉じ上書きスキップ（P17）。VBA / cmd / Plain は入れない。
     /// </summary>
     public static class AutoCloseRules
     {
@@ -70,6 +70,63 @@ namespace WindowsIDE.Languages
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 入力した閉じ括弧がキャレット直後と同じなら挿入せずスキップすべきとき true。
+        /// </summary>
+        /// <param name="language">言語。</param>
+        /// <param name="buffer">本文。</param>
+        /// <param name="session">行開始状態。</param>
+        /// <param name="line">キャレット行。</param>
+        /// <param name="column">キャレット列（直後の閉じの位置）。</param>
+        /// <param name="typed">入力した閉じ括弧。</param>
+        /// <returns>挿入せずキャレットだけ進めるとき true。</returns>
+        public static bool ShouldSkipTypedCloser(LanguageKind language, TextBuffer buffer, HighlightSession session, int line, int column, char typed)
+        {
+            if (buffer == null)
+            {
+                return false;
+            }
+
+            if (language != LanguageKind.CSharp && language != LanguageKind.PowerShell)
+            {
+                return false;
+            }
+
+            if (!BracePairs.IsCloser(language, typed))
+            {
+                return false;
+            }
+
+            if (line < 0 || line >= buffer.LineCount)
+            {
+                return false;
+            }
+
+            string text = buffer.GetLine(line);
+            if (column < 0)
+            {
+                column = 0;
+            }
+
+            if (column > text.Length)
+            {
+                column = text.Length;
+            }
+
+            TokenKind kind = BraceMatch.TokenKindAt(language, buffer, session, line, column);
+            if (kind == TokenKind.String || kind == TokenKind.Comment)
+            {
+                return false;
+            }
+
+            if (column >= text.Length)
+            {
+                return false;
+            }
+
+            return text[column] == typed;
         }
     }
 }

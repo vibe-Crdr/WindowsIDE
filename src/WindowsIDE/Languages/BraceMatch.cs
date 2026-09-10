@@ -89,7 +89,7 @@ namespace WindowsIDE.Languages
         }
 
         /// <summary>
-        /// opener だけを (line, column) に入れたと仮定し、既存の閉じと組めるなら true。
+        /// スタック対があり、対閉じ行の LeadingWhitespace が opener 行と一致するとき true。Find は使わない。
         /// </summary>
         /// <param name="language">言語。</param>
         /// <param name="buffer">本文。</param>
@@ -97,7 +97,7 @@ namespace WindowsIDE.Languages
         /// <param name="line">挿入行。</param>
         /// <param name="column">挿入列。</param>
         /// <param name="opener">開き括弧。</param>
-        /// <returns>仮想 opener が対と一致するとき true。</returns>
+        /// <returns>同じ indent の既対があるとき true。</returns>
         public static bool WouldMatchInsertedOpener(LanguageKind language, TextBuffer buffer, HighlightSession session, int line, int column, char opener)
         {
             if (buffer == null || !BracePairs.IsOpener(language, opener))
@@ -115,7 +115,21 @@ namespace WindowsIDE.Languages
             int[] pairs;
             bool[] matched;
             MatchSites(language, sites, out pairs, out matched);
-            return matched[virtualIndex];
+            if (!matched[virtualIndex])
+            {
+                return false;
+            }
+
+            int pairIndex = pairs[virtualIndex];
+            if (pairIndex < 0)
+            {
+                return false;
+            }
+
+            BraceSite pair = sites[pairIndex];
+            string openerPrefix = IndentRules.LeadingWhitespace(buffer.GetLine(line));
+            string closerPrefix = IndentRules.LeadingWhitespace(buffer.GetLine(pair.Line));
+            return openerPrefix == closerPrefix;
         }
 
         /// <summary>

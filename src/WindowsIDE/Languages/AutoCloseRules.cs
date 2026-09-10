@@ -3,12 +3,12 @@
 namespace WindowsIDE.Languages
 {
     /// <summary>
-    /// C# / PowerShell の対括弧自動閉じ可否と閉じ上書きスキップ（P17）。VBA / cmd / Plain は入れない。
+    /// C# / PowerShell の対括弧自動閉じ可否と閉じ上書きスキップ（P17）。既対は同じ indent のスタック対。VBA / cmd / Plain は入れない。
     /// </summary>
     public static class AutoCloseRules
     {
         /// <summary>
-        /// typedOpener の直後に closer を入れるべきなら true。
+        /// typedOpener の直後に closer を入れるべきなら true。同じ indent の既対では入れない。
         /// </summary>
         /// <param name="language">言語。</param>
         /// <param name="buffer">本文。</param>

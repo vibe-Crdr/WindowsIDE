@@ -138,7 +138,7 @@ VB.NET 字句は既存 TokenKind 色だけを使う。新しいテーマ色は�
 
 ドロップダウン項目の幅は DualFont（ニーモニック除去後のラベルと `GetShortcutDisplayText`）に左 24 DIP・タブギャップ・右矢印列（論理 10+8 DIP）を足した行幅と、WinForms の `MaxItemSize`（`base.GetPreferredSize`）の大きい方。兄弟 DualFont 行は同幅にし、ショートカットは共有右端に揃える。本文 `fontSize` 非連動は上記のまま。
 
-同梱の読み込みに失敗したときだけ Consolas / Yu Gothic / MS Gothic に退避し、ステータスへエラーを出す。
+同梱の読み込みに失敗したときだけ Consolas / Yu Gothic（UI）/ MS Gothic に退避し、ステータスへエラーを出す。退避時もレイアウトは実フォントのメトリクスに追従する。
 
 ## 編集器の見た目
 

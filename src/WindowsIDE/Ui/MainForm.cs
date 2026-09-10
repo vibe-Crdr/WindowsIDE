@@ -629,7 +629,8 @@ namespace WindowsIDE.Ui
             this.menu.Renderer = this.chromeRenderer;
             this.menu.BackColor = Theme.Background;
             this.menu.ForeColor = Theme.Foreground;
-            this.menu.Padding = new Padding(4, 2, 0, 2);
+            int menuDpi = DpiUtil.GetDpi(IntPtr.Zero);
+            this.menu.Padding = new Padding(DpiUtil.ToPixels(DpiUtil.MenuStripPadXDip, menuDpi), DpiUtil.ToPixels(DpiUtil.MenuStripPadYDip, menuDpi), 0, DpiUtil.ToPixels(DpiUtil.MenuStripPadYDip, menuDpi));
             this.menu.DpiChangedAfterParent += this.OnChromeDpiChangedAfterParent;
 
             ToolStripMenuItem file = this.CreateTop("ファイル(&F)");
@@ -924,7 +925,9 @@ namespace WindowsIDE.Ui
                 extraBottom = d - extraTop;
             }
 
-            this.menu.Padding = new Padding(4, 2 + extraTop, 0, 2 + extraBottom);
+            int menuPadX = DpiUtil.ToPixels(DpiUtil.MenuStripPadXDip, dpi);
+            int menuPadY = DpiUtil.ToPixels(DpiUtil.MenuStripPadYDip, dpi);
+            this.menu.Padding = new Padding(menuPadX, menuPadY + extraTop, 0, menuPadY + extraBottom);
             int padX = DpiUtil.ToPixels(DpiUtil.StatusStripPadXDip, dpi);
             int padY = DpiUtil.ToPixels(DpiUtil.StatusStripPadYDip, dpi);
             this.status.Padding = new Padding(padX, padY + extraTop, padX, padY + extraBottom);

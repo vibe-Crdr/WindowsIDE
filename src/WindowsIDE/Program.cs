@@ -34,6 +34,10 @@ namespace WindowsIDE
             {
                 HandleException(ex);
             }
+            finally
+            {
+                FontLoader.Cleanup();
+            }
         }
 
         private static void OnThreadException(object sender, ThreadExceptionEventArgs e)
@@ -69,8 +73,9 @@ namespace WindowsIDE
                 string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + ex.ToString() + Environment.NewLine;
                 File.AppendAllText(path, line);
             }
-            catch (IOException)
+            catch (Exception)
             {
+                // ログ失敗（UnauthorizedAccessException 等も含む）で例外ハンドラから再脱出しない。
             }
 
             try

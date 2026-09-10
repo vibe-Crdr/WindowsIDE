@@ -43,13 +43,18 @@ TTF を優先するのは Cascadia Mono のみ。源ノ角は公式静的 OTF �
 各フォントについて次の順。全部失敗したときだけ OS フォントへ退避する。
 
 1. `System.Drawing.Text.PrivateFontCollection.AddMemoryFont`（バッファはフォントを捨てるまでピン留めする）
-2. 失敗なら `gdi32.AddFontMemResourceEx`
-3. 失敗なら一時ファイルへ書き出し、`gdi32.AddFontResourceEx` に `FR_PRIVATE`（`0x10`、プロセス限定）
-4. 全部失敗時だけ 半角 `Consolas`、全角 `Yu Gothic` / `MS Gothic`。ステータスにエラーを出す
+2. 失敗なら一時ファイル（`%TEMP%\WindowsIDE\fonts\` に GUID 名）へ書き出し、`PrivateFontCollection.AddFontFile`
+3. 全部失敗時だけ 半角 `Consolas`、全角 `Yu Gothic` / `Yu Gothic UI` / `MS Gothic`。退避は常に `UsedFallback=true` でステータスにエラーを出す。`FontFamily.GenericMonospace` は成功扱いしない
+
+GDI 登録系（`gdi32.AddFontMemResourceEx` / `AddFontResourceEx(FR_PRIVATE)`）は GDI+ の `new FontFamily(name)` から参照できないため使わない（D32）。
+
+一時ファイルのライフサイクルは 3 段。書き出し失敗時はその場で削除、成功分は終了時に `FontLoader.Cleanup()`（Program.Main の finally）が削除し、前回異常終了の残りは次回起動時の `LoadFromBytes` 先頭で 1 ファイルずつ掃除する（他インスタンスがロック中のファイルは残る）。`build/fetch-fonts.ps1` の作業場 `%TEMP%\WindowsIDE-fonts` とは別ディレクトリ。
+
+各経路の失敗と最終採用結果は `%TEMP%\WindowsIDE.log` に記録する（MessageBox は出さない）。
 
 源ノ角のファミリ名は `"Source Han Sans JP"` を先に試し、だめなら `"源ノ角ゴシック JP"`。
 
-P/Invoke は許可。`C:\Windows\Fonts` へはコピーしない。OS に Cascadia Mono が入っていても同梱を使う。
+`C:\Windows\Fonts` へはコピーしない。OS に Cascadia Mono が入っていても同梱を使う。
 
 半角は **Cascadia Mono のみ**。Cascadia Code は同梱しない（GDI+ ではリガチャがほぼ出ないため）。
 

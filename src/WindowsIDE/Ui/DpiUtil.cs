@@ -36,6 +36,12 @@ namespace WindowsIDE.Ui
         /// <summary>StatusStrip の上下余白（96dpi DIP）。</summary>
         public const int StatusStripPadYDip = 4;
 
+        /// <summary>MenuStrip の左右余白（96dpi DIP）。</summary>
+        public const int MenuStripPadXDip = 4;
+
+        /// <summary>MenuStrip の上下余白（96dpi DIP）。</summary>
+        public const int MenuStripPadYDip = 2;
+
         /// <summary>
         /// ウィンドウの実 DPI。ハンドルが無ければシステムの DPI。どちらも 0 なら 96。
         /// </summary>

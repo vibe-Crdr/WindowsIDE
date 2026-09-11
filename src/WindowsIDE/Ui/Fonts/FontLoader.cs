@@ -99,9 +99,12 @@ namespace WindowsIDE.Ui.Fonts
     /// </summary>
     public static class FontLoader
     {
+        private const int RouteFail = 0;
+        private const int RouteMemory = 1;
+        private const int RouteFile = 2;
+
         private static PrivateFontCollection privateFonts;
         private static List<GCHandle> pins;
-        private static List<IntPtr> memHandles;
         private static List<string> tempFiles;
         private static FontLoadResult lastResult;
 
@@ -126,37 +129,68 @@ namespace WindowsIDE.Ui.Fonts
         /// <returns>読み込み結果。</returns>
         public static FontLoadResult LoadFromBytes(byte[] cascadiaRegular, byte[] cascadiaBold, byte[] sourceHan)
         {
+            return LoadFromBytes(cascadiaRegular, cascadiaBold, sourceHan, false);
+        }
+
+        /// <summary>
+        /// テスト用。skipMemoryRoute でメモリ経路を飛ばし、一時ファイル経路を検証できる。
+        /// </summary>
+        /// <param name="cascadiaRegular">Cascadia Mono Regular の TTF。</param>
+        /// <param name="cascadiaBold">Cascadia Mono Bold の TTF。</param>
+        /// <param name="sourceHan">源ノ角 Regular の OTF。</param>
+        /// <param name="skipMemoryRoute">true なら AddMemoryFont を試さない（テスト用シーム）。</param>
+        /// <returns>読み込み結果。</returns>
+        public static FontLoadResult LoadFromBytes(byte[] cascadiaRegular, byte[] cascadiaBold, byte[] sourceHan, bool skipMemoryRoute)
+        {
             EnsureState();
+            SweepStaleTempFiles();
             string[] halfNames = new string[] { "Cascadia Mono" };
             string[] fullNames = new string[] { "Source Han Sans JP", "源ノ角ゴシック JP" };
 
             FontFamily half;
             FontFamily bold;
             FontFamily full;
-            bool halfOk = TryLoadFamily(cascadiaRegular, halfNames, ".ttf", out half);
-            TryLoadFamily(cascadiaBold, halfNames, ".ttf", out bold);
-            bool fullOk = TryLoadFamily(sourceHan, fullNames, ".otf", out full);
+            int halfRoute = TryLoadFamily(cascadiaRegular, halfNames, ".ttf", skipMemoryRoute, out half);
+            TryLoadFamily(cascadiaBold, halfNames, ".ttf", skipMemoryRoute, out bold);
+            int fullRoute = TryLoadFamily(sourceHan, fullNames, ".otf", skipMemoryRoute, out full);
 
             bool fallback = false;
-            string error = null;
-            if (!halfOk)
+            if (halfRoute == RouteFail)
             {
                 fallback = true;
-                half = TryOsFamily(new string[] { "Consolas", "Consolas" });
+                half = TryOsFamily(new string[] { "Consolas" });
+                if (half == null)
+                {
+                    half = FontFamily.GenericMonospace;
+                }
             }
 
-            if (!fullOk)
+            if (fullRoute == RouteFail)
             {
                 fallback = true;
                 full = TryOsFamily(new string[] { "Yu Gothic", "Yu Gothic UI", "MS Gothic" });
+                if (full == null)
+                {
+                    full = FontFamily.GenericMonospace;
+                }
             }
 
-            if (fallback)
+            string error = null;
+            if (halfRoute == RouteFail && fullRoute == RouteFail)
             {
-                error = "同梱フォントの読み込みに失敗したため、Consolas / Yu Gothic に退避しています。";
+                error = "同梱フォントの読み込みに失敗したため、" + half.Name + " / " + full.Name + " に退避しています。";
+            }
+            else if (halfRoute == RouteFail)
+            {
+                error = "同梱フォントの読み込みに失敗したため、半角を " + half.Name + " に退避しています。";
+            }
+            else if (fullRoute == RouteFail)
+            {
+                error = "同梱フォントの読み込みに失敗したため、全角を " + full.Name + " に退避しています。";
             }
 
             lastResult = new FontLoadResult(half, full, bold, fallback, error);
+            Log("font load: half=" + half.Name + " (" + RouteLabel(halfRoute) + "), full=" + full.Name + " (" + RouteLabel(fullRoute) + ")");
             return lastResult;
         }
 
@@ -164,6 +198,79 @@ namespace WindowsIDE.Ui.Fonts
         public static FontLoadResult LastResult
         {
             get { return lastResult; }
+        }
+
+        /// <summary>
+        /// 登録したフォントと一時ファイルを解放する。終了時に Program.Main の finally から呼ぶ。例外は外へ出さない。
+        /// </summary>
+        public static void Cleanup()
+        {
+            try
+            {
+                if (privateFonts != null)
+                {
+                    try
+                    {
+                        privateFonts.Dispose();
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+
+                if (pins != null)
+                {
+                    for (int i = 0; i < pins.Count; i++)
+                    {
+                        try
+                        {
+                            if (pins[i].IsAllocated)
+                            {
+                                pins[i].Free();
+                            }
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+                }
+
+                if (tempFiles != null)
+                {
+                    for (int i = 0; i < tempFiles.Count; i++)
+                    {
+                        try
+                        {
+                            File.Delete(tempFiles[i]);
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+                }
+
+                try
+                {
+                    string dir = TempFontDir();
+                    if (Directory.Exists(dir))
+                    {
+                        Directory.Delete(dir, false);
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                privateFonts = null;
+                pins = null;
+                tempFiles = null;
+                lastResult = null;
+            }
         }
 
         private static void EnsureState()
@@ -176,11 +283,6 @@ namespace WindowsIDE.Ui.Fonts
             if (pins == null)
             {
                 pins = new List<GCHandle>();
-            }
-
-            if (memHandles == null)
-            {
-                memHandles = new List<IntPtr>();
             }
 
             if (tempFiles == null)
@@ -211,51 +313,107 @@ namespace WindowsIDE.Ui.Fonts
             }
         }
 
-        private static bool TryLoadFamily(byte[] data, string[] familyNames, string extension, out FontFamily family)
+        private static string TempFontDir()
+        {
+            return Path.Combine(Path.GetTempPath(), "WindowsIDE", "fonts");
+        }
+
+        /// <summary>
+        /// 前回実行が残した一時フォントを消す。ロック中（他インスタンス稼働中）のファイルはスキップされる。
+        /// </summary>
+        private static void SweepStaleTempFiles()
+        {
+            string dir;
+            try
+            {
+                dir = TempFontDir();
+                if (!Directory.Exists(dir))
+                {
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            string[] patterns = new string[] { "*.ttf", "*.otf" };
+            for (int p = 0; p < patterns.Length; p++)
+            {
+                string[] files;
+                try
+                {
+                    files = Directory.GetFiles(dir, patterns[p]);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try
+                    {
+                        File.Delete(files[i]);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 1 ファミリを メモリ → 一時ファイル の順で試す。戻り値は採用経路（失敗は RouteFail）。
+        /// </summary>
+        private static int TryLoadFamily(byte[] data, string[] familyNames, string extension, bool skipMemoryRoute, out FontFamily family)
         {
             family = null;
             if (data == null || data.Length < 16)
             {
-                return false;
+                return RouteFail;
             }
 
-            if (TryAddMemoryFont(data, familyNames, out family))
+            if (!skipMemoryRoute && TryAddMemoryFont(data, familyNames, out family))
             {
-                return true;
+                return RouteMemory;
             }
 
-            if (TryAddFontMemResource(data, familyNames, out family))
+            if (TryAddFontFile(data, familyNames, extension, out family))
             {
-                return true;
+                return RouteFile;
             }
 
-            if (TryAddTempFile(data, familyNames, extension, out family))
-            {
-                return true;
-            }
-
-            return false;
+            return RouteFail;
         }
 
         private static bool TryAddMemoryFont(byte[] data, string[] familyNames, out FontFamily family)
         {
             family = null;
             GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            bool keep = false;
             try
             {
                 privateFonts.AddMemoryFont(handle.AddrOfPinnedObject(), data.Length);
                 family = FindPrivateFamily(familyNames);
+                // AddMemoryFont が例外なく戻った場合、名不一致でもコレクションはバッファを参照し続ける。
+                // 個別フォントをコレクションから外す API は無いため、GC 移動/回収後の Families 列挙が
+                // 無効メモリに触れないよう、ピンはプロセス寿命まで保持する（Cleanup まで解放しない）。
+                pins.Add(handle);
+                keep = true;
                 if (family != null)
                 {
-                    pins.Add(handle);
                     return true;
                 }
+
+                Log("AddMemoryFont: family not found");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Log("AddMemoryFont failed: " + ex.GetType().Name + ": " + ex.Message);
             }
 
-            if (handle.IsAllocated)
+            if (!keep && handle.IsAllocated)
             {
                 handle.Free();
             }
@@ -263,67 +421,46 @@ namespace WindowsIDE.Ui.Fonts
             return false;
         }
 
-        private static bool TryAddFontMemResource(byte[] data, string[] familyNames, out FontFamily family)
+        /// <summary>
+        /// 一時ファイルへ書き出して PrivateFontCollection.AddFontFile で読む。失敗時はその場でファイルを消す。
+        /// </summary>
+        private static bool TryAddFontFile(byte[] data, string[] familyNames, string extension, out FontFamily family)
         {
             family = null;
-            GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            string path = null;
             try
             {
-                uint count = 1;
-                IntPtr added = NativeFonts.AddFontMemResourceEx(handle.AddrOfPinnedObject(), (uint)data.Length, IntPtr.Zero, ref count);
-                if (added == IntPtr.Zero)
-                {
-                    handle.Free();
-                    return false;
-                }
-
-                pins.Add(handle);
-                memHandles.Add(added);
-                family = TryOsFamily(familyNames);
-                return family != null;
-            }
-            catch (Exception)
-            {
-                if (handle.IsAllocated)
-                {
-                    handle.Free();
-                }
-
-                return false;
-            }
-        }
-
-        private static bool TryAddTempFile(byte[] data, string[] familyNames, string extension, out FontFamily family)
-        {
-            family = null;
-            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-fonts");
-            try
-            {
+                string dir = TempFontDir();
                 Directory.CreateDirectory(dir);
-                string path = Path.Combine(dir, Guid.NewGuid().ToString("N") + extension);
+                path = Path.Combine(dir, Guid.NewGuid().ToString("N") + extension);
                 File.WriteAllBytes(path, data);
-                int added = NativeFonts.AddFontResourceEx(path, (uint)NativeFonts.FR_PRIVATE, IntPtr.Zero);
-                if (added <= 0)
+                privateFonts.AddFontFile(path);
+                family = FindPrivateFamily(familyNames);
+                if (family != null)
                 {
-                    try
-                    {
-                        File.Delete(path);
-                    }
-                    catch (IOException)
-                    {
-                    }
-
-                    return false;
+                    tempFiles.Add(path);
+                    return true;
                 }
 
-                tempFiles.Add(path);
-                family = TryOsFamily(familyNames);
-                return family != null;
+                Log("AddFontFile: family not found (" + extension + ")");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return false;
+                Log("AddFontFile failed: " + ex.GetType().Name + ": " + ex.Message);
             }
+
+            if (path != null)
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return false;
         }
 
         private static FontFamily FindPrivateFamily(string[] familyNames)
@@ -343,6 +480,9 @@ namespace WindowsIDE.Ui.Fonts
             return null;
         }
 
+        /// <summary>
+        /// OS のインストール済みファミリを候補順に試す。全滅なら null（GenericMonospace は成功扱いしない）。
+        /// </summary>
         private static FontFamily TryOsFamily(string[] names)
         {
             for (int i = 0; i < names.Length; i++)
@@ -357,13 +497,37 @@ namespace WindowsIDE.Ui.Fonts
                 }
             }
 
+            return null;
+        }
+
+        private static string RouteLabel(int route)
+        {
+            if (route == RouteMemory)
+            {
+                return "memory";
+            }
+
+            if (route == RouteFile)
+            {
+                return "file";
+            }
+
+            return "os-fallback";
+        }
+
+        /// <summary>
+        /// %TEMP%\WindowsIDE.log へ 1 行追記する。ログ失敗でフォント読込を壊さないよう例外は握りつぶす。
+        /// </summary>
+        private static void Log(string message)
+        {
             try
             {
-                return FontFamily.GenericMonospace;
+                string path = Path.Combine(Path.GetTempPath(), "WindowsIDE.log");
+                string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message + Environment.NewLine;
+                File.AppendAllText(path, line);
             }
-            catch (ArgumentException)
+            catch (Exception)
             {
-                return null;
             }
         }
     }

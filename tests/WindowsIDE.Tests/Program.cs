@@ -77,6 +77,7 @@ namespace WindowsIDE.Tests
             RunDocumentVbaEncoding();
             RunDocumentCmdEncoding();
             RunFontLoaderFallback();
+            RunFontLoaderFileRoute();
             RunMainFormLeftPaneCtor();
             RunTabSwitchScroll();
             RunDpiUtil();
@@ -1140,12 +1141,54 @@ namespace WindowsIDE.Tests
 
         private static void RunFontLoaderFallback()
         {
-            FontLoadResult junk = FontLoader.LoadFromBytes(new byte[] { 0, 1, 2, 3 }, new byte[] { 9, 9, 9 }, new byte[] { 1 });
-            Check("force fail fallback", junk != null && junk.UsedFallback);
-            Check("fallback message", junk.ErrorMessage != null && junk.ErrorMessage.Length > 0);
+            // 16 バイト未満だと早期 return で一時ファイル経路を踏まないため、64 バイトの不正データを使う。
+            byte[] junk = new byte[64];
+            for (int i = 0; i < junk.Length; i++)
+            {
+                junk[i] = (byte)(i * 37 + 1);
+            }
+
+            FontLoadResult junkResult = FontLoader.LoadFromBytes(junk, junk, junk);
+            Check("force fail fallback", junkResult != null && junkResult.UsedFallback);
+            Check("fallback message", junkResult.ErrorMessage != null && junkResult.ErrorMessage.Length > 0);
+
+            FontLoadResult junkFile = FontLoader.LoadFromBytes(junk, junk, junk, true);
+            Check("force fail fallback file route", junkFile != null && junkFile.UsedFallback);
+            Check("fallback message file route", junkFile.ErrorMessage != null && junkFile.ErrorMessage.Length > 0);
+
+            string tempFontDir = Path.Combine(Path.GetTempPath(), "WindowsIDE", "fonts");
+            bool leftover = Directory.Exists(tempFontDir)
+                && (Directory.GetFiles(tempFontDir, "*.ttf").Length > 0 || Directory.GetFiles(tempFontDir, "*.otf").Length > 0);
+            Check("junk leaves no temp font (他インスタンス稼働中のロック残りは偽陽性の可能性)", !leftover);
 
             FontLoadResult missing = FontLoader.Load();
             Check("no embed fallback", missing != null && missing.UsedFallback);
+        }
+
+        /// <summary>
+        /// メモリ経路を飛ばすシームで、実ファイル assets/fonts が一時ファイル経路で読めることを確認する。
+        /// </summary>
+        private static void RunFontLoaderFileRoute()
+        {
+            string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string cascadiaRegular = Path.Combine(root, "assets", "fonts", "cascadia", "CascadiaMono-Regular.ttf");
+            string cascadiaBold = Path.Combine(root, "assets", "fonts", "cascadia", "CascadiaMono-Bold.ttf");
+            string sourceHan = Path.Combine(root, "assets", "fonts", "source-han-sans", "SourceHanSansJP-Regular.otf");
+            if (!File.Exists(cascadiaRegular) || !File.Exists(cascadiaBold) || !File.Exists(sourceHan))
+            {
+                Check("font assets present", false);
+                return;
+            }
+
+            FontLoadResult result = FontLoader.LoadFromBytes(
+                File.ReadAllBytes(cascadiaRegular),
+                File.ReadAllBytes(cascadiaBold),
+                File.ReadAllBytes(sourceHan),
+                true);
+            Check("file route no fallback", result != null && !result.UsedFallback);
+            Check("file route half family", result.HalfWidthFamilyName == "Cascadia Mono");
+            bool fullNameOk = result.FullWidthFamilyName == "Source Han Sans JP" || result.FullWidthFamilyName == "源ノ角ゴシック JP";
+            Check("file route full family", fullNameOk);
         }
 
         private static void RunTabSwitchScroll()

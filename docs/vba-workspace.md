@@ -21,10 +21,10 @@ vba/
 | --- | --- | --- |
 | `.bas` | Standard module | 対象 |
 | `.cls` | Class module / document のコード | 対象（document は名前で対応） |
-| `.frm` + `.frx` | UserForm | 初期対象外（読み取りのみでもよい）。C# WinForms デザイナー（R17 / F-WF-DSN / フェーズ P10）とは別。こちらは対象外のまま |
+| `.frm` + `.frx` | UserForm | フェーズ P11（F-UF-DSN。今は実装しない）。同期は Export/Import。視覚編集は WindowsIDE 内。C# WinForms デザイナー（R17 / F-WF-DSN / フェーズ P10）とは別 |
 | `.vb` | （VB.NET。Excel VBA ではない） | **同期対象外**。指定 `vbc.exe` のホスト（フェーズ P9）。Excel に載せない |
 
-エンコーディング既定は **CP932**。マップに上書きがあればそれに従う。`.vb` の既定は UTF-8 BOM であり、この CP932 には寄せない。
+エンコーディング既定は **CP932**。マップに上書きがあればそれに従う。`.vb` の既定は UTF-8 BOM であり、この CP932 には寄せない。フェーズ P11 の `.frm` も CP932。`.frx` はバイナリ（再エンコードしない）。今は実装しない。
 
 `.bas` / `.cls` のディスクは本文のみでよい。`Attribute VB_Name` は不要（禁止ではない）。先頭に VERSION / BEGIN-END / Attribute があってもよい。
 
@@ -71,7 +71,7 @@ folder_prefix:  vba/Lib/Text/Join.bas   →  Lib_Text_Join
 
 - `workbook/@path` はワークスペース内なら相対可、外ならフル。
 - `root/@relative` 既定 `vba`。絶対・`..`・外は拒否。
-- `relpath` は root からの相対、区切り `/`。`type` は `std` | `class` | `document` のみ。
+- `relpath` は root からの相対、区切り `/`。`type` は `std` | `class` | `document` のみ。`form` は提案 P45（P11 実装時。今は足さない）。
 - 壊れた XML は上書きせず MessageBox。
 - 初回プル（relpath 無し）: `{root}/{ExcelName}.bas|.cls` 平坦。folder_prefix でも Excel は平坦なのでフォルダは復元しない。
 
@@ -84,6 +84,7 @@ Excel で名前を変えたら、次のプルでマップを更新する。ツ�
 | ブックを選ぶ | マクロ有効ブック（`.xlsm` / `.xlsb`）を Common Item Dialog で選ぶ。`.xlsx` は拒否。ピッカーはプル／プッシュから自動起動しない |
 | プル | ブックを開き（必要なら起動）、VBComponents をエクスポートし、マップに従ってファイルを作る/更新する。IDE に未保存の同名バッファがあれば確認する（全体中止。破棄して上書きしない）。成功時は問題一覧を触らない。開いている対象タブは ReloadFromDisk |
 | プッシュ | ディスクの `.bas` / `.cls` をインポートまたはコード置換する。識別子・衝突は失敗し問題一覧に両方のパス。部分適用しない。Excel にだけあるモジュールは削除しない（成功後に名前リスト）。削除は別コマンド。プッシュ後に Workbook.Save しない |
+| フォーム（フェーズ P11。今は実装しない） | `.frm` / `.frx` の視覚編集（F-UF-DSN）と Type 3 のプル／プッシュ。プルは `VBComponent.Export`。プッシュは Remove + Import（CodeModule 置換ではレイアウトが消える）。Excel のみフォームは黙って消さない。VBE デザイナー窓は埋め込まない |
 | 名前の付け方 | プレビュー（旧名→新名。document は変更なし。先頭 20 件＋残り件数）の Yes でマップの namingMode だけ更新。この操作では Excel をリネームしない |
 | コンパイル（フェーズ P7。手動は着手、ライブは今は実装しない） | メニュー「コンパイル」。保存確認のうえディスクを先にプッシュし、対象 VBProject を Excel VBA コンパイラで Compile する。失敗は問題一覧と波線（F-VBA-BLD）。`Application.Run` しない。手動は Excel 未起動なら起動してよい。ライブは今は実装しない（提案 P25 は確認待ち）。キーごと禁止 |
 | 参照（フェーズ P8。今は実装しない） | 開いている VBProject の `References` を一覧・追加・削除する（F-VBA-REF）。`.bas` には書かない。ビルトイン VBA / Excel 参照は削除しない。任意 COM は Excel プロセスに載る。明示操作だけ |
@@ -112,6 +113,7 @@ Excel が開いていて未保存なら、同期前に保存するか中止す�
 - IDE が起動した Excel を Quit しない。IDE 終了時も Excel を触らない
 - Compile（フェーズ P7。手動は着手、ライブは今は実装しない）: `Application.VBE.CommandBars` の Compile（通例 Control Id **578**。キャプション依存にしない）。`Enabled` で成否。失敗時は選択位置＋マップでディスクパス。先頭ヘッダがあればその行数を加算し、本文のみなら GetSelection の行をそのまま。レキサで埋めない。FindControl 失敗は取得失敗 1 件。自前レキサで埋めない
 - References（フェーズ P8）: `VBProject.References` の一覧・追加・削除
+- UserForm（フェーズ P11。今は実装しない）: Type 3 は `VBComponent.Export`（`.frm` + `.frx`）。プッシュは Remove + Import。CodeModule 置換ではレイアウトが消える。デザイナー UI は `WindowsIDE.Vba.Forms`。VBE 窓は埋め込まない
 
 IDE プロセスは STA。Excel ダイアログをユーザーの前に出すときは、IDE 側でモーダルを重ねて操作不能にしない。診断 Compile も UI/STA。バックグラウンドスレッドで Excel を触らない。
 
@@ -124,6 +126,10 @@ IDE プロセスは STA。Excel ダイアログをユーザーの前に出すと
 ## フェーズ P8（今は実装しない）
 
 F-VBA-REF: 開いている VBProject の参照。GUID を vba-map に残すかは提案 P23（確認待ち）。今はマップ要素を足さない。
+
+## フェーズ P11（今は実装しない）
+
+F-UF-DSN: UserForm の視覚編集と Type 3 同期。`.frm` テキスト往復。`.frx` は不透明。Excel は Export/Import を正にする。`type="form"` は提案 P45（確認待ち）。今はマップ要素を足さない。P2 の `.bas` / `.cls` 契約は変えない。C# の F-WF-DSN に混ぜない。
 
 ## ディレクトリが Excel に出ないこと
 

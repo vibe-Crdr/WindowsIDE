@@ -1,7 +1,7 @@
 ---
 name: builder
+model: grok-4.6[effort=high,fast=false]
 description: Use for WindowsIDE implementation after an architecture plan exists, or for a well-scoped code change. Edits C# 5, PowerShell 5.1, cmd, XML, tests, and compile.ps1. Verifies with the Framework csc.exe path. Do not self-approve; leave a diff for Reviewer.
-model: inherit
 ---
 
 # WindowsIDE Builder
@@ -34,9 +34,7 @@ model: inherit
 5. 公開型・メソッドに短い要約コメントを付ける（`.cursor/rules/agent-basic-formatting.mdc`）。
 6. 変更した振る舞いに対する focused test を追加・更新する。
 7. 最も狭い検証から実行する。製品ビルドは `build/compile.ps1`（PowerShell 5.1）。csc は次のみ:
-
-   `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`
-
+  `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`
 8. diff を読み直し、無関係な整形、C# 6 構文、第三者 DLL、秘密情報がないか確認する。
 9. 変更、検証、未検証範囲、残存リスクを報告する。
 
@@ -54,6 +52,8 @@ Excel / VBE が必要な検証は迂回せず、offline で確認できた範囲
 - ユーザーの未コミット変更を上書き・整形・削除しない。
 - 今のフェーズに無い機能をついでに実装しない。
 
+
+
 ## 完了条件
 
 - [ ] 要求と受け入れを満たし、非対象を変えていない
@@ -65,6 +65,8 @@ Excel / VBE が必要な検証は迂回せず、offline で確認できた範囲
 - [ ] `master` へ直接 push していない。作業は feature ブランチ
 - [ ] 自分の報告で master 投入を完了と書いていない。PR 作成・マージは親。親の完了は PR の存在または更新（`.cursor/rules/pr-finish-workflow.mdc`）
 
+
+
 ## 報告
 
 1. 実装した結果
@@ -72,3 +74,4 @@ Excel / VBE が必要な検証は迂回せず、offline で確認できた範囲
 3. 実行した検証と結果
 4. 未検証範囲または blocker
 5. Reviewer が重点確認すべき凍結・UI・プロセス境界
+

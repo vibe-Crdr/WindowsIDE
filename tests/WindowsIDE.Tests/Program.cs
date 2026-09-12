@@ -82,6 +82,7 @@ namespace WindowsIDE.Tests
             RunTabSwitchScroll();
             RunDpiUtil();
             RunTabStripLayout();
+            RunChromeTextLayout();
             RunBreakpointStore();
             RunDebugSessionState();
             RunPowerShellDebugger();
@@ -1296,6 +1297,108 @@ namespace WindowsIDE.Tests
             int showingLast = TabStripLayout.EnsureVisible(0, lastLeft, lastLeft + tabs[2], content, 100);
             int showingFirst = TabStripLayout.EnsureVisible(showingLast, 4, 4 + tabs[0], content, 100);
             Check("EnsureVisible last to first toward 0", showingFirst < showingLast && showingFirst == 4);
+        }
+
+        private static void RunChromeTextLayout()
+        {
+            Check("InkPadPx", ChromeTextLayout.InkPadPx == 2);
+            Check("CellHeight full taller", ChromeTextLayout.CellHeight(12, 16) == 16);
+            Check("CellHeight half taller", ChromeTextLayout.CellHeight(16, 12) == 16);
+            Check("CellHeight both zero", ChromeTextLayout.CellHeight(0, 0) == 1);
+            Check("CellHeight equal", ChromeTextLayout.CellHeight(16, 16) == 16);
+            Check("ItemContentHeight 16", ChromeTextLayout.ItemContentHeight(16) == 18);
+
+            Check("ToPixels 4@96", DpiUtil.ToPixels(4, 96) == 4);
+            Check("ToPixels 4@120", DpiUtil.ToPixels(4, 120) == 5);
+            Check("ToPixels 4@144", DpiUtil.ToPixels(4, 144) == 6);
+            Check("StripPreferredHeight 16 pad4 96", ChromeTextLayout.StripPreferredHeight(16, 4, 96) == 26);
+            Check("StripPreferredHeight 16 pad4 120", ChromeTextLayout.StripPreferredHeight(16, 4, 120) == 28);
+            Check("StripPreferredHeight 16 pad4 144", ChromeTextLayout.StripPreferredHeight(16, 4, 144) == 30);
+            Check("StripPreferredHeight cell-diff 96", ChromeTextLayout.StripPreferredHeight(ChromeTextLayout.CellHeight(12, 16), 4, 96) == 26);
+            Check("StripPreferredHeight same-cell 120", ChromeTextLayout.StripPreferredHeight(ChromeTextLayout.CellHeight(16, 16), 4, 120) == 28);
+
+            Rectangle itemTop = new Rectangle(0, 0, 120, 24);
+            Rectangle trTop = new Rectangle(8, 8, 20, 8);
+            Rectangle clipTop = ChromeTextLayout.ItemTextClip(itemTop, trTop, 50f, false, false, false);
+            Check("top left clip.Right grows to DualFont", clipTop.Right == 8 + 50);
+            Check("top left clip within item", clipTop.Right <= itemTop.Right && clipTop.X >= itemTop.Left && clipTop.X == 8);
+            Check("top left clip.Height is item", clipTop.Height == itemTop.Height);
+            Rectangle clipTopCap = ChromeTextLayout.ItemTextClip(itemTop, trTop, 200f, false, false, false);
+            Check("top left clip.Right not past item", clipTopCap.Right == itemTop.Right);
+
+            Rectangle itemDrop = new Rectangle(0, 0, 300, 24);
+            Rectangle trDrop = new Rectangle(32, 4, 180, 8);
+            Rectangle clipDrop = ChromeTextLayout.ItemTextClip(itemDrop, trDrop, 500f, true, false, false);
+            Check("dropdown clip.X is textRect.X", clipDrop.X == trDrop.X);
+            Check("dropdown clip.Right is textRect.Right", clipDrop.Right == trDrop.Right);
+            Check("dropdown clip.Height is item", clipDrop.Height == itemDrop.Height);
+
+            Rectangle itemRight = new Rectangle(0, 0, 300, 24);
+            Rectangle trRight = new Rectangle(200, 4, 80, 8);
+            Rectangle clipRight = ChromeTextLayout.ItemTextClip(itemRight, trRight, 50f, false, true, false);
+            Check("right align keeps textRect.Right", clipRight.Right == trRight.Right && clipRight.Right <= itemRight.Right);
+            Check("right align clip.Height is item", clipRight.Height == itemRight.Height);
+
+            Rectangle itemSpring = new Rectangle(0, 0, 400, 20);
+            Rectangle trSpring = new Rectangle(0, 4, 40, 8);
+            Rectangle clipSpring = ChromeTextLayout.ItemTextClip(itemSpring, trSpring, 80f, false, false, false);
+            Check("spring clip width DualFont", clipSpring.Width == 80 && clipSpring.Width <= itemSpring.Width);
+            Check("spring clip.Height is item", clipSpring.Height == itemSpring.Height);
+
+            Rectangle itemCenter = new Rectangle(0, 0, 200, 24);
+            Rectangle trCenter = new Rectangle(80, 8, 40, 8);
+            Rectangle clipCenter = ChromeTextLayout.ItemTextClip(itemCenter, trCenter, 80f, false, false, true);
+            Check("center clip within item", clipCenter.X >= itemCenter.Left && clipCenter.Right <= itemCenter.Right);
+            Check("center clip.Height is item", clipCenter.Height == itemCenter.Height);
+
+            Rectangle itemMiss = new Rectangle(0, 0, 40, 20);
+            Rectangle trMiss = new Rectangle(100, 0, 20, 10);
+            Rectangle clipMiss = ChromeTextLayout.ItemTextClip(itemMiss, trMiss, 30f, false, false, false);
+            Check("left clip empty when no overlap", clipMiss.IsEmpty);
+
+            using (Font half = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font full = new Font("Yu Gothic", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                CheckChromeItemPreferredHeight(half, full, "same-cell");
+            }
+
+            using (Font half = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font full = new Font("Yu Gothic", 16f, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                CheckChromeItemPreferredHeight(half, full, "full-taller");
+            }
+
+            using (Font half = new Font("Consolas", 16f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font full = new Font("Yu Gothic", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                CheckChromeItemPreferredHeight(half, full, "half-taller");
+            }
+        }
+
+        private static void CheckChromeItemPreferredHeight(Font half, Font full, string tag)
+        {
+            DarkMenuRenderer renderer = new DarkMenuRenderer();
+            renderer.SetFonts(half, full);
+            int cell = ChromeTextLayout.CellHeight(half.Height, full.Height);
+            int content = ChromeTextLayout.ItemContentHeight(cell);
+
+            using (StatusStrip status = new StatusStrip())
+            {
+                status.Renderer = renderer;
+                DualFontStatusLabel label = new DualFontStatusLabel("C#");
+                status.Items.Add(label);
+                int minH = content + label.Padding.Vertical;
+                Check("status GetPreferredSize height " + tag, label.GetPreferredSize(Size.Empty).Height >= minH);
+            }
+
+            using (MenuStrip menu = new MenuStrip())
+            {
+                menu.Renderer = renderer;
+                DualFontMenuItem item = new DualFontMenuItem("ファイル(&F)");
+                menu.Items.Add(item);
+                int minH = content + item.Padding.Vertical;
+                Check("top menu GetPreferredSize height " + tag, item.GetPreferredSize(Size.Empty).Height >= minH && !item.IsOnDropDown);
+            }
         }
 
         private static void RunBreakpointStore()

@@ -25,6 +25,7 @@ src\WindowsIDE\Ui\Theme.cs
 src\WindowsIDE\Ui\DpiUtil.cs
 src\WindowsIDE\Ui\NativeCaption.cs
 src\WindowsIDE\Ui\ThemedScrollBar.cs
+src\WindowsIDE\Ui\ChromeTextLayout.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs

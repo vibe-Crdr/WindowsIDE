@@ -40,7 +40,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 ### P1 ハイライト
 
 P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。
-言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP（全角セルが高ければ extra を足す）。SizingGrip は出さない。
+言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP。項目高さは DualFont セル + 2 px。ストリップ Padding は DIP のみ。描画クリップの高さは項目クライアント。トップ／ステータスの幅クリップは DualFont 測幅まで項目内で伸ばす。ドロップダウンの左右は TextRectangle（ショートカット右寄せ）。SizingGrip は出さない。
 Ctrl+F は P1 F-FIND。VB.NET のステータス名はフェーズ P9（今は実装しない）。
 
 ### P1 F-CS-BLD / F-PROB（問題一覧）
@@ -134,7 +134,7 @@ VB.NET 字句は既存 TokenKind 色だけを使う。新しいテーマ色は�
 
 ツリーは **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。
 
-メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブも同じ **12 DIP** DualFont（本文 `fontSize` 非連動）。About だけシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。
+メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブも同じ **12 DIP** DualFont（本文 `fontSize` 非連動）。About だけシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。ToolStrip の `TextRectangle` を DualFont クリップの正にしない（正は `ChromeTextLayout`。実セル＋項目クライアント。`TextRectangle` は左右の配置ヒント）。
 
 ドロップダウン項目の幅は DualFont（ニーモニック除去後のラベルと `GetShortcutDisplayText`）に左 24 DIP・タブギャップ・右矢印列（論理 10+8 DIP）を足した行幅と、WinForms の `MaxItemSize`（`base.GetPreferredSize`）の大きい方。兄弟 DualFont 行は同幅にし、ショートカットは共有右端に揃える。本文 `fontSize` 非連動は上記のまま。
 
@@ -159,7 +159,7 @@ DWM 属性でキャプションをシェル色に合わせる。`DWMWA_CAPTION_C
 - システムツリービューをそのまま使わず、ツリーもオーナー描画してよい
 - `Application.EnableVisualStyles` は使うが、色は自前
 - マニフェストで Per-Monitor DPI Awareness
-- `AutoScaleMode.None`。固定 `Height=28` などは 96dpi DIP 下限とし、描画時に手動換算する
+- `AutoScaleMode.None`。固定 `Height=28` などは 96dpi DIP 下限とし、描画時に手動換算する。メニュー／ステータスは `Height=28` を代入しない。ToolStrip の `TextRectangle` を DualFont クリップの正にしない
 - メイン枠の `OnDpiChanged` は `base` のみ。起動サイズの再適用や `ApplyEditorSettings` はしない。子は自分で `GetDpi` する
 - About は `AutoScaleMode.None`、アンカー配置、ClientSize 720×540 DIP 以上、ボタン帯 48 DIP。閉じると注記が見切れないこと。開いたときライセンス TextBox は非選択。初期フォーカスは「閉じる」。手動選択してコピーは可
 - フォルダを開く / 名前を付けて保存は Windows Common Item Dialog（IFileOpenDialog / IFileSaveDialog）

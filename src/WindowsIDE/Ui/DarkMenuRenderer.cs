@@ -82,13 +82,6 @@ namespace WindowsIDE.Ui
             }
 
             Rectangle rect = e.TextRectangle;
-            Rectangle clip = rect;
-            if (e.Item != null)
-            {
-                Rectangle itemClient = new Rectangle(0, 0, e.Item.Width, e.Item.Height);
-                clip = Rectangle.Intersect(rect, itemClient);
-            }
-
             float textWidth = DualFontPainter.Measure(e.Graphics, visible, this.halfFont, this.fullFont, null);
             float originX = rect.X;
             if ((flags & TextFormatFlags.Right) != 0)
@@ -98,6 +91,16 @@ namespace WindowsIDE.Ui
             else if ((flags & TextFormatFlags.HorizontalCenter) != 0)
             {
                 originX = rect.X + (rect.Width - textWidth) / 2f;
+            }
+
+            Rectangle clip = rect;
+            if (e.Item != null)
+            {
+                Rectangle itemClient = new Rectangle(0, 0, e.Item.Width, e.Item.Height);
+                bool onDropDown = e.Item.IsOnDropDown;
+                bool rightAlign = (flags & TextFormatFlags.Right) != 0;
+                bool center = (flags & TextFormatFlags.HorizontalCenter) != 0;
+                clip = ChromeTextLayout.ItemTextClip(itemClient, rect, textWidth, onDropDown, rightAlign, center);
             }
 
             using (SolidBrush brush = new SolidBrush(e.TextColor))
@@ -162,13 +165,20 @@ namespace WindowsIDE.Ui
         internal static Graphics CreateMeasureGraphics(ToolStrip owner, out Bitmap bitmap)
         {
             bitmap = null;
+            Graphics g;
             if (owner != null && owner.IsHandleCreated)
             {
-                return owner.CreateGraphics();
+                g = owner.CreateGraphics();
+            }
+            else
+            {
+                bitmap = new Bitmap(1, 1);
+                g = Graphics.FromImage(bitmap);
             }
 
-            bitmap = new Bitmap(1, 1);
-            return Graphics.FromImage(bitmap);
+            g.PageUnit = GraphicsUnit.Pixel;
+            g.PageScale = 1f;
+            return g;
         }
 
         /// <summary>
@@ -266,14 +276,9 @@ namespace WindowsIDE.Ui
             }
 
             Size native = base.GetPreferredSize(constrainingSize);
-            int cell = half.Height;
-            if (full.Height > cell)
-            {
-                cell = full.Height;
-            }
-
+            int cell = ChromeTextLayout.CellHeight(half.Height, full.Height);
             int height = native.Height;
-            int minHeight = cell + this.Padding.Vertical;
+            int minHeight = ChromeTextLayout.ItemContentHeight(cell) + this.Padding.Vertical;
             if (height < minHeight)
             {
                 height = minHeight;
@@ -368,14 +373,9 @@ namespace WindowsIDE.Ui
             try
             {
                 float textW = DualFontPainter.Measure(g, visible, half, full, null);
-                int cell = half.Height;
-                if (full.Height > cell)
-                {
-                    cell = full.Height;
-                }
-
+                int cell = ChromeTextLayout.CellHeight(half.Height, full.Height);
                 int width = (int)Math.Ceiling((double)textW) + this.Padding.Horizontal;
-                int height = cell + this.Padding.Vertical;
+                int height = ChromeTextLayout.ItemContentHeight(cell) + this.Padding.Vertical;
                 if (width < 1)
                 {
                     width = 1;
@@ -480,14 +480,9 @@ namespace WindowsIDE.Ui
             try
             {
                 float textW = DualFontPainter.Measure(g, visible, half, full, null);
-                int cell = half.Height;
-                if (full.Height > cell)
-                {
-                    cell = full.Height;
-                }
-
+                int cell = ChromeTextLayout.CellHeight(half.Height, full.Height);
                 int width = (int)Math.Ceiling((double)textW) + this.Padding.Horizontal;
-                int height = cell + this.Padding.Vertical;
+                int height = ChromeTextLayout.ItemContentHeight(cell) + this.Padding.Vertical;
                 if (width < 1)
                 {
                     width = 1;

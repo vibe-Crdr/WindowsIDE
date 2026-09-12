@@ -6,7 +6,7 @@ Windows 11 上で、指定の .NET Framework 4.8.1 と Framework `csc.exe`（C# 
 
 編集・実行・デバッグの対象は **C# 5、VB.NET（指定 Framework `vbc.exe`）、VBA、Windows PowerShell 5.1、cmd**。VB.NET の実装はフェーズ P9（今は実装しない）。VBA はディスク上でディレクトリ管理し、Excel と同期する（`.vb` は VBA ではない）。見た目はダーク、neovim 程度に薄い枠、フォントは半角 Cascadia Mono / 全角 源ノ角ゴシック。編集器本文には全ファイル形式のインデント線（F-IG。今は実装しない）。
 
-VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧、統合ターミナル、実行とデバッグ、コマンドパレット）を、自前実装で満たす。Electron や VS Code 本体は使わない。ユーザー C# の Windows Forms は Visual Studio 相当の GUI で視覚編集する（R17 / F-WF-DSN。フェーズ P10。今は実装しない）。IDE 本体の UI をデザイナーで作る話ではない。
+VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧、統合ターミナル、実行とデバッグ、コマンドパレット）を、自前実装で満たす。Electron や VS Code 本体は使わない。ユーザー C# の Windows Forms は Visual Studio 相当の GUI で視覚編集する（R17 / F-WF-DSN。フェーズ P10。今は実装しない）。VBA の UserForm は VBE 相当の GUI で視覚編集する（R18 / F-UF-DSN。フェーズ P11。今は実装しない）。IDE 本体の UI をデザイナーで作る話ではない。
 
 ## 2. 想定利用者と利用形態
 
@@ -37,6 +37,7 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | R15 | VB.NET をホストとして扱う（`.vb`、指定 Framework `vbc.exe` でビルド、実行。デバッグは段階）。VBA / VBScript ではない。フェーズ P9。今は実装しない |
 | R16 | 編集器本文のインデント線（F-IG）。すべてのファイル形式（Plain / 無題を含む）。言語非依存。今は実装しない |
 | R17 | ユーザー C# の Windows Forms を GUI で視覚編集する（F-WF-DSN。ツールボックス・デザイン面・プロパティ・`Foo.Designer.cs`）。Visual Studio のフォームデザイナー相当。IDE 本体 UI と VBA UserForm は対象外。フェーズ P10。今は実装しない |
+| R18 | VBA の UserForm を GUI で視覚編集する（F-UF-DSN。ツールボックス・デザイン面・プロパティ・`.frm` / `.frx`・Excel Export/Import）。VBE のフォームデザイナー相当。C# の R17 / F-WF-DSN とは別。IDE 本体 UI ではない。フェーズ P11。今は実装しない |
 
 ## 4. 非機能要件
 
@@ -60,7 +61,6 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 - 拡張機能ホスト、LSP サーバ導入、NuGet UI
 - 共同編集、クラウド同期
 - Vim モーダル編集（見た目は neovim、キーは VS Code 風。D12）
-- UserForm の完全ビジュアル編集（`.frm` / `.frx` は後相。C# の R17 / F-WF-DSN とは別。R17 では解かない）
 - 常時コンパイルによる EXE 自動起動
 - バックグラウンドスレッドの Compile / 自動 Run
 - Object Browser
@@ -81,9 +81,12 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | P8 | Markdown 字句とプレビュー、VBAProject 参照、キー記録マクロ。今は実装しない。P5（F-PAL）と P7 の後 |
 | P9 | VB.NET ホスト（`.vb`、指定 Framework `vbc.exe` でビルドと実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない |
 | P10 | ユーザー C# の WinForms 視覚編集（F-WF-DSN）。今は実装しない。P7 / P8 / P9 に押し込まない。**フェーズ番号の P10 は、提案 P10（`namingMode` 既定 `filename`）とは別である** |
+| P11 | VBA UserForm の視覚編集（F-UF-DSN。`.frm` / `.frx`）。今は実装しない。P2 / P7 / P8 / P9 / P10 に押し込まない。**フェーズ番号の P11 は、採用済み提案 P11（言語は拡張子のみ）とは別である** |
 
 F-IG（インデント線）はフェーズ番号を持たない独立スライスである。P7-A に混ぜない。P9 より先でよい。今は実装しない。
 
 フェーズ P10 は番号を持つ（F-IG とは別）。C# WinForms デザイナーであり、VB.NET デザイナーでも VBA UserForm でもない。今は実装しない。P0–P2 の必須には含めない。
 
-P0→P2 を最初の利用可能な IDE とする。P3–P6 はデバッガ品質を上げる。フェーズ P7 は編集器インテリジェンスであり、P0–P2 の必須には含めない。フェーズ番号の P7 は、採用済み提案 P7（UTF-8 BOM）とは別である。フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。フェーズ番号の P9 は VB.NET ホストであり、提案番号とは別である。フェーズ番号の P10 は WinForms デザイナーであり、提案 P10 とは別である。
+フェーズ P11 は番号を持つ。VBA UserForm デザイナーであり、C# WinForms（P10）でも VB.NET デザイナーでもない。今は実装しない。P0–P2 の必須には含めない。
+
+P0→P2 を最初の利用可能な IDE とする。P3–P6 はデバッガ品質を上げる。フェーズ P7 は編集器インテリジェンスであり、P0–P2 の必須には含めない。フェーズ番号の P7 は、採用済み提案 P7（UTF-8 BOM）とは別である。フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。フェーズ番号の P9 は VB.NET ホストであり、提案番号とは別である。フェーズ番号の P10 は WinForms デザイナーであり、提案 P10 とは別である。フェーズ番号の P11 は UserForm デザイナーであり、採用済み提案 P11 とは別である。

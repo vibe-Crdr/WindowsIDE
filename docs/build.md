@@ -59,6 +59,8 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 
 フェーズ P10（F-WF-DSN。今は実装しない）の製品 `/r` 候補は、同じ Framework フォルダの `System.Design.dll` と `System.Drawing.Design.dll` である。足すときは [decisions.md](decisions.md) の提案 P38 を採用してから。**今は rsp に足さない。** ユーザー手動 csc には足さない（ユーザーは既存 6 DLL で足りる。Design は IDE のホスト用）。`Microsoft.CSharp.dll` は製品にもユーザーにも足さない。
 
+フェーズ P11（F-UF-DSN。今は実装しない）は製品 `/r` を増やさない。System.Design を UserForm のために足さない（P38 は C# WinForms 側）。Office PIA も足さない。Excel は遅延バインディングの Export/Import のみ。
+
 ## ユーザー手動 csc（F-CS-BLD）
 
 製品の `compile.ps1`（`/target:winexe`、SMA、フォント `/resource`）と混同しない。IDE がユーザー `.cs` を手動ビルドするときだけ、同じ指定 `csc.exe` を別プロセスで呼ぶ。

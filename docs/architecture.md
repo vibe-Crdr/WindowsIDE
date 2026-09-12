@@ -36,7 +36,7 @@ flowchart LR
 
 図の `ui --> child` は手動ビルド成功後の `WindowsIDE.Host.Csharp`（Ctrl+F5。およびフェーズ P9 の `WindowsIDE.Host.VbNet`）起動と、P4-A の `WindowsIDE.Debug.CorDebugSession` による ICorDebug.CreateProcess（F5）。csc / vbc は起動しない。常時コンパイルの一時生成物は起動しない。`vbc.exe` 経路はフェーズ P9（今は実装しない）。P3 の PowerShell デバッグは子プロセスではなく、デバッグ中だけ図の `ui`（`WindowsIDE.exe`）内の Runspace で動く。`Host.PowerShell` の 1 ショット実行は子のまま。C# デバッグの起動は Host.Csharp ではなく Debug の CreateProcess。
 
-- UI は WinForms。メインは STA（Excel COM のため `[STAThread]`）。フェーズ P10 のデザイナーもこの `ui` プロセス内（図に子を増やさない。今は実装しない）。
+- UI は WinForms。メインは STA（Excel COM のため `[STAThread]`）。フェーズ P10 のデザイナーもこの `ui` プロセス内（図に子を増やさない。今は実装しない）。フェーズ P11 の UserForm デザイナーも同じ `ui` プロセス内（VBE 窓を埋め込まない。今は実装しない）。
 - ユーザー C# プログラムは別プロセス。IDE を落とさない。手動ビルド成功後の起動だけが `WindowsIDE.Host.Csharp`（csc は持たない）。常時コンパイル（F-LIVE）の一時生成物は起動しない。
 - ユーザー VB.NET（フェーズ P9。今は実装しない）は指定 `vbc.exe` でビルドし、成功後の EXE 起動は `WindowsIDE.Host.VbNet`（vbc は持たない。名前は `Host.VisualBasic` にしない。VBA と衝突する）。Excel は起動しない。csc に `.vb` を渡さない。vbc に `.cs` を渡さない。
 - P1 のユーザー `.ps1`（F-PS-RUN）は `powershell.exe` 5.1 の子プロセス（`WindowsIDE.Host.PowerShell`）。同一プロセスの Runspace は P3 の `WindowsIDE.Debug` だけがデバッグ時に開く。波線のために Runspace を増やさない。対話ターミナル（F-TERM）は `WindowsIDE.Terminal` の ConPTY であり、この 1 ショットホストとは別プロセスとして共存できる。PS 構文エラー位置は `WindowsIDE.Languages` が `ParseInput` する（実行しない）。
@@ -50,7 +50,7 @@ flowchart LR
 | 名前空間 | 責務 |
 | --- | --- |
 | `WindowsIDE` | `Program.Main`、起動引数（`StartupArgs`）、未処理例外 |
-| `WindowsIDE.Ui` | メイン枠、テーマ、TabStrip / TabStripLayout（横オフセット。タブバーに ThemedScrollBar は載せない）、FindBar、HoverInfoControl（F-HOV。既存色。`SW_SHOWNOACTIVATE` / `WS_EX_NOACTIVATE`。折返しと ThemedScrollBar）、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成／リネーム）、BottomPane（問題 / 出力 / ターミナル / デバッグ）、ProblemListControl、OutputPanelControl、TerminalControl、DebugPaneControl（ローカル + コンソール。縦 SplitContainer はセッション内。XML に書かない）。将来: コマンドパレット、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8）、WinForms デザイン枠（ビューバー、デザイン面ホスト、ツールボックスリスト、プロパティ枠。フェーズ P10。今は実装しない。エンジンは `WindowsIDE.Designer`） |
+| `WindowsIDE.Ui` | メイン枠、テーマ、TabStrip / TabStripLayout（横オフセット。タブバーに ThemedScrollBar は載せない）、FindBar、HoverInfoControl（F-HOV。既存色。`SW_SHOWNOACTIVATE` / `WS_EX_NOACTIVATE`。折返しと ThemedScrollBar）、ChromeMark（FindBar のみ）、CreateBarGlyph、FileTreeCreateBar、DualFontField（FindBar とツリー作成／リネーム）、BottomPane（問題 / 出力 / ターミナル / デバッグ）、ProblemListControl、OutputPanelControl、TerminalControl、DebugPaneControl（ローカル + コンソール。縦 SplitContainer はセッション内。XML に書かない）。将来: コマンドパレット、Markdown プレビュー枠、VBA 参照 UI（フェーズ P8）、WinForms デザイン枠（ビューバー、デザイン面ホスト、ツールボックスリスト、プロパティ枠。フェーズ P10。今は実装しない。エンジンは `WindowsIDE.Designer`）、UserForm デザイン枠（ビューバー、デザイン面ホスト、MSForms ツールボックス、プロパティ枠。フェーズ P11。今は実装しない。エンジンは `WindowsIDE.Vba.Forms`。Designer に混ぜない） |
 | `WindowsIDE.Ui.Fonts` | 埋め込みフォントのプロセス内登録 |
 | `WindowsIDE.Editor` | バッファ、キャレット、描画、選択、Undo、IndentRules（言語非依存 F-IND）、FindRules（言語非依存 F-FIND）、対括弧の FillRectangle（F-BR。Selection / Error）、自動閉じと F-SIND / VBA 終端の挿入、F-DOC の挿入、ホバー枠のホスト、Document.Retarget（ディスク移動後のパス追従。本文は書かない）、波線（`SquiggleSpan` + TextView。error のみ。既存 Error。WinForms 非依存の区間計算）。将来: インデント線（F-IG。LineNumber。TextBodyClip 内。今は実装しない）、キー記録（P8。今は実装しない） |
 | `WindowsIDE.Workspace` | フォルダ、ツリー、設定 XML、WorkspaceItemRules（名前検証・リネームパス・ディレクトリ境界）、WorkspaceCreateRules（新規作成。検証は ItemRules へ委譲）、WorkspaceRecycle（shell32 SHFileOperation ごみ箱。追加 /r なし）。ツリーは ThemedScrollBar overlay。縦 overlay は Client 高さいっぱい。横は縦幅を除く。SysTreeView32 バーは TVS_NOHSCROLL + NCCALCSIZE/ShowScrollBar。TVS_NOSCROLL は使わない |
@@ -61,7 +61,8 @@ flowchart LR
 | `WindowsIDE.Host.Cmd` | P1 のユーザー `.cmd` / `.bat`（F-CMD-RUN ファイル実行と選択行）は `System32\cmd.exe` の子プロセス。選択行は所有 TEMP の `.cmd` を書いて同じ起動経路へ渡す。対話は `WindowsIDE.Terminal`（ConPTY）。C# / PowerShell / cmd の 3 つの 1 ショットは同時に走らせない |
 | `WindowsIDE.Host.Csharp` | 手動ビルド成功後のユーザー EXE 起動と stdout/stderr（Ctrl+F5）。csc は持たない。常時コンパイル（F-LIVE）はここに置かない。C# デバッグ起動は持たない（P4-A は `WindowsIDE.Debug` の CreateProcess）。VBA Compile は置かない。vbc も持たない |
 | `WindowsIDE.Host.VbNet` | フェーズ P9。手動 vbc 成功後のユーザー EXE 起動。vbc は持たない。名前は `Host.VisualBasic` にしない。今は実装しない |
-| `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期（P2 F-VBA-SYNC 実装済み）。ツリーのディスクリネーム／削除はマップ Ok なら relpath 更新またはエントリ削除（COM 無し。推測紐付けしない）。Compile 手動（F-VBA-BLD。`VbaCompiler`。プッシュ成功と同じセッション解放前。WinForms 非依存）。ライブ Compile は今は実装しない。References（F-VBA-REF）/ `Application.Run` は将来 |
+| `WindowsIDE.Vba` | ディスク木、マップ、Excel 同期（P2 F-VBA-SYNC 実装済み）。ツリーのディスクリネーム／削除はマップ Ok なら relpath 更新またはエントリ削除（COM 無し。推測紐付けしない）。Compile 手動（F-VBA-BLD。`VbaCompiler`。プッシュ成功と同じセッション解放前。WinForms 非依存）。ライブ Compile は今は実装しない。References（F-VBA-REF）/ `Application.Run` は将来。将来: Type 3 UserForm の Export/Import（F-UF-DSN の同期。フェーズ P11。今は実装しない。デザイン面は置かない） |
+| `WindowsIDE.Vba.Forms` | フェーズ P11。VBA UserForm のデザインエンジン（MSForms ツールボックス、`.frm` テキストの emit/parse、オーナー描画キャンバス）。Excel Export/Import は `WindowsIDE.Vba`。C# WinForms の `WindowsIDE.Designer` に混ぜない。今は実装しない |
 | `WindowsIDE.Macro` | フェーズ P8。キー記録の再生と、パレットコマンド名を PowerShell 5.1 から呼ぶ薄い面。拡張ホストではない |
 | `WindowsIDE.Designer` | フェーズ P10。ユーザー C# WinForms のデザインエンジン（ツールボックスカタログ、`InitializeComponent` の emit/parse、`Foo.cs` / `Foo.Designer.cs` 対検出）。DesignSurface ホストは提案 P38 採用時。IDE 本体 UI のデザイナーではない。VBA UserForm は置かない。今は実装しない |
 | `WindowsIDE.Terminal` | 統合ターミナル（ConPTY）。CreateProcess は EXTENDED_STARTUPINFO_PRESENT。CREATE_NO_WINDOW と STARTF_USESTDHANDLES は付けない。レジストリ Blind Access Off のときだけ張り付き SPI_GETSCREENREADER をライブ解除し、PTY 子へ TERM は渡さない。シェルパス、VT 画面、セッション、入力分類。WinForms / Theme / Host.* は参照しない。1 ショットホストとは共存する |
@@ -111,11 +112,13 @@ MyProject/
 | --- | --- |
 | `.cs` / `.vb` / `.ps1` | UTF-8 BOM（提案 P7。`.vb` はフェーズ P9） |
 | `.bas` / `.cls` | 新規は 0 バイト・CP932 BOM なし（P2） |
+| `.frm` | フェーズ P11。既定 CP932（VBA と同じ）。今は実装しない |
+| `.frx` | フェーズ P11。バイナリ。再エンコードしない。今は実装しない |
 | `.cmd` / `.bat` | D23（新規・0 バイト Open・無題 SaveAs は CP932 BOM なし CRLF。保存時は BOM を書かない。非空 UTF-8 BOM は Open 検出どおり UTF-8、Save で BOM だけ落とす） |
 
 ## セキュリティ境界
 
-- ユーザーコードの実行は明示操作（実行 / デバッグ）のときだけ。常時コンパイルは診断のみであり、実行ではない。デザイン時もユーザー EXE を IDE に Load しない。ルートはインボックスの `Form`（ユーザー Form 派生のコンストラクタは走らせない。フェーズ P10。今は実装しない）。
+- ユーザーコードの実行は明示操作（実行 / デバッグ）のときだけ。常時コンパイルは診断のみであり、実行ではない。デザイン時もユーザー EXE を IDE に Load しない。ルートはインボックスの `Form`（ユーザー Form 派生のコンストラクタは走らせない。フェーズ P10。今は実装しない）。UserForm の `Show` はデザイン操作では走らせない（フェーズ P11。今は実装しない）。
 - Excel マクロ実行も明示。自動で全モジュールを走らせない。STA の診断 Compile（F-VBA-BLD）は可。バックグラウンドスレッドでは Compile / Run しない。キー入力ごとの同期 Excel Compile は禁止。
 - 任意の COM 参照追加（F-VBA-REF、フェーズ P8）は明示操作だけ。足したコードは Excel プロセスに載る。
 - ワークスペース外への書き込みは、名前を付けて保存などユーザー操作に限る。

@@ -916,21 +916,12 @@ namespace WindowsIDE.Ui
                 this.tabs.SetFonts(newHalf, newFull);
             }
 
-            int extraTop = 0;
-            int extraBottom = 0;
-            if (newFull.Height > newHalf.Height)
-            {
-                int d = newFull.Height - newHalf.Height;
-                extraTop = d / 2;
-                extraBottom = d - extraTop;
-            }
-
             int menuPadX = DpiUtil.ToPixels(DpiUtil.MenuStripPadXDip, dpi);
             int menuPadY = DpiUtil.ToPixels(DpiUtil.MenuStripPadYDip, dpi);
-            this.menu.Padding = new Padding(menuPadX, menuPadY + extraTop, 0, menuPadY + extraBottom);
+            this.menu.Padding = new Padding(menuPadX, menuPadY, 0, menuPadY);
             int padX = DpiUtil.ToPixels(DpiUtil.StatusStripPadXDip, dpi);
             int padY = DpiUtil.ToPixels(DpiUtil.StatusStripPadYDip, dpi);
-            this.status.Padding = new Padding(padX, padY + extraTop, padX, padY + extraBottom);
+            this.status.Padding = new Padding(padX, padY, padX, padY);
 
             if (oldHalf != null)
             {

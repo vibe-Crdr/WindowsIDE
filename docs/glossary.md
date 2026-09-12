@@ -27,14 +27,16 @@
 | フェーズ P8 | Markdown 字句とプレビュー、VBAProject 参照、キー記録マクロ。今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
 | フェーズ P9 | VB.NET ホスト（`.vb`、指定 `vbc.exe`、実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない。 |
 | フェーズ P10 | ユーザー C# の WinForms 視覚編集（F-WF-DSN）。今は実装しない。**提案 P10**（`namingMode` 既定 `filename`）とは別。 |
+| フェーズ P11 | VBA UserForm の視覚編集（F-UF-DSN。`.frm` / `.frx`）。今は実装しない。**採用済み提案 P11**（言語は拡張子のみ）とは別。 |
 | 提案 P8 | F-CMP を P5 でキーワードと開いているファイルに限ること。ワークスペース拡張を P5 必須にしない。確定していない。フェーズ P8 ではない。 |
 | VBA Compile | Excel VBA コンパイラによる診断（F-VBA-BLD）。プッシュ後。Run しない。`WindowsIDE.Vba`。csc ではない。 |
 | 構造ヒント | 自前パーサ（D31）が見つけた構文・モジュール内構造の誤り。F-VBA-BLD のコンパイラ診断ではない。問題一覧に出すなら別バケット／別文言（「構造」）。波線は既存 Error 色でよい。F-SQU の C「ブロック不一致波線」と同系。今は実装しない。 |
 | VBA 構文解析 | IDE 知能用の自前構文解析（D30。製品 C# 5。`WindowsIDE.Languages`）。実装目標は D31（プッシュ前に VBE が構文・構造で落とす誤りをほぼ拾う。Excel 不要）。今は実装しない。VBA Compile（Excel）とは別。コンパイラ診断として問題一覧を埋めない。構造ヒントは可。プッシュはパーサ失敗で拒否しない。 |
 | F-DOC | 言語ごとの枠コメントを定義直前に 1 回入れること。ラベルは `summary` / `args` / `returns`（採用済み P19）。 |
 | F-WF-DSN | ユーザー C# の Windows Forms 視覚編集。R17。フェーズ P10。今は実装しない。IDE 本体 UI のデザイナーではない。VBA UserForm ではない。対ファイルは `Foo.cs` と `Foo.Designer.cs`。 |
+| F-UF-DSN | VBA UserForm の視覚編集。R18。フェーズ P11。今は実装しない。WindowsIDE 内のデザイン面 + Excel Export/Import。VBE 窓の埋め込みではない。C# の F-WF-DSN ではない。`.frm` テキストと不透明 `.frx`。 |
 | Designer.cs | WinForms の partial 対の生成側。`InitializeComponent` を置く。P14 の全 `.cs` 1 単位に含める。csc から外さない。 |
-| UserForm | Excel VBA のフォーム（`.frm` / `.frx`）。初期対象外。C# の F-WF-DSN ではない。 |
+| UserForm | Excel VBA のフォーム（`.frm` / `.frx`）。視覚編集は F-UF-DSN / フェーズ P11。今は実装しない。C# の F-WF-DSN ではない。 |
 | 常時コンパイル | 入力停止後にデバウンスした Framework `csc.exe` で診断だけ再コンパイルすること。生成物は起動しない。手動ビルド（F-CS-BLD）とは別。VBA Compile は含めない。 |
 | 波線 | 診断位置の下に既存エラー色で付ける下線。C# は csc、PS は `ParseInput`、VBA のコンパイラ診断は F-VBA-BLD。構造ヒント（D31）も既存 Error 色でよいがコンパイラ診断と呼ばない。自前パーサをコンパイラ診断と偽らない。 |
 | F-DBG-PS | PowerShell の行ブレーク・ステップ・ローカル。P3。同一プロセス Runspace。Ctrl+F5 の子プロセス実行（F-PS-RUN）とは別。 |

@@ -6,7 +6,7 @@
 WindowsIDE/                     この git リポジトリ（Cursor で編集）
   docs/                         仕様（正）
   .cursor/                      MCP と rules。製品に含めない
-  scripts/                      Cursor 用 Python（MCP 起動と凍結検査）。製品に含めない
+  scripts/                      Cursor 用 Python 3.14（MCP 起動と凍結検査）。製品に含めない
   src/WindowsIDE/               製品 C# 5 ソース（実装時）
   build/                        compile.ps1 と csc レスポンスファイル（実装時）
   tests/                        オフライン検証（実装時）

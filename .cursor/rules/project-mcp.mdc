@@ -15,7 +15,7 @@ Call `GetMcpTools` then `CallMcpTool`. Do not invent MCP results if a server is 
 | GitHub issues, PRs, search, remote API | `windows-ide-github` | remote Copilot MCP |
 | Workbook read/write under this repo | `windows-ide-excel` | `scripts/run_excel_mcp.py` |
 
-Python launchers exist because this repo path contains `デスクトップ`. Do not replace them with raw `npx` + `${workspaceFolder}` unless asked.
+Python launchers exist because this repo path contains `デスクトップ`. Do not replace them with raw `npx` + `${workspaceFolder}` unless asked. The host interpreter is Python 3.14 (`Python314/python.exe`). Memory still launches via uvx with `UV_PYTHON=3.14` and `UV_PYTHON_PREFERENCE=only-managed`.
 
 Workspace source edits stay on built-in Read / Write / StrReplace / Grep. Local git stays on Shell. GitHub MCP is for the GitHub API; fall back to `gh` if that server is down.
 

@@ -21,7 +21,7 @@ vba/
 | --- | --- | --- |
 | `.bas` | Standard module | 対象 |
 | `.cls` | Class module / document のコード | 対象（document は名前で対応） |
-| `.frm` + `.frx` | UserForm | 初期対象外（読み取りのみでもよい） |
+| `.frm` + `.frx` | UserForm | 初期対象外（読み取りのみでもよい）。C# WinForms デザイナー（R17 / F-WF-DSN / フェーズ P10）とは別。こちらは対象外のまま |
 | `.vb` | （VB.NET。Excel VBA ではない） | **同期対象外**。指定 `vbc.exe` のホスト（フェーズ P9）。Excel に載せない |
 
 エンコーディング既定は **CP932**。マップに上書きがあればそれに従う。`.vb` の既定は UTF-8 BOM であり、この CP932 には寄せない。

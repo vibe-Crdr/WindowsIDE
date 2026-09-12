@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P9。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P9 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
+凡例: M = 必須（P2 まで）。S = べき（P3–P10。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9、WinForms デザイナーはフェーズ P10。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P10 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB / F-WF-DSN から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
 
 ## P0 スライス
 
@@ -326,6 +326,44 @@ P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の�
 
 製品を VB.NET で書き直すこと、製品ビルドを vbc にすること、指定外 vbc、`.vbproj`、`.vbs` を VB.NET にすること、`.bas` / `.cls` を vbc に渡すこと、Excel へ `.vb` を載せること、F-VBA-CASE / Excel Compile の流用、F-LIVE を vbc 対応に拡張すること、`WindowsIDE.Vba` に vbc を置くこと、`Host.VisualBasic` という名前、製品 `/r` への `Microsoft.VisualBasic.dll`、P7-A / P8 への混入、今の `workspace.xml` 新規属性、P9 受け入れへのデバッグ必須化。
 
+## フェーズ P10（WinForms デザイナー）— 今は実装しない
+
+ユーザー C# の Windows Forms を Visual Studio のフォームデザイナー相当で視覚編集する（R17 / F-WF-DSN）。**IDE 本体の UI をデザイナーで作る話ではない。** VBA UserForm（`.frm` / `.frx`）ではない。VB.NET フォームデザイナーは入れない。P7 / P8 / P9 に押し込まない。P3–P6 デバッガにも入れない。F-IG と混ぜない。P9 完了は前提にしない。新しい M は作らない。設定 XML の新規属性は今増やさない。製品 `/r` は今増やさない（候補は提案 P38。確認待ち）。ユーザー手動 csc の `/target:exe` は変えない（提案 P39。確認待ち）。**フェーズ番号の P10 は、提案 P10（`namingMode` 既定 `filename`）とは別である。**
+
+着手順の目安（コードを書くとき）: P10-A（切替・ツールボックス・デザイン面・プロパティ・`Designer.cs` 往復）→ P10-B（イベント配線・トレイ）→ P10-C（`.resx` / ToolStrip / 入れ子デザイナー）。今はコードを書かない。
+
+| ID | 優先 | 内容 | 受け入れ |
+| --- | --- | --- | --- |
+| F-WF-DSN | S | ユーザー C# WinForms の視覚編集 | ディスク上の `Foo.cs` + `Foo.Designer.cs` をデザイン面で置き・動かし・プロパティ変更でき、`InitializeComponent` が Designer.cs に書き戻る。IDE 本体 UI と VBA UserForm は対象外。今は実装しない |
+
+### P10-A（第1スライス、S）
+
+| 項目 | やる | やらない |
+| --- | --- | --- |
+| 切替 | 同一文書タブでコード / デザイン。FindBar 直下〜同列の薄いビューバー（FindBar と同型） | 別ウィンドウ、タブ複製 |
+| ツールボックス | 選択ポインタ + 固定リストの `System.Windows.Forms` のみ（Button, Label, TextBox, CheckBox, RadioButton, ComboBox, ListBox, LinkLabel, Panel, GroupBox, PictureBox, NumericUpDown, ProgressBar, DateTimePicker, TreeView, ListView, RichTextBox） | GAC 全スキャン、ユーザーアセンブリ、サードパーティ |
+| デザイン面 | 置き・選択・移動・リサイズ。ルートはインボックスの `Form`（ユーザー型を `new` しない） | ユーザー `out.exe` の Load、ユーザー Form 派生のコンストラクタ実行 |
+| プロパティ | 選択コントロールの PropertyGrid。Anchor / Dock はプロパティ経由 | 視覚アンカーウィジェット（C）、新 Theme 色、完全自前グリッド |
+| 生成 | `Foo.cs` + `Foo.Designer.cs` の partial。`InitializeComponent` を Designer.cs へ。UTF-8 BOM + CRLF。「新しい Windows フォーム」がこの 2 ファイルを作る | `Program.cs` / `Application.Run` の必須生成（C）。`.resx`（P42）。第1スライスで `Foo.cs` を書き換えること |
+| 読み | 対応する InitializeComponent サブセットのベストエフォート復元。失敗時はコード面へ戻し Designer.cs を黙って上書きしない | ループやヘルパー呼び出しを含む手書きの完全復元 |
+| スナップ | インボックスデザイナーのスナップがホストできれば使う。できなければ 8 DIP グリッド | VS 完全なスナップライン一致を受け入れにすること（C） |
+
+生成物契約: 対は basename（`Foo.cs` と `Foo.Designer.cs`）。csproj が無いのでツリーは兄弟ファイル。P14 のコンパイル単位に両方入る。Designer.cs を csc から外さない。デザイナーが書いてよいのは Designer.cs の生成領域（フィールド + `InitializeComponent`）だけ。無題 `.cs` はデザイン不可。
+
+サポートする InitializeComponent 構文: `new`、プリミティブ / enum / `Point` / `Size` / `Color` / `Padding` の代入、`Controls.Add`、`SuspendLayout` / `ResumeLayout`。それ以外は失敗クローズ。
+
+実装方針: 提案 P38 を採用したときは Framework `System.Design` の DesignSurface をホストし、C# 5 の自前テキスト emit / parse で Designer.cs を出す。不採用なら自前キャンバス（範囲をさらに削る）。今は製品 `/r` を足さない。`Microsoft.CSharp` / `CSharpCodeProvider` / VS の `CodeDomDesignerLoader` は使わない。
+
+名前空間: エンジンは `WindowsIDE.Designer`。枠は `WindowsIDE.Ui`（ビューバー、デザイン面、ツールボックスリスト、プロパティ枠。MainForm がホスト）。`TextView` はコード面のまま。**触らない:** Editor の契約、Languages、Build（P39 採用まで）、Vba、Host.*、Debug、Terminal。Languages は Theme / WinForms / Designer を参照しない。
+
+### P10-B / P10-C（C）
+
+イベント配線（稲妻タブ、ダブルクリックで `Click` を `Form.cs` に生成。提案 P43）、コンポーネントトレイ（Timer 等）、`.resx`、TabControl ページ編集、SplitContainer / TableLayoutPanel / DataGridView の入れ子デザイナー、MenuStrip / ToolStrip / StatusStrip、視覚アンカー、ListView 列エディタ、Inherited Form、UserControl をツールボックスへ、`Program.cs` / `Application.Run` のひな型。
+
+### フェーズ P10 の非対象
+
+WPF、データバインド一式、WebBrowser、任意 GAC スキャン、ユーザーアセンブリ Load、ユーザー EXE を IDE に Load すること、ユーザー Form コンストラクタを IDE で走らせること、VBA UserForm、VB.NET デザイナー、Object Browser、サードパーティデザイナー、Roslyn、NuGet、csproj、IDE 本体 UI のデザイナー化、Excel COM 上へのデザイナー、左ツリーをツールボックスに差し替えること、下パネルへツールボックスを置くこと、P7 / P8 / P9 への混入、今の `workspace.xml` 新規属性、製品 `/r` の確定追加（P38 待ち）、ユーザー `/target:winexe` の確定（P39 待ち）、`Microsoft.CSharp` を製品またはユーザー `/r` に足すこと。
+
 ## ワークベンチ
 
 | ID | 優先 | 内容 | 受け入れ |
@@ -336,6 +374,7 @@ P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の�
 | F-PAL | S | コマンドパレット | コマンド名で絞り込み実行 |
 | F-QO | S | クイックオープン | ワークスペース内ファイル名で開く |
 | F-SET | M | 設定 UI または XML 編集 | フォントサイズと VBA `namingMode` を切替できる。半角フォントは Cascadia Mono 固定。P2 の namingMode は vba-map + VBA メニュー。設定画面なし |
+| F-WF-DSN | S | ユーザー C# WinForms の視覚編集 | ディスク上の対ファイルをデザイン面で編集でき、`InitializeComponent` が `Designer.cs` に書き戻る。IDE 本体 UI と VBA UserForm は対象外。フェーズ P10。今は実装しない |
 
 ## 編集器
 
@@ -411,4 +450,4 @@ P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の�
 | F-EXT | 拡張マーケット | 外部コード導入になる |
 | F-AI | 製品内チャット | ホスト言語外・ネット前提になりやすい |
 
-フェーズ P7 の非対象は「フェーズ P7（編集器インテリジェンス）」節に列挙する。フェーズ P8 の非対象は「フェーズ P8」節に列挙する。F-LSP は W のまま。
+フェーズ P7 の非対象は「フェーズ P7（編集器インテリジェンス）」節に列挙する。フェーズ P8 の非対象は「フェーズ P8」節に列挙する。フェーズ P10 の非対象は「フェーズ P10」節に列挙する。F-LSP は W のまま。

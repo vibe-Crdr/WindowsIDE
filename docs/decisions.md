@@ -38,6 +38,7 @@
 | D30 | VBA の構文解析（IDE 知能: 識別子束縛・F-GD / F-HOV / 将来 F-CMP の構造）の正は、製品 C# 5 の自前パーサ（指定 Framework `csc.exe`）。置く名前空間は `WindowsIDE.Languages`。`WindowsIDE.Vba` は COM / 同期 / `VbaCompiler` のまま。ANTLR、Irony、言語ワークベンチ、Rubberduck、Roslyn、指定外コンパイラ、指定 `vbc.exe`、Excel / VBIDE の構文木、第三者 DLL、Python は使わない。診断の正は Excel Compile（F-VBA-BLD）のまま。自前パーサの失敗を問題一覧・波線のコンパイラ診断として出さない。完全な型システムは作らない（P12 と同型）。実装は今しない。現行は `VbaLexer` + `VbaSemantic` ヒューリスティック + `WorkspaceSymbols.CollectVba` の行スキャン。構造ヒントの表示は D31。 |
 | D31 | D30 パーサの実装目標は、プッシュ前に VBE が構文・モジュール内構造で落とす誤りをディスク上でほぼ拾うこと（未閉じブロック、不正な構文、同一モジュールの手続き名衝突など。Excel COM 不要）。100% は保証しない。拾えないもの（保証しない）: 参照欠け、Excel/COM 型、ドキュメントモジュールとディスクの差、`#If` と実機ビット数、完全な型システム、UserForm。表示は構造ヒント。F-VBA-BLD（Excel Compile）のコンパイラ診断と並べて偽らない。問題一覧に出すなら別バケット／別文言（「構造」）。波線は既存 Error 色でよいがコンパイラ診断と呼ばない（F-SQU の C「ブロック不一致波線」と同系）。プッシュはパーサ失敗で拒否しない（偽陽性と Excel 依存の誤りが残る。期待経路は直してからプッシュ。ゲートの正はプッシュ後の Excel Compile）。完全な型システムは作らない（D30 / P12）。実装は今しない。第1スライスは構文・ブロック（Excel 不要）。Option Explicit 未宣言とワークスペース横断解決は第1スライス必須にしない。 |
 | D32 | 同梱フォントの GDI 登録経路（`AddFontMemResourceEx` / `AddFontResourceEx(FR_PRIVATE)`）は GDI+ の `new FontFamily(name)` から参照できないため廃止。読み込みは 1) `PrivateFontCollection.AddMemoryFont` 2) 一時ファイル（`%TEMP%\WindowsIDE\fonts\`、GUID 名）+ `PrivateFontCollection.AddFontFile` 3) 全滅時のみ OS 退避（半角 Consolas、全角 Yu Gothic / Yu Gothic UI / MS Gothic）で、退避は常に `UsedFallback=true` + ステータス赤エラー。`FontFamily.GenericMonospace` は成功扱いしない。一時ファイルは失敗時即削除・終了時 `FontLoader.Cleanup()`・次回起動時 stale 掃除。失敗は `%TEMP%\WindowsIDE.log` に経路付きで記録する。メニュー／ステータスの DualFont クリップは ToolStrip TextRenderer の TextRectangle ではなく ChromeTextLayout（実セル＋項目クライアント）。 |
+| D33 | ユーザー C# の Windows Forms を視覚編集する（R17 / F-WF-DSN）。IDE 本体 UI のデザイナーではない。VBA UserForm（`.frm` / `.frx`）ではない。VB.NET デザイナーは入れない。フェーズ P10。優先度 S。名前空間は `WindowsIDE.Designer`。今は実装しない。**フェーズ P10 は提案 P10（`namingMode` 既定）とは別** |
 
 ## P0 で採用した提案
 
@@ -81,7 +82,9 @@
 
 [requirements.md](requirements.md) の **フェーズ P8**（Markdown／VBAProject 参照／マクロ）と、下表の **提案 P8**（F-CMP の P5 必須範囲）も別物である。混同しない。
 
-P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 / P35 / P36 / P37 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
+[requirements.md](requirements.md) の **フェーズ P10**（C# WinForms デザイナー）と、下表の **提案 P10**（`namingMode` 既定 `filename`）も別物である。混同しない。
+
+P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しない。** P20 / P23 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 / P32 / P33 / P34 / P35 / P36 / P37 / P38 / P39 / P40 / P41 / P42 / P43 / P44 は確認待ちであり、上の確定欄に入れない。P15 / P18 も確定しない。P19 / P21 / P22 は採用済み（D22）。P1 F-CS-BLD は実装既定として P15 の 6 DLL を使う。確定にはしない。ユーザー vbc の `/r` は P26。
 
 | ID | 提案 | 理由 | 代替 |
 | --- | --- | --- | --- |
@@ -107,10 +110,17 @@ P15 / P18 はフェーズ P7 向けの確認待ち。**提案 P8 は確定しな
 | P35 | P3 の PowerShell デバッグは同一プロセス Runspace のまま。ユーザースクリプトが IDE を落とせることを隠さない。ヘルパー EXE への隔離は今は実装しない。確定しない | 同一プロセスが P3 の採用。隔離は確認待ち | ヘルパー EXE で SMA Debugger を隔離する |
 | P36 | P3 のブレーク印と停止行は既存 Error / CurrentLine。専用色は今は足さない。確定しない | ui.md の新色禁止を今は破らない | ブレーク専用 Theme 色 |
 | P37 | P4-A（F-DBG-CS）実装既定: スライスは P4-A のみ（F-DBG-CMD は P4-B、今は書かない）。FuncEval 禁止。手動 TEMP `%TEMP%\WindowsIDE\build\manual\<key>\out.exe` を再利用し第3の debug ディレクトリは作らない。確定しない | 手動ビルドとデバッグ生成物を分けない | 専用 debug TEMP、FuncEval で ToString |
+| P38 | P10 実装時、製品 `/r` に同じ Framework フォルダの `System.Design.dll` と `System.Drawing.Design.dll` を足す。4.8 ファミリー検査の対象に含める。確定しない。今は rsp を触らない | DesignSurface / インボックスの Form デザイナー / `ToolboxItem` に必要。インボックスであり NuGet ではない | System.Design なしの完全自前キャンバス |
+| P39 | ユーザー手動 csc の `/target` をデザイナー有無で `winexe` に変える。確定しない。第1スライスでは現行 `/target:exe` を維持 | WinForms 実行時のコンソールを隠せる。テストが winexe 禁止を見ており、F-CS-BLD / F-DBG-CS の exe 契約を動かす | 現状 exe 維持 / XML で切替（今は XML を増やさない） |
+| P40 | コード/デザイン切替キーは F7（コード）と Shift+F7（デザイン）。ShortcutKeys なし、ProcessCmdKey、IME 中は奪わない。確定しない | VS 相当。D12 は VS Code 風だがフォームデザイナーは VS 側のキーが空いている（F7 未使用。Ctrl+Alt+D は F-DOC） | メニューとビューバーのみ |
+| P41 | ツールボックスとプロパティはデザイン面の右カラム（縦 SplitContainer、セッション内。XML に書かない）。左ツリーと下パネルは畳まない。確定しない | ファイルツリーをツールボックスに差し替えない | 左ツリーとタブ化、下パネルタブ（非推奨） |
+| P42 | 第1スライスは `.resx` を生成・読まない。画像・ローカライズは出さない。確定しない | P14 とエンコーディング契約を今増やさない。resx は csc `/res` も要る | PictureBox 用に sibling `.resx` を第1スライス必須にする |
+| P43 | イベント配線（稲妻タブ、ダブルクリックで `Click` を `Form.cs` に生成）は C（P10-B）。第1スライス必須にしない。確定しない | 第1スライスでユーザー手書き `Form.cs` を書き換えない | 第1スライス必須（VS に近いが衝突面が広い） |
+| P44 | PropertyGrid は既存 Theme 色プロパティ（BackColor 系）だけ合わせる。新 Theme キーもオーナー描画グリッドも作らない。ドロップダウン（Color/Font）はシステム色のまま可。確定しない | ui.md の新色禁止を破らない | 新色、完全自前グリッド |
 
 ## まだ聞かないが後で決める
 
-- UserForm（`.frm` / `.frx`）の扱い
+- UserForm（`.frm` / `.frx`）の扱い（R17 / F-WF-DSN / フェーズ P10 では解かない。C# WinForms デザイナーとは別）
 - 複数ブック / 複数 VBA プロジェクト
 - ログのローテーション
 - メニュー「ファイルを開く」

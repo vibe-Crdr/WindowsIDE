@@ -57,6 +57,8 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 
 ユーザーコードの常時コンパイル（F-LIVE）も同じ Framework `csc.exe` を使う。live rsp は `/nostdlib /platform:x64 /target:library /utf8output`（`/debug+` も `/debug-` も書かない）。`/noconfig` は rsp に書かない。`/r:` は手動と同じ 6 DLL。`/out` は `%TEMP%\WindowsIDE\build\live\<key>\out.dll`。診断後に live ディレクトリをベストエフォート削除する。生成物は起動しない。製品の `/r` は増やさない。手動 exe 節（`/target:exe /debug+`）は変えない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。ユーザー VB.NET（F-VB-BLD、フェーズ P9。今は実装しない）は指定 `vbc.exe` を使う。製品 `/r` に `Microsoft.VisualBasic.dll` を足さない。csc に `.vb` を渡さない。
 
+フェーズ P10（F-WF-DSN。今は実装しない）の製品 `/r` 候補は、同じ Framework フォルダの `System.Design.dll` と `System.Drawing.Design.dll` である。足すときは [decisions.md](decisions.md) の提案 P38 を採用してから。**今は rsp に足さない。** ユーザー手動 csc には足さない（ユーザーは既存 6 DLL で足りる。Design は IDE のホスト用）。`Microsoft.CSharp.dll` は製品にもユーザーにも足さない。
+
 ## ユーザー手動 csc（F-CS-BLD）
 
 製品の `compile.ps1`（`/target:winexe`、SMA、フォント `/resource`）と混同しない。IDE がユーザー `.cs` を手動ビルドするときだけ、同じ指定 `csc.exe` を別プロセスで呼ぶ。
@@ -64,7 +66,7 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 - コマンドライン先頭は必ず `/noconfig`。rsp には `/noconfig` を書かない（rsp 内は無視され CS2023）
 - rsp（UTF-8 BOM、TEMP）: `/nostdlib /platform:x64 /target:exe /debug+ /utf8output`
 - `/r:` は Framework64 の 6 DLL のみ（mscorlib, System, System.Core, System.Drawing, System.Windows.Forms, System.Xml）。SMA / Microsoft.CSharp / Office は足さない。製品 `/r` は増やさない
-- `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。手動 csc は **`Process.Start` しない**
+- `/out` は `%TEMP%\WindowsIDE\build\manual\<key>\out.exe`（`<key>` はワークスペース根または単一ファイルのフルパスを OrdinalIgnoreCase で SHA1 短縮）。PDB 可。生成物は消さない。手動 csc は **`Process.Start` しない**。`/target:exe` は提案 P39 を採用するまで変えない（デザイナー有無で `winexe` にしない）
 - ユーザー EXE の起動と、そのプロセス参照だけの Kill は `WindowsIDE.Host.Csharp`。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - ユーザー `.ps1` の起動は `WindowsIDE.Host.PowerShell`（`SpecialFolder.System` + `WindowsPowerShell\v1.0\powershell.exe` 子プロセス）。SMA は 1 ショット実行のホストではない。再実行・手動 csc の直前・MainForm.Dispose で Kill する。プロセス名検索はしない
 - P3 の PowerShell デバッグは `WindowsIDE.Debug` が同一プロセスで Runspace を開く。`src\WindowsIDE\Debug\` を `Host\Cmd\CmdProcessHost.cs` の次に列挙する。P4-A は既存 Debug 4 本の次に `Debug\DebugStackFrame.cs` と `Debug\CorDebug\` 4 本（`CorDebugNative` / `CorDebugManagedCallback` / `PdbBinder` / `CorDebugSession`）を列挙する。製品 `/r` は増やさない（ICorDebug / ISymUnmanagedBinder は P/Invoke と CoCreateInstance。ISymWrapper は参照しない）。`src\WindowsIDE\Ui\DebugPaneControl.cs` は BottomPane の次（製品 rsp。テスト rsp も BottomPane の次）。Languages / Host.PowerShell は Runspace を開かない

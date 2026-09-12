@@ -2,7 +2,7 @@
 Summary:
     Launch doobidoo mcp-memory-service as the WindowsIDE decision-memory MCP.
 
-    Uses uvx with a managed Python so sqlite_vec loads reliably on Windows.
+    Uses uvx with managed Python 3.14 so sqlite_vec loads reliably on Windows.
     Storage stays under .cursor/memory/.
 
 Arguments:
@@ -78,6 +78,7 @@ def _prepare_env() -> dict[str, str]:
     (MEMORY_DIR / "backups").mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
+    env.setdefault("UV_PYTHON", "3.14")
     env.setdefault("UV_PYTHON_PREFERENCE", "only-managed")
     env.setdefault("MCP_MEMORY_STORAGE_BACKEND", "sqlite_vec")
     env.setdefault(

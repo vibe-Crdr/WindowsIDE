@@ -97,7 +97,7 @@ IDE には WinForms 等が必要なので、**同じ Framework フォルダ**、
 
 C# 6 以降の構文は、コンパイラが落とす。書かない。代表例は `.cursor/rules/csharp5.mdc`。
 
-Python / Node / .NET SDK は **Cursor 用 `scripts/` だけ**。製品コード、製品ビルド、ユーザー向けランタイムに出さない。
+Python / Node / .NET SDK は **Cursor 用 `scripts/` だけ**。製品コード、製品ビルド、ユーザー向けランタイムに出さない。Cursor MCP 起動のホストは Python 3.14（`.cursor/mcp.json` の `Python314/python.exe`）。
 
 ## フォント
 

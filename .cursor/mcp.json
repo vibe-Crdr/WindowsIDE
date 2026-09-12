@@ -1,11 +1,12 @@
 {
   "mcpServers": {
     "windows-ide-memory": {
-      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python314/python.exe",
       "args": [
         "${workspaceFolder}/scripts/run_memory_mcp.py"
       ],
       "env": {
+        "UV_PYTHON": "3.14",
         "UV_PYTHON_PREFERENCE": "only-managed",
         "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec",
         "MCP_MEMORY_SQLITE_PATH": "${workspaceFolder}/.cursor/memory/sqlite_vec.db",
@@ -17,7 +18,7 @@
       }
     },
     "codebase-memory": {
-      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python314/python.exe",
       "args": [
         "${workspaceFolder}/scripts/run_codebase_memory_mcp.py"
       ],
@@ -26,7 +27,7 @@
       }
     },
     "windows-ide-filesystem": {
-      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python314/python.exe",
       "args": [
         "${workspaceFolder}/scripts/run_filesystem_mcp.py"
       ]
@@ -38,7 +39,7 @@
       }
     },
     "windows-ide-excel": {
-      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python311/python.exe",
+      "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python314/python.exe",
       "args": [
         "${workspaceFolder}/scripts/run_excel_mcp.py"
       ]

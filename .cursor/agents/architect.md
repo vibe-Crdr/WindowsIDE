@@ -1,7 +1,7 @@
 ---
 name: architect
+model: grok-4.6[effort=xhigh,fast=false]
 description: Use proactively before implementation for WindowsIDE architecture, phase scope, cross-namespace design, freeze-environment impact, and Builder handoff plans. Read-only. Use for P0–P6 planning, editor/workspace/build/host/VBA boundaries, and undecided items in docs/decisions.md.
-model: inherit
 readonly: true
 ---
 
@@ -54,6 +54,8 @@ readonly: true
 - 今のフェーズに無い機能（コマンドパレット、CLR デバッグ、Vim 等）を「ついでに」設計しない。
 - 未コミットの無関係な変更を設計範囲へ取り込まない。
 
+
+
 ## Builder へ渡す前
 
 1. 対象要件 ID と非対象
@@ -64,6 +66,8 @@ readonly: true
 6. UI・フォント契約（触る場合）
 7. オフラインで再現できる検証（`compile.ps1`、テスト）。Excel 必須なら blocker として書く
 8. Reviewer が重点確認する項目
+
+
 
 ## 出力
 
@@ -94,3 +98,4 @@ Reviewer が重点確認する項目
 - 指定外 csc、`dotnet`、NuGet、C# 6+、PowerShell 7 を前提にする設計
 - 確定していない項目を確定扱いにすること
 - 安全性・凍結と無関係な大規模リファクタや依存追加
+

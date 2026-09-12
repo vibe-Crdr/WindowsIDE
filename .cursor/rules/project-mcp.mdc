@@ -14,10 +14,13 @@ Call `GetMcpTools` then `CallMcpTool`. Do not invent MCP results if a server is 
 | Sandboxed file trees / metadata / moves | `windows-ide-filesystem` | `scripts/run_filesystem_mcp.py` |
 | GitHub issues, PRs, search, remote API | `windows-ide-github` | remote Copilot MCP |
 | Workbook read/write under this repo | `windows-ide-excel` | `scripts/run_excel_mcp.py` |
+| Live Windows desktop / UI / OS automation | `windows-mcp` (CursorTouch Windows-MCP) | `scripts/run_windows_mcp.py` |
 
 Python launchers exist because this repo path contains `デスクトップ`. Do not replace them with raw `npx` + `${workspaceFolder}` unless asked. The host interpreter is Python 3.14 (`Python314/python.exe`). Memory still launches via uvx with `UV_PYTHON=3.14` and `UV_PYTHON_PREFERENCE=only-managed`.
 
 Workspace source edits stay on built-in Read / Write / StrReplace / Grep. Local git stays on Shell. GitHub MCP is for the GitHub API; fall back to `gh` if that server is down.
+
+`windows-mcp` is OS-wide computer use (Click, Type, Screenshot, Snapshot, App, PowerShell, FileSystem, Registry, Process, and the rest). All 20 tools stay enabled — do not set `WINDOWS_MCP_TOOLS` or `WINDOWS_MCP_EXCLUDE_TOOLS`. It is not a sandbox: do not use it to edit this repo's source (prefer built-in file tools) and do not use `Type` to program inside WindowsIDE. Skills: personal `mcp-windows` and `windows-mcp-tool-tester`.
 
 Never print `GITHUB_PERSONAL_ACCESS_TOKEN` or put a PAT in files. Memory storage is `.cursor/memory/` (gitignored). Filesystem and Excel are scoped to the project root only.
 

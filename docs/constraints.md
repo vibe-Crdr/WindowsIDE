@@ -77,6 +77,10 @@ IDE には WinForms 等が必要なので、**同じ Framework フォルダ**、
 - `System.Management.Automation.dll`（Windows PowerShell 5.1）
 - Excel / VBIDE の COM 相互運用（遅延バインディング推奨）
 
+P10 実装時の候補（今は製品 `/r` に無い。足すときは [decisions.md](decisions.md) の提案 P38 が先）:
+
+- `System.Design.dll`, `System.Drawing.Design.dll`（同じ Framework フォルダ。ユーザー csc には足さない）
+
 禁止:
 
 - NuGet、`packages.config`、`PackageReference`

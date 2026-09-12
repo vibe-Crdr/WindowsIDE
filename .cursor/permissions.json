@@ -4,6 +4,7 @@
     "codebase-memory:*",
     "windows-ide-filesystem:*",
     "windows-ide-github:*",
-    "windows-ide-excel:*"
+    "windows-ide-excel:*",
+    "windows-mcp:*"
   ]
 }

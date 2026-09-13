@@ -32,12 +32,6 @@
         "${workspaceFolder}/scripts/run_filesystem_mcp.py"
       ]
     },
-    "windows-ide-github": {
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": {
-        "Authorization": "Bearer ${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
-      }
-    },
     "windows-ide-excel": {
       "command": "C:/Users/Sonic/AppData/Local/Programs/Python/Python314/python.exe",
       "args": [

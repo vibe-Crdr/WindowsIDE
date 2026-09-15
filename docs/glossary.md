@@ -24,7 +24,7 @@
 | フェーズ P3 | PowerShell デバッグ（F-DBG-PS / F-DBG-UI 最小）。ディスク上 `.ps1` を同一プロセスの Runspace + SMA Debugger で行 BP・ステップ・ローカル。Host.PowerShell の 1 ショットは子プロセスのまま。 |
 | フェーズ P4 | C# デバッグ（P4-A = F-DBG-CS）と cmd デバッグ（P4-B = F-DBG-CMD。今は実装しない）。P4-A は手動 csc の TEMP `out.exe` を ICorDebug.CreateProcess で別プロセスデバッグする。Ctrl+F5 は Host.Csharp のまま。 |
 | F-DBG-CS | C# の行ブレーク・ステップ・ローカル・粗いスタック。P4-A。PDB + ICorDebug（インボックス COM）。Host.Csharp の 1 ショット実行（F-CS-RUN）とは別。 |
-| フェーズ P8 | F-MD 実装、参照/マクロは今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
+| フェーズ P8 | F-MD 第1+第2スライス済み、参照/マクロは今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
 | フェーズ P9 | VB.NET ホスト（`.vb`、指定 `vbc.exe`、実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない。 |
 | フェーズ P10 | ユーザー C# の WinForms 視覚編集（F-WF-DSN）。今は実装しない。**提案 P10**（`namingMode` 既定 `filename`）とは別。 |
 | 提案 P8 | F-CMP を P5 でキーワードと開いているファイルに限ること。ワークスペース拡張を P5 必須にしない。確定していない。フェーズ P8 ではない。 |

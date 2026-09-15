@@ -280,7 +280,7 @@ PS と CS は同時セッション禁止。Stopped の F5 は止まっている�
 
 ## フェーズ P8（Markdown／参照／マクロ）
 
-P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。F-MD 第1スライスは実装する。F-VBA-REF / F-MACRO は今は実装しない。
+P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。F-MD 第1スライスと第2スライスは実装済み。F-VBA-REF / F-MACRO は今は実装しない。
 
 | ID | 優先 | 内容 | 受け入れ |
 | --- | --- | --- | --- |
@@ -292,11 +292,12 @@ P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**�
 
 | ID | P8 F-MD でやる | P8 F-MD でやらない |
 | --- | --- | --- |
-| F-MD | `.md` だけ `LanguageKind.Markdown`。行スキャナ（`MarkdownLexer` / `MarkdownSyntax`。正規表現なし）で ATX・リスト・``` フェンス・インライン `` ` `` / `*` `_` `**` `__`。見出しは Keyword、フェンスは String。プレビューは `MarkdownBlocks` + オーナー描画 `MarkdownPreviewControl`（見出し・段落・リスト・強調・フェンス。横 split、Ctrl+Shift+V）。ホスト知能は Plain と同様 no-op。同梱 DualFont。既存 Theme 色のみ | F-VBA-REF、F-MACRO、F-CMP / F-HOV / F-DOC の Markdown 拡張、CommonMark 完全、NuGet パーサ、WebBrowser、RichTextBox 着色、生 HTML 実行、新 Theme 色、新 `/r`、workspace.xml 属性、実行/デバッグ/csc/vbc/F-LIVE、~~~ / Setext / 引用 / 表 / 画像 / リンクプレビュー、フェンス内入れ子字句、Cascadia Bold / 源ノ角 Bold、P10 ビューバー、プレビュー全画面、下パネルタブ化 |
+| F-MD 第1 | `.md` だけ `LanguageKind.Markdown`。行スキャナ（`MarkdownLexer` / `MarkdownSyntax`。正規表現なし）で ATX・リスト・``` フェンス・インライン `` ` `` / `*` `_` `**` `__`。見出しは Keyword、フェンスは String。プレビューは `MarkdownBlocks` + オーナー描画 `MarkdownPreviewControl`（見出し・段落・リスト・強調・フェンス。横 split、Ctrl+Shift+V）。ホスト知能は Plain と同様 no-op。同梱 DualFont。既存 Theme 色のみ | F-VBA-REF、F-MACRO、F-CMP / F-HOV / F-DOC の Markdown 拡張、CommonMark 完全、NuGet パーサ、WebBrowser、RichTextBox 着色、生 HTML 実行、新 Theme 色、新 `/r`、workspace.xml 属性、実行/デバッグ/csc/vbc/F-LIVE、フェンス内入れ子字句、P10 ビューバー、プレビュー全画面、下パネルタブ化 |
+| F-MD 第2 | プレビューが扱う全書式を視覚上区別する。ATX/Setext、段落・ハードブレーク、引用ネスト、HR、入れ子リスト・タスク、``` と ~~~、インデントコード、GFM パイプ表、Strong/Emphasis/両方、取り消し線、インライン code 帯、リンク下線、相対ローカル画像。半角 Cascadia Bold/Italic/BoldItalic と源ノ角 Bold を同梱。全角 Italic は合成 | CommonMark 完全、脚注、定義リスト、Math、Mermaid、GFM アラート、絵文字 shortcode、リモート画像、HTML 実行、フェンス内ホスト字句、リンクの Process.Start、源ノ角 Italic ファイル、Cascadia Code / Variable、新 Theme 色、新 `/r`、workspace.xml、TextView 本文の Bold、F-VBA-REF / F-MACRO / F-CMP / F-HOV / F-DOC |
 
 ### Markdown（F-MD）
 
-ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（正規表現禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。見出し・段落・リスト・インライン強調・フェンス。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可だが第1スライスではやらない。F-DOC の同じコマンドも第1スライスではやらない。
+ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（正規表現禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。第1スライス: 見出し・段落・リスト・インライン強調・フェンス。第2スライス: 表・引用・HR・入れ子リスト・タスク・取り消し線・リンク下線・ローカル画像と、太字・斜体・コードブロック枠。本文強調の文字色は Foreground（書式はウェイト／斜体）。見出しは Keyword＋太字。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可だが第1スライスではやらない。F-DOC の同じコマンドも第1スライスではやらない。
 
 ### VBAProject 参照（F-VBA-REF）
 

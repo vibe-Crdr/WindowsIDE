@@ -147,20 +147,33 @@ Get-OfficialFile -Urls @(
 
 $cascadiaRegular = Join-Path $CascadiaDir "CascadiaMono-Regular.ttf"
 $cascadiaBold = Join-Path $CascadiaDir "CascadiaMono-Bold.ttf"
+$cascadiaItalic = Join-Path $CascadiaDir "CascadiaMono-Italic.ttf"
+$cascadiaBoldItalic = Join-Path $CascadiaDir "CascadiaMono-BoldItalic.ttf"
 $sourceHan = Join-Path $SourceHanDir "SourceHanSansJP-Regular.otf"
+$sourceHanBold = Join-Path $SourceHanDir "SourceHanSansJP-Bold.otf"
 
 Get-OfficialFile -Urls @(
     "https://github.com/adobe-fonts/source-han-sans/raw/2.005R/SubsetOTF/JP/SourceHanSansJP-Regular.otf",
     "https://github.com/adobe-fonts/source-han-sans/raw/release/SubsetOTF/JP/SourceHanSansJP-Regular.otf"
 ) -OutFile $sourceHan -MinimumBytes 1000000
 
+Get-OfficialFile -Urls @(
+    "https://github.com/adobe-fonts/source-han-sans/raw/2.005R/SubsetOTF/JP/SourceHanSansJP-Bold.otf",
+    "https://github.com/adobe-fonts/source-han-sans/raw/release/SubsetOTF/JP/SourceHanSansJP-Bold.otf"
+) -OutFile $sourceHanBold -MinimumBytes 1000000
+
 $cascadiaZip = "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip"
 $cascadiaEntries = @{}
 $cascadiaEntries["ttf\static\CascadiaMono-Regular.ttf"] = $cascadiaRegular
 $cascadiaEntries["ttf\static\CascadiaMono-Bold.ttf"] = $cascadiaBold
+$cascadiaEntries["ttf\static\CascadiaMono-Italic.ttf"] = $cascadiaItalic
+$cascadiaEntries["ttf\static\CascadiaMono-BoldItalic.ttf"] = $cascadiaBoldItalic
 Get-ZipEntries -ZipUrl $cascadiaZip -Entries $cascadiaEntries -MinimumBytes 100000
 
 Write-Host "Fonts ready."
 Write-Host ("  " + $cascadiaRegular)
 Write-Host ("  " + $cascadiaBold)
+Write-Host ("  " + $cascadiaItalic)
+Write-Host ("  " + $cascadiaBoldItalic)
 Write-Host ("  " + $sourceHan)
+Write-Host ("  " + $sourceHanBold)

@@ -9,7 +9,7 @@ Summary:
     feedback before the authoritative build on a Windows machine:
 
       * every product/test .cs file carries a UTF-8 BOM (docs/build.md, P7);
-      * the three bundled SIL OFL font files are present (docs/fonts.md);
+      * the six bundled SIL OFL font files are present (docs/fonts.md);
       * no Cascadia Code font leaks into assets/fonts (docs/decisions.md D9);
       * every /r: reference in build/*.rsp stays inside the frozen Framework
         folder, i.e. no NuGet / third-party DLL references (docs/constraints.md);
@@ -47,7 +47,10 @@ SMA_DLL = (
 BUNDLED_FONTS = (
     "assets/fonts/cascadia/CascadiaMono-Regular.ttf",
     "assets/fonts/cascadia/CascadiaMono-Bold.ttf",
+    "assets/fonts/cascadia/CascadiaMono-Italic.ttf",
+    "assets/fonts/cascadia/CascadiaMono-BoldItalic.ttf",
     "assets/fonts/source-han-sans/SourceHanSansJP-Regular.otf",
+    "assets/fonts/source-han-sans/SourceHanSansJP-Bold.otf",
 )
 
 # PowerShell 7 tokens that must not appear in product/build scripts.
@@ -104,7 +107,7 @@ def check_bom(report):
 
 
 def check_fonts(report):
-    """同梱フォント 3 種の存在と Cascadia Code の不在を検査する。"""
+    """同梱フォント 6 種の存在と Cascadia Code の不在を検査する。"""
     for rel in BUNDLED_FONTS:
         if not (PROJECT_ROOT / rel).is_file():
             report.error("Bundled font missing: " + rel)

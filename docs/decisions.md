@@ -39,6 +39,7 @@
 | D31 | D30 パーサの実装目標は、プッシュ前に VBE が構文・モジュール内構造で落とす誤りをディスク上でほぼ拾うこと（未閉じブロック、不正な構文、同一モジュールの手続き名衝突など。Excel COM 不要）。100% は保証しない。拾えないもの（保証しない）: 参照欠け、Excel/COM 型、ドキュメントモジュールとディスクの差、`#If` と実機ビット数、完全な型システム、UserForm。表示は構造ヒント。F-VBA-BLD（Excel Compile）のコンパイラ診断と並べて偽らない。問題一覧に出すなら別バケット／別文言（「構造」）。波線は既存 Error 色でよいがコンパイラ診断と呼ばない（F-SQU の C「ブロック不一致波線」と同系）。プッシュはパーサ失敗で拒否しない（偽陽性と Excel 依存の誤りが残る。期待経路は直してからプッシュ。ゲートの正はプッシュ後の Excel Compile）。完全な型システムは作らない（D30 / P12）。実装は今しない。第1スライスは構文・ブロック（Excel 不要）。Option Explicit 未宣言とワークスペース横断解決は第1スライス必須にしない。 |
 | D32 | 同梱フォントの GDI 登録経路（`AddFontMemResourceEx` / `AddFontResourceEx(FR_PRIVATE)`）は GDI+ の `new FontFamily(name)` から参照できないため廃止。読み込みは 1) `PrivateFontCollection.AddMemoryFont` 2) 一時ファイル（`%TEMP%\WindowsIDE\fonts\`、GUID 名）+ `PrivateFontCollection.AddFontFile` 3) 全滅時のみ OS 退避（半角 Consolas、全角 Yu Gothic / Yu Gothic UI / MS Gothic）で、退避は常に `UsedFallback=true` + ステータス赤エラー。`FontFamily.GenericMonospace` は成功扱いしない。一時ファイルは失敗時即削除・終了時 `FontLoader.Cleanup()`・次回起動時 stale 掃除。失敗は `%TEMP%\WindowsIDE.log` に経路付きで記録する。メニュー／ステータスの DualFont クリップは ToolStrip TextRenderer の TextRectangle ではなく ChromeTextLayout（実セル＋項目クライアント）。 |
 | D33 | ユーザー C# の Windows Forms を視覚編集する（R17 / F-WF-DSN）。IDE 本体 UI のデザイナーではない。VBA UserForm（`.frm` / `.frx`）ではない。VB.NET デザイナーは入れない。フェーズ P10。優先度 S。名前空間は `WindowsIDE.Designer`。今は実装しない。**フェーズ P10 は提案 P10（`namingMode` 既定）とは別** |
+| D34 | Markdown プレビューは Cascadia Mono Italic / BoldItalic と源ノ角 Bold を同梱して使う。本文 TextView・メニュー・ツリーは Regular のまま。源ノ角 Italic ファイルは取らない。P21（オーナー描画、WebBrowser 禁止）は維持する |
 
 ## P0 で採用した提案
 
@@ -69,11 +70,11 @@
 
 ## フェーズ P8 で採用した提案
 
-[requirements.md](requirements.md) の **フェーズ P8**。下の **提案 P8**（F-CMP の P5 必須範囲）とは別。F-MD 着手（P21 実装済み）。F-VBA-REF / F-MACRO（P22）は今はコードを書かない。
+[requirements.md](requirements.md) の **フェーズ P8**。下の **提案 P8**（F-CMP の P5 必須範囲）とは別。F-MD 第1スライスと第2スライス実装済み（P21 維持）。F-VBA-REF / F-MACRO（P22）は今はコードを書かない。
 
 | ID | 内容 |
 | --- | --- |
-| P21 | Markdown プレビューはオーナー描画のサブセット（同梱フォント）。インボックス WebBrowser は使わない。F-MD 第1スライスで実装済み |
+| P21 | Markdown プレビューはオーナー描画のサブセット（同梱フォント）。インボックス WebBrowser は使わない。F-MD 第1スライスで実装済み。第2スライスも P21 を維持する |
 | P22 | F-MACRO はキー記録／再生と、パレットと同じコマンド名を PowerShell 5.1 から呼ぶ薄い面。サクラの PPA / JScript / マクロファイル互換は W |
 
 ## 提案（確認待ち）

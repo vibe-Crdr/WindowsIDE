@@ -33,8 +33,11 @@ Assert-FrameworkBclFamily -FrameworkDirectory $Fw
 
 $fontRegular = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Regular.ttf"
 $fontBold = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Bold.ttf"
+$fontItalic = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Italic.ttf"
+$fontBoldItalic = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-BoldItalic.ttf"
 $fontSource = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Regular.otf"
-if (-not (Test-Path -LiteralPath $fontRegular) -or -not (Test-Path -LiteralPath $fontBold) -or -not (Test-Path -LiteralPath $fontSource)) {
+$fontSourceBold = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Bold.otf"
+if (-not (Test-Path -LiteralPath $fontRegular) -or -not (Test-Path -LiteralPath $fontBold) -or -not (Test-Path -LiteralPath $fontItalic) -or -not (Test-Path -LiteralPath $fontBoldItalic) -or -not (Test-Path -LiteralPath $fontSource) -or -not (Test-Path -LiteralPath $fontSourceBold)) {
     Fail "Bundled fonts missing. Run build\fetch-fonts.ps1"
 }
 
@@ -119,7 +122,10 @@ Write-Host ("Resources: " + ($names -join ", "))
 $required = @(
     "WindowsIDE.Fonts.CascadiaMonoRegular",
     "WindowsIDE.Fonts.CascadiaMonoBold",
-    "WindowsIDE.Fonts.SourceHanSansJpRegular"
+    "WindowsIDE.Fonts.CascadiaMonoItalic",
+    "WindowsIDE.Fonts.CascadiaMonoBoldItalic",
+    "WindowsIDE.Fonts.SourceHanSansJpRegular",
+    "WindowsIDE.Fonts.SourceHanSansJpBold"
 )
 foreach ($name in $required) {
     if ($names -notcontains $name) {

@@ -81,7 +81,7 @@ P7-A 対括弧は Selection / 不一致は Error。P7-B ホバー（F-HOV）は�
 
 ### フェーズ P8（F-MD）
 
-Markdown プレビューは新しいテーマ色を足さない。見出しと強調は Keyword、フェンスとインラインコードは StringLiteral。プレビュー方式は採用済み P21（オーナー描画サブセット。同梱フォント。WebBrowser は使わない）。同梱フォント（Cascadia Mono / 源ノ角ゴシック）はプレビューでも破らない。Bold は使わない。
+Markdown プレビューは新しいテーマ色を足さない。見出しは Keyword＋太字。本文の強調は Foreground（書式は Bold / Italic）。フェンスとインラインコードは StringLiteral。引用バーは Selection。HR・表罫線・タスク枠は Border。リンク下線は Local。プレビュー方式は採用済み P21（オーナー描画サブセット。同梱フォント。WebBrowser は使わない）。同梱フォント（Cascadia Mono / 源ノ角ゴシック）はプレビューでも破らない。プレビューは Cascadia Bold / Italic / BoldItalic と源ノ角 Bold を使う。TextView 本文・メニュー・ツリーは Regular のまま。
 
 `editorColumn` は FindBar `Dock.Top` の下に横 `SplitContainer`（`Orientation.Vertical`。左 TextView、右 `MarkdownPreviewControl`）。既定は右パネル畳み。表示メニュー「プレビュー」Ctrl+Shift+V（ShortcutKeys なし。ProcessCmdKey。IME 変換中は奪わない）。非 `.md` では畳む。幅はセッション内。XML に書かない。フォントは本文と同じ `editor/@fontSize` DIP DualFont。F-VBA-REF / F-MACRO の UI は今は実装しない。
 

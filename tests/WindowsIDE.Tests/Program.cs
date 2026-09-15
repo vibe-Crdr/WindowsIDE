@@ -96,6 +96,8 @@ namespace WindowsIDE.Tests
             RunLanguageDetector();
             RunLexers();
             RunMarkdownBlocks();
+            RunMarkdownBlocksSlice2();
+            RunMarkdownLocalPath();
             RunMarkdownHostNoop();
             InspectMarkdownSource();
             RunCSharpBind();
@@ -1193,6 +1195,49 @@ namespace WindowsIDE.Tests
             Check("file route half family", result.HalfWidthFamilyName == "Cascadia Mono");
             bool fullNameOk = result.FullWidthFamilyName == "Source Han Sans JP" || result.FullWidthFamilyName == "源ノ角ゴシック JP";
             Check("file route full family", fullNameOk);
+
+            string cascadiaItalic = Path.Combine(root, "assets", "fonts", "cascadia", "CascadiaMono-Italic.ttf");
+            string cascadiaBoldItalic = Path.Combine(root, "assets", "fonts", "cascadia", "CascadiaMono-BoldItalic.ttf");
+            string sourceHanBold = Path.Combine(root, "assets", "fonts", "source-han-sans", "SourceHanSansJP-Bold.otf");
+            if (!File.Exists(cascadiaItalic) || !File.Exists(cascadiaBoldItalic) || !File.Exists(sourceHanBold))
+            {
+                Check("font assets 6 present", false);
+                return;
+            }
+
+            FontLoadResult six = FontLoader.LoadFromBytes(
+                File.ReadAllBytes(cascadiaRegular),
+                File.ReadAllBytes(cascadiaBold),
+                File.ReadAllBytes(cascadiaItalic),
+                File.ReadAllBytes(cascadiaBoldItalic),
+                File.ReadAllBytes(sourceHan),
+                File.ReadAllBytes(sourceHanBold),
+                true);
+            Check("file route 6 no fallback", six != null && !six.UsedFallback);
+            Font hi = six.CreateHalfWidthItalic(16f);
+            Font hb = six.CreateHalfWidthBold(16f);
+            Font hbi = six.CreateHalfWidthBoldItalic(16f);
+            Font fb = six.CreateFullWidthBold(16f);
+            Check("file route 6 create italic bold", hi != null && hb != null && hbi != null && fb != null);
+            if (hi != null)
+            {
+                hi.Dispose();
+            }
+
+            if (hb != null)
+            {
+                hb.Dispose();
+            }
+
+            if (hbi != null)
+            {
+                hbi.Dispose();
+            }
+
+            if (fb != null)
+            {
+                fb.Dispose();
+            }
         }
 
         private static void RunTabSwitchScroll()
@@ -2538,6 +2583,10 @@ namespace WindowsIDE.Tests
             md.ScanLine("```", MarkdownLexer.Fenced, mdClose, out mdCloseEnd);
             Check("md fence close state", mdCloseEnd == MarkdownLexer.Normal);
             Check("md after fence heading", KindAt(md, "# Title", MarkdownLexer.Normal, 0) == TokenKind.Keyword);
+            List<Token> mdTilde = new List<Token>();
+            int mdTildeEnd;
+            md.ScanLine("~~~", MarkdownLexer.Normal, mdTilde, out mdTildeEnd);
+            Check("md tilde fence open", mdTildeEnd == MarkdownLexer.Fenced);
             Check("md inline code string", KindAt(md, "`code`", 0, 1) == TokenKind.String);
             Check("md unclosed tick text", KindAt(md, "`code", 0, 0) == TokenKind.Text);
             Check("md emphasis marker", KindAt(md, "*em*", 0, 0) == TokenKind.Keyword);
@@ -2559,6 +2608,190 @@ namespace WindowsIDE.Tests
             Check("md fence raw hash", blocks[3].FenceLines[1] == "# not heading");
             Check("md em strong", HasInlineKind(blocks[4], MarkdownInlineKind.Emphasis) && HasInlineKind(blocks[4], MarkdownInlineKind.Strong));
             Check("md html literal", blocks[5].Kind == MarkdownBlockKind.Paragraph && InlineText(blocks[5]) == "<b>x</b>");
+        }
+
+        private static void RunMarkdownBlocksSlice2()
+        {
+            TextBuffer setext = new TextBuffer();
+            setext.SetText("Title\n=====\n\nSub\n---");
+            List<MarkdownBlock> setextBlocks = MarkdownBlocks.Parse(setext);
+            Check("md setext h1", setextBlocks.Count >= 2 && setextBlocks[0].Kind == MarkdownBlockKind.Heading && setextBlocks[0].HeadingLevel == 1 && InlineText(setextBlocks[0]) == "Title");
+            Check("md setext h2", setextBlocks[1].Kind == MarkdownBlockKind.Heading && setextBlocks[1].HeadingLevel == 2 && InlineText(setextBlocks[1]) == "Sub");
+
+            TextBuffer quote = new TextBuffer();
+            quote.SetText("> a\n>> b\n> # H");
+            List<MarkdownBlock> quoteBlocks = MarkdownBlocks.Parse(quote);
+            Check("md quote nest 1", quoteBlocks.Count >= 3 && quoteBlocks[0].Kind == MarkdownBlockKind.Quote && quoteBlocks[0].NestLevel == 1 && InlineText(quoteBlocks[0]) == "a");
+            Check("md quote nest 2", quoteBlocks[1].Kind == MarkdownBlockKind.Quote && quoteBlocks[1].NestLevel == 2);
+            Check("md quote heading", quoteBlocks[2].Kind == MarkdownBlockKind.Heading && quoteBlocks[2].NestLevel == 1 && quoteBlocks[2].HeadingLevel == 1);
+
+            TextBuffer hr = new TextBuffer();
+            hr.SetText("***");
+            List<MarkdownBlock> hrBlocks = MarkdownBlocks.Parse(hr);
+            Check("md hr", hrBlocks.Count == 1 && hrBlocks[0].Kind == MarkdownBlockKind.HorizontalRule);
+
+            TextBuffer tilde = new TextBuffer();
+            tilde.SetText("~~~\nx\n~~~");
+            List<MarkdownBlock> tildeBlocks = MarkdownBlocks.Parse(tilde);
+            Check("md tilde fence", tildeBlocks.Count == 1 && tildeBlocks[0].Kind == MarkdownBlockKind.Fence && tildeBlocks[0].FenceLines.Length == 1 && tildeBlocks[0].FenceLines[0] == "x");
+
+            TextBuffer indented = new TextBuffer();
+            indented.SetText("    code");
+            List<MarkdownBlock> indentedBlocks = MarkdownBlocks.Parse(indented);
+            Check("md indented code", indentedBlocks.Count == 1 && indentedBlocks[0].Kind == MarkdownBlockKind.IndentedCode && indentedBlocks[0].FenceLines.Length == 1 && indentedBlocks[0].FenceLines[0] == "code");
+
+            TextBuffer nested = new TextBuffer();
+            nested.SetText("- a\n  - b");
+            List<MarkdownBlock> nestedBlocks = MarkdownBlocks.Parse(nested);
+            Check("md nested list", nestedBlocks.Count == 2 && nestedBlocks[0].Kind == MarkdownBlockKind.ListItem && nestedBlocks[0].IndentLevel == 0 && nestedBlocks[1].Kind == MarkdownBlockKind.ListItem && nestedBlocks[1].IndentLevel >= 1);
+
+            TextBuffer task = new TextBuffer();
+            task.SetText("- [ ] open\n- [x] done");
+            List<MarkdownBlock> taskBlocks = MarkdownBlocks.Parse(task);
+            Check("md task open", taskBlocks.Count == 2 && taskBlocks[0].TaskState == MarkdownTaskState.Open && InlineText(taskBlocks[0]) == "open");
+            Check("md task closed", taskBlocks[1].TaskState == MarkdownTaskState.Closed && InlineText(taskBlocks[1]) == "done");
+
+            TextBuffer table = new TextBuffer();
+            table.SetText("| h1 | h2 |\n| --- | --- |\n| **a** | b |");
+            List<MarkdownBlock> tableBlocks = MarkdownBlocks.Parse(table);
+            Check("md table kind", tableBlocks.Count == 1 && tableBlocks[0].Kind == MarkdownBlockKind.Table && tableBlocks[0].TableRows.Count == 2);
+            Check("md table header", tableBlocks[0].TableRows[0].Cells.Count == 2 && InlineList(tableBlocks[0].TableRows[0].Cells[0]) == "h1");
+            Check("md table cell", tableBlocks[0].TableRows[1].Cells.Count == 2 && InlineList(tableBlocks[0].TableRows[1].Cells[1]) == "b");
+            Check("md table cell strong", HasInlineKindList(tableBlocks[0].TableRows[1].Cells[0], MarkdownInlineKind.Strong) && InlineList(tableBlocks[0].TableRows[1].Cells[0]) == "a");
+
+            TextBuffer extras = new TextBuffer();
+            extras.SetText("~~strike~~ [t](u) ![a](p) <http://e.x> ***both***");
+            List<MarkdownBlock> extraBlocks = MarkdownBlocks.Parse(extras);
+            Check("md extras para", extraBlocks.Count == 1 && extraBlocks[0].Kind == MarkdownBlockKind.Paragraph);
+            Check("md strike", HasInlineStrike(extraBlocks[0]));
+            Check("md link", HasInlineKind(extraBlocks[0], MarkdownInlineKind.Link) && HasInlineDest(extraBlocks[0], MarkdownInlineKind.Link, "u"));
+            Check("md image", HasInlineKind(extraBlocks[0], MarkdownInlineKind.Image) && HasInlineDest(extraBlocks[0], MarkdownInlineKind.Image, "p"));
+            Check("md autolink", HasInlineDest(extraBlocks[0], MarkdownInlineKind.Link, "http://e.x"));
+            Check("md both flags", HasInlineBoth(extraBlocks[0]));
+
+            TextBuffer hard = new TextBuffer();
+            hard.SetText("a  \nb");
+            List<MarkdownBlock> hardBlocks = MarkdownBlocks.Parse(hard);
+            Check("md hard break", hardBlocks.Count == 1 && HasInlineKind(hardBlocks[0], MarkdownInlineKind.Break));
+
+            TextBuffer html = new TextBuffer();
+            html.SetText("<b>x</b>");
+            List<MarkdownBlock> htmlBlocks = MarkdownBlocks.Parse(html);
+            Check("md html still literal", htmlBlocks.Count == 1 && htmlBlocks[0].Kind == MarkdownBlockKind.Paragraph && InlineText(htmlBlocks[0]) == "<b>x</b>");
+        }
+
+        private static string InlineList(List<MarkdownInline> inlines)
+        {
+            if (inlines == null)
+            {
+                return "";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            int i = 0;
+            while (i < inlines.Count)
+            {
+                if (inlines[i] != null)
+                {
+                    sb.Append(inlines[i].Text);
+                }
+
+                i++;
+            }
+
+            return sb.ToString();
+        }
+
+        private static bool HasInlineStrike(MarkdownBlock block)
+        {
+            if (block == null || block.Inlines == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < block.Inlines.Count)
+            {
+                if (block.Inlines[i].Strike)
+                {
+                    return true;
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
+        private static bool HasInlineDest(MarkdownBlock block, MarkdownInlineKind kind, string dest)
+        {
+            if (block == null || block.Inlines == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < block.Inlines.Count)
+            {
+                if (block.Inlines[i].Kind == kind && block.Inlines[i].Destination == dest)
+                {
+                    return true;
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
+        private static bool HasInlineBoth(MarkdownBlock block)
+        {
+            if (block == null || block.Inlines == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < block.Inlines.Count)
+            {
+                if (block.Inlines[i].Strong && block.Inlines[i].Emphasis && block.Inlines[i].Text == "both")
+                {
+                    return true;
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
+        private static void RunMarkdownLocalPath()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-mdpath-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string png = Path.Combine(dir, "pic.png");
+                File.WriteAllBytes(png, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+                string full;
+                Check("md path relative", MarkdownLocalPath.TryNormalize(dir, "pic.png", out full) && string.Equals(full, Path.GetFullPath(png), StringComparison.OrdinalIgnoreCase));
+                Check("md path http", !MarkdownLocalPath.TryNormalize(dir, "http://example.com/x.png", out full));
+                Check("md path https", !MarkdownLocalPath.TryNormalize(dir, "https://example.com/x.png", out full));
+                Check("md path parent", !MarkdownLocalPath.TryNormalize(dir, "..\\secret.png", out full));
+                Check("md path rooted", !MarkdownLocalPath.TryNormalize(dir, Path.GetFullPath(png), out full));
+                Check("md path empty dir", !MarkdownLocalPath.TryNormalize(null, "pic.png", out full));
+                Check("md path scheme helper", MarkdownLocalPath.HasRemoteScheme("HTTP://x") && !MarkdownLocalPath.HasRemoteScheme("pic.png"));
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
         }
 
         private static string InlineText(MarkdownBlock block)
@@ -2600,6 +2833,27 @@ namespace WindowsIDE.Tests
             return false;
         }
 
+        private static bool HasInlineKindList(List<MarkdownInline> inlines, MarkdownInlineKind kind)
+        {
+            if (inlines == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < inlines.Count)
+            {
+                if (inlines[i] != null && inlines[i].Kind == kind)
+                {
+                    return true;
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
         private static void RunMarkdownHostNoop()
         {
             TextBuffer buf = new TextBuffer();
@@ -2625,6 +2879,7 @@ namespace WindowsIDE.Tests
                 Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownLexer.cs"),
                 Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownSyntax.cs"),
                 Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownBlocks.cs"),
+                Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownLocalPath.cs"),
                 Path.Combine(repo, "src", "WindowsIDE", "Ui", "MarkdownPreviewControl.cs")
             };
 
@@ -2644,6 +2899,48 @@ namespace WindowsIDE.Tests
             Check("md Theme no Markdown color", theme.IndexOf("Markdown", StringComparison.Ordinal) < 0);
             Check("md Theme no Fence color", theme.IndexOf("Fence", StringComparison.Ordinal) < 0);
             Check("md Theme no Heading color", theme.IndexOf("Heading", StringComparison.Ordinal) < 0);
+
+            string preview = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "MarkdownPreviewControl.cs"));
+            Check("md preview half bold", preview.IndexOf("CreateHalfWidthBold", StringComparison.Ordinal) >= 0);
+            Check("md preview half italic", preview.IndexOf("CreateHalfWidthItalic", StringComparison.Ordinal) >= 0);
+            Check("md preview image from stream", preview.IndexOf("Image.FromStream", StringComparison.Ordinal) >= 0);
+            Check("md preview no Image.FromFile", preview.IndexOf("Image.FromFile", StringComparison.Ordinal) < 0);
+            Check("md preview quote nest bars", preview.IndexOf("while (n < nest)", StringComparison.Ordinal) >= 0);
+            Check("md preview cell clip", preview.IndexOf("AppendClippedText", StringComparison.Ordinal) >= 0);
+            Check("md preview text clip span.W", preview.IndexOf("int clipW = span.W;", StringComparison.Ordinal) >= 0);
+            string textView = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Editor", "TextView.cs"));
+            Check("md textview no half bold", textView.IndexOf("CreateHalfWidthBold", StringComparison.Ordinal) < 0);
+
+            string compile = File.ReadAllText(Path.Combine(repo, "build", "compile.ps1"));
+            Check("md compile italic resource", compile.IndexOf("WindowsIDE.Fonts.CascadiaMonoItalic", StringComparison.Ordinal) >= 0);
+            Check("md compile bolditalic resource", compile.IndexOf("WindowsIDE.Fonts.CascadiaMonoBoldItalic", StringComparison.Ordinal) >= 0);
+            Check("md compile sourcehan bold resource", compile.IndexOf("WindowsIDE.Fonts.SourceHanSansJpBold", StringComparison.Ordinal) >= 0);
+            int requiredAt = compile.IndexOf("$required = @(", StringComparison.Ordinal);
+            int requiredEnd = (requiredAt < 0) ? -1 : compile.IndexOf(")", requiredAt, StringComparison.Ordinal);
+            string requiredBlock = (requiredAt >= 0 && requiredEnd > requiredAt) ? compile.Substring(requiredAt, requiredEnd - requiredAt) : "";
+            Check("md compile required 6", CountQuotes(requiredBlock, "WindowsIDE.Fonts.") == 6);
+        }
+
+        private static int CountQuotes(string text, string needle)
+        {
+            if (text == null || needle == null)
+            {
+                return 0;
+            }
+
+            int n = 0;
+            int i = 0;
+            while (true)
+            {
+                int at = text.IndexOf(needle, i, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    return n;
+                }
+
+                n++;
+                i = at + needle.Length;
+            }
         }
 
         private static void RunCSharpBind()

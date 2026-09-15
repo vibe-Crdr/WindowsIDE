@@ -33,7 +33,7 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | R11 | コマンドパレットとファイル名クイックオープン（VS Code の Ctrl+P / Ctrl+Shift+P 相当） |
 | R12 | 入力停止後、Framework `csc.exe` で診断のみ再コンパイルし、問題一覧と波線に出す。生成物は起動しない（フェーズ P7） |
 | R13 | ユーザーソース上の定義へ移動と、ホバー（解決できた定義のシグネチャ常時 + F-DOC 枠 / `///` / 直前コメント / Framework XML）。枠コメント挿入（F-DOC）。P7 の対象は C# / VBA / PowerShell / cmd。VB.NET の F-GD / F-HOV / F-DOC はフェーズ P9（今は実装しない） |
-| R14 | Markdown（`.md`）の字句色分けとプレビュー。ホスト言語ではない。実行・デバッグしない（フェーズ P8。F-MD 第1スライス実装。F-VBA-REF / F-MACRO は今は実装しない） |
+| R14 | Markdown（`.md`）の字句色分けとプレビュー。ホスト言語ではない。実行・デバッグしない（フェーズ P8。F-MD 第1+第2スライス済み。F-VBA-REF / F-MACRO は今は実装しない） |
 | R15 | VB.NET をホストとして扱う（`.vb`、指定 Framework `vbc.exe` でビルド、実行。デバッグは段階）。VBA / VBScript ではない。フェーズ P9。今は実装しない |
 | R16 | 編集器本文のインデント線（F-IG）。すべてのファイル形式（Plain / 無題を含む）。言語非依存。今は実装しない |
 | R17 | ユーザー C# の Windows Forms を GUI で視覚編集する（F-WF-DSN。ツールボックス・デザイン面・プロパティ・`Foo.Designer.cs`）。Visual Studio のフォームデザイナー相当。IDE 本体 UI と VBA UserForm は対象外。フェーズ P10。今は実装しない |
@@ -78,7 +78,7 @@ VS Code 級の作業面（エクスプローラ、タブ、検索、問題一覧
 | P5 | コマンドパレット、クイックオープン、簡易補完（C# / VBA / PowerShell / cmd。キーワード + ファイル内シンボル。VB.NET の F-CMP はフェーズ P9） |
 | P6 | VBA デバッグ（Excel VBE 連携 / `Application.Run` と実行時エラー） |
 | P7 | 編集器インテリジェンス（対応括弧、スマートインデント、自動閉じ、定義へ移動、ホバー、枠コメント、VBA キーワード大文字小文字、常時 csc、波線、VBA Compile 診断）。対象ホストは C# / VBA / PowerShell / cmd。VB.NET の同系統はフェーズ P9。P7-C 着手（F-LIVE / F-SQU / F-VBA-BLD 手動。VBA ライブは今は実装しない）。着手時期は採用済み P16（P2 完了の直後） |
-| P8 | F-MD 実装。参照/マクロは今は実装しない。P5（F-PAL）と P7 の後 |
+| P8 | F-MD 第1+第2スライス済み。参照/マクロは今は実装しない。P5（F-PAL）と P7 の後 |
 | P9 | VB.NET ホスト（`.vb`、指定 Framework `vbc.exe` でビルドと実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない |
 | P10 | ユーザー C# の WinForms 視覚編集（F-WF-DSN）。今は実装しない。P7 / P8 / P9 に押し込まない。**フェーズ番号の P10 は、提案 P10（`namingMode` 既定 `filename`）とは別である** |
 

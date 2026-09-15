@@ -119,10 +119,10 @@ powershell.exe -NoProfile -File .\build\compile-tests.ps1
 
 1. 固定パスの csc を使い、バナー（`for C# 5`）をログする
 2. BCL が 4.8 ファミリーであることを検査し FileVersion をログする
-3. 同梱フォント 3 ファイルが無ければ失敗する
+3. 同梱フォント 6 ファイルが無ければ失敗する
 4. 出力が x64 PE である（スクリプトが PE ヘッダを読む）
 5. 出力フォルダに第三者 DLL が増えていない
-6. 埋め込みリソース名 `WindowsIDE.Fonts.CascadiaMonoRegular` / `CascadiaMonoBold` / `SourceHanSansJpRegular` がある
+6. 埋め込みリソース名 `WindowsIDE.Fonts.CascadiaMonoRegular` / `CascadiaMonoBold` / `CascadiaMonoItalic` / `CascadiaMonoBoldItalic` / `SourceHanSansJpRegular` / `SourceHanSansJpBold` がある
 7. `app.config` を `WindowsIDE.exe.config` としてコピーする
 
-製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 3 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL の 4.8 ファミリー検査と FileVersion ログ、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。
+製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 6 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL の 4.8 ファミリー検査と FileVersion ログ、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。

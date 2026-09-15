@@ -95,6 +95,9 @@ namespace WindowsIDE.Tests
             RunStartupArgs();
             RunLanguageDetector();
             RunLexers();
+            RunMarkdownBlocks();
+            RunMarkdownHostNoop();
+            InspectMarkdownSource();
             RunCSharpBind();
             RunHighlightSession();
             RunBraceMatch();
@@ -2367,10 +2370,14 @@ namespace WindowsIDE.Tests
             Check("ext .vbs", LanguageDetector.FromPath("a.vbs") == LanguageKind.Plain);
             Check("ext .csx", LanguageDetector.FromPath("script.csx") == LanguageKind.Plain);
             Check("ext .txt", LanguageDetector.FromPath("note.txt") == LanguageKind.Plain);
+            Check("ext .md", LanguageDetector.FromPath("readme.md") == LanguageKind.Markdown);
+            Check("ext .MD", LanguageDetector.FromPath("README.MD") == LanguageKind.Markdown);
+            Check("ext .markdown", LanguageDetector.FromPath("note.markdown") == LanguageKind.Plain);
             Check("display C#", LanguageDetector.GetDisplayName(LanguageKind.CSharp) == "C#");
             Check("display VBA", LanguageDetector.GetDisplayName(LanguageKind.Vba) == "VBA");
             Check("display PowerShell", LanguageDetector.GetDisplayName(LanguageKind.PowerShell) == "PowerShell");
             Check("display cmd", LanguageDetector.GetDisplayName(LanguageKind.Cmd) == "cmd");
+            Check("display Markdown", LanguageDetector.GetDisplayName(LanguageKind.Markdown) == "Markdown");
             Check("display Plain", LanguageDetector.GetDisplayName(LanguageKind.Plain) == "Plain");
 
             Document untitled = Document.CreateUntitled();
@@ -2517,6 +2524,126 @@ namespace WindowsIDE.Tests
             Check("ps path param local", KindAt(ps, "Get-ChildItem -Path", 0, 15) == TokenKind.Local);
             Check("ps childitem still method", KindAt(ps, "Get-ChildItem -Path", 0, 4) == TokenKind.Method);
             Check("cs comment between ident and paren", KindAtCs("M /*c*/ (", 0, 0) == TokenKind.Method);
+
+            MarkdownLexer md = new MarkdownLexer();
+            Check("md heading keyword", KindAt(md, "# Title", 0, 0) == TokenKind.Keyword);
+            List<Token> mdOpen = new List<Token>();
+            int mdOpenEnd;
+            md.ScanLine("```", MarkdownLexer.Normal, mdOpen, out mdOpenEnd);
+            Check("md fence open state", mdOpenEnd == MarkdownLexer.Fenced);
+            Check("md fence body string", KindAt(md, "code", MarkdownLexer.Fenced, 0) == TokenKind.String);
+            Check("md fence heading string", KindAt(md, "# Title", MarkdownLexer.Fenced, 0) == TokenKind.String);
+            List<Token> mdClose = new List<Token>();
+            int mdCloseEnd;
+            md.ScanLine("```", MarkdownLexer.Fenced, mdClose, out mdCloseEnd);
+            Check("md fence close state", mdCloseEnd == MarkdownLexer.Normal);
+            Check("md after fence heading", KindAt(md, "# Title", MarkdownLexer.Normal, 0) == TokenKind.Keyword);
+            Check("md inline code string", KindAt(md, "`code`", 0, 1) == TokenKind.String);
+            Check("md unclosed tick text", KindAt(md, "`code", 0, 0) == TokenKind.Text);
+            Check("md emphasis marker", KindAt(md, "*em*", 0, 0) == TokenKind.Keyword);
+            Check("md list marker", KindAt(md, "- item", 0, 0) == TokenKind.Keyword);
+            Check("md Foo stays text", KindAtLang(LanguageKind.Markdown, "Foo(", 0, 0) == TokenKind.Text);
+        }
+
+        private static void RunMarkdownBlocks()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("# Title\n\nhello\nworld\n\n- item\n\n```\ncode\n# not heading\n```\n\n*em* **strong**\n\n<b>x</b>");
+            List<MarkdownBlock> blocks = MarkdownBlocks.Parse(buf);
+            Check("md blocks count", blocks.Count == 6);
+            Check("md heading kind", blocks[0].Kind == MarkdownBlockKind.Heading && blocks[0].HeadingLevel == 1);
+            Check("md heading text", blocks[0].Inlines.Count == 1 && blocks[0].Inlines[0].Text == "Title");
+            Check("md para join", blocks[1].Kind == MarkdownBlockKind.Paragraph && InlineText(blocks[1]) == "hello world");
+            Check("md list kind", blocks[2].Kind == MarkdownBlockKind.ListItem && InlineText(blocks[2]) == "item");
+            Check("md fence lines", blocks[3].Kind == MarkdownBlockKind.Fence && blocks[3].FenceLines.Length == 2);
+            Check("md fence raw hash", blocks[3].FenceLines[1] == "# not heading");
+            Check("md em strong", HasInlineKind(blocks[4], MarkdownInlineKind.Emphasis) && HasInlineKind(blocks[4], MarkdownInlineKind.Strong));
+            Check("md html literal", blocks[5].Kind == MarkdownBlockKind.Paragraph && InlineText(blocks[5]) == "<b>x</b>");
+        }
+
+        private static string InlineText(MarkdownBlock block)
+        {
+            if (block == null || block.Inlines == null)
+            {
+                return "";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            int i = 0;
+            while (i < block.Inlines.Count)
+            {
+                sb.Append(block.Inlines[i].Text);
+                i++;
+            }
+
+            return sb.ToString();
+        }
+
+        private static bool HasInlineKind(MarkdownBlock block, MarkdownInlineKind kind)
+        {
+            if (block == null || block.Inlines == null)
+            {
+                return false;
+            }
+
+            int i = 0;
+            while (i < block.Inlines.Count)
+            {
+                if (block.Inlines[i].Kind == kind)
+                {
+                    return true;
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
+        private static void RunMarkdownHostNoop()
+        {
+            TextBuffer buf = new TextBuffer();
+            buf.SetText("# Title\nFoo(");
+            HighlightSession session = new HighlightSession();
+            session.Reset(LanguageKind.Markdown, buf.LineCount);
+            session.SyncAfterEdit(buf, 0);
+            SmartIndentPlan plan = SmartIndentRules.Plan(LanguageKind.Markdown, buf, session, 0, 0, 4);
+            Check("md si copy", plan.Kind == SmartIndentKind.CopyOnly);
+            DocInsertPlan docPlan;
+            Check("md doc false", !DocCommentRules.TryBuildInsert(LanguageKind.Markdown, buf, session, "a.md", 0, 0, out docPlan));
+            DeclaredSymbol symbol;
+            Check("md def false", !DefinitionResolver.TryResolve(LanguageKind.Markdown, buf, session, "a.md", null, 0, 0, out symbol));
+            string hover;
+            Check("md hover false", !HoverText.TryGet(LanguageKind.Markdown, buf, session, "a.md", null, 0, 0, out hover) && hover == null);
+        }
+
+        private static void InspectMarkdownSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string[] files = new string[]
+            {
+                Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownLexer.cs"),
+                Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownSyntax.cs"),
+                Path.Combine(repo, "src", "WindowsIDE", "Languages", "MarkdownBlocks.cs"),
+                Path.Combine(repo, "src", "WindowsIDE", "Ui", "MarkdownPreviewControl.cs")
+            };
+
+            int i = 0;
+            while (i < files.Length)
+            {
+                string src = File.ReadAllText(files[i]);
+                string name = Path.GetFileName(files[i]);
+                Check("md no Regex " + name, src.IndexOf("Regex", StringComparison.Ordinal) < 0);
+                Check("md no WebBrowser " + name, src.IndexOf("WebBrowser", StringComparison.Ordinal) < 0);
+                i++;
+            }
+
+            string theme = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Theme.cs"));
+            Check("md Theme Keyword stays", theme.IndexOf("Keyword", StringComparison.Ordinal) >= 0);
+            Check("md Theme StringLiteral stays", theme.IndexOf("StringLiteral", StringComparison.Ordinal) >= 0);
+            Check("md Theme no Markdown color", theme.IndexOf("Markdown", StringComparison.Ordinal) < 0);
+            Check("md Theme no Fence color", theme.IndexOf("Fence", StringComparison.Ordinal) < 0);
+            Check("md Theme no Heading color", theme.IndexOf("Heading", StringComparison.Ordinal) < 0);
         }
 
         private static void RunCSharpBind()

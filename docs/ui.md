@@ -40,7 +40,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 ### P1 ハイライト
 
 P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。
-言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP。項目高さは DualFont セル + 2 px。ストリップ Padding は DIP のみ。描画クリップの高さは項目クライアント。トップ／ステータスの幅クリップは DualFont 測幅まで項目内で伸ばす。ドロップダウンの左右は TextRectangle（ショートカット右寄せ）。SizingGrip は出さない。
+言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Markdown / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP。項目高さは DualFont セル + 2 px。ストリップ Padding は DIP のみ。描画クリップの高さは項目クライアント。トップ／ステータスの幅クリップは DualFont 測幅まで項目内で伸ばす。ドロップダウンの左右は TextRectangle（ショートカット右寄せ）。SizingGrip は出さない。
 Ctrl+F は P1 F-FIND。VB.NET のステータス名はフェーズ P9（今は実装しない）。
 
 ### P1 F-CS-BLD / F-PROB（問題一覧）
@@ -79,9 +79,11 @@ P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`T
 
 P7-A 対括弧は Selection / 不一致は Error。P7-B ホバー（F-HOV）は既存の背景 / 前景 / 枠。シグネチャ行は既存 Keyword / Type / Method / Local 等。長い本文は折り返し、収まらなければ ThemedScrollBar（10 DIP、オートハイド）。フォーカスは奪わない（`SW_SHOWNOACTIVATE`）。P7-C 波線は既存 Error。新色なし。ライブ VBA は今は実装しない。波線は既存エラー `#f7768e`。フェーズ P7 でも新しいテーマ色は足さない。虹色括弧は W。P1 の「これ以外の新しい色は足さない」は維持する。つまみホバーはスクロールバーのマウスオーバーであり F-HOV ではない。
 
-### フェーズ P8（今は実装しない）
+### フェーズ P8（F-MD）
 
-Markdown プレビューは新しいテーマ色を足さない。見出しは Keyword、フェンスは String。プレビュー方式は採用済み P21（オーナー描画サブセット。同梱フォント。WebBrowser は使わない）。同梱フォント（Cascadia Mono / 源ノ角ゴシック）はプレビューでも破らない。
+Markdown プレビューは新しいテーマ色を足さない。見出しと強調は Keyword、フェンスとインラインコードは StringLiteral。プレビュー方式は採用済み P21（オーナー描画サブセット。同梱フォント。WebBrowser は使わない）。同梱フォント（Cascadia Mono / 源ノ角ゴシック）はプレビューでも破らない。Bold は使わない。
+
+`editorColumn` は FindBar `Dock.Top` の下に横 `SplitContainer`（`Orientation.Vertical`。左 TextView、右 `MarkdownPreviewControl`）。既定は右パネル畳み。表示メニュー「プレビュー」Ctrl+Shift+V（ShortcutKeys なし。ProcessCmdKey。IME 変換中は奪わない）。非 `.md` では畳む。幅はセッション内。XML に書かない。フォントは本文と同じ `editor/@fontSize` DIP DualFont。F-VBA-REF / F-MACRO の UI は今は実装しない。
 
 ### F-IG（今は実装しない）
 

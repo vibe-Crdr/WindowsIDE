@@ -9,6 +9,7 @@
         CSharp,
         Vba,
         PowerShell,
-        Cmd
+        Cmd,
+        Markdown
     }
 }

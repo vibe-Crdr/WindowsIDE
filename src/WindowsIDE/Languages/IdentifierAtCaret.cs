@@ -22,6 +22,11 @@ namespace WindowsIDE.Languages
         public static bool TryGet(LanguageKind language, TextBuffer buffer, HighlightSession session, int line, int column, out IdentifierHit hit)
         {
             hit = null;
+            if (language == LanguageKind.Markdown)
+            {
+                return false;
+            }
+
             if (buffer == null || line < 0 || line >= buffer.LineCount)
             {
                 return false;

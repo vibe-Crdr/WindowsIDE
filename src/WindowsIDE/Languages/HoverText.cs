@@ -45,6 +45,11 @@ namespace WindowsIDE.Languages
         public static bool TryGet(LanguageKind language, TextBuffer buffer, HighlightSession session, string filePath, string workspaceRoot, int line, int column, Dictionary<string, TextBuffer> openBuffers, out string text)
         {
             text = null;
+            if (language == LanguageKind.Markdown)
+            {
+                return false;
+            }
+
             IdentifierHit hit;
             if (!IdentifierAtCaret.TryGet(language, buffer, session, line, column, out hit))
             {

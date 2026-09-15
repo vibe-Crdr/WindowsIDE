@@ -84,7 +84,7 @@ namespace WindowsIDE.Languages
                 return false;
             }
 
-            if (language == LanguageKind.Plain)
+            if (language == LanguageKind.Plain || language == LanguageKind.Markdown)
             {
                 return false;
             }

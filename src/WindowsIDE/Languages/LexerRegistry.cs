@@ -10,6 +10,7 @@
         private static readonly ILineLexer Vba = new VbaLexer();
         private static readonly ILineLexer PowerShell = new PowerShellLexer();
         private static readonly ILineLexer Cmd = new CmdLexer();
+        private static readonly ILineLexer Markdown = new MarkdownLexer();
 
         /// <summary>
         /// 言語に対応するレキサを返す。未知は Plain。
@@ -28,6 +29,8 @@
                     return PowerShell;
                 case LanguageKind.Cmd:
                     return Cmd;
+                case LanguageKind.Markdown:
+                    return Markdown;
                 default:
                     return Plain;
             }

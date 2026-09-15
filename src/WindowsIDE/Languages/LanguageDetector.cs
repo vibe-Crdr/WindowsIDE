@@ -50,6 +50,11 @@ namespace WindowsIDE.Languages
                 return LanguageKind.Cmd;
             }
 
+            if (ext.Equals(".md", StringComparison.OrdinalIgnoreCase))
+            {
+                return LanguageKind.Markdown;
+            }
+
             return LanguageKind.Plain;
         }
 
@@ -70,6 +75,8 @@ namespace WindowsIDE.Languages
                     return "PowerShell";
                 case LanguageKind.Cmd:
                     return "cmd";
+                case LanguageKind.Markdown:
+                    return "Markdown";
                 default:
                     return "Plain";
             }

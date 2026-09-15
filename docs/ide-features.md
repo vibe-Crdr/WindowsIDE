@@ -187,7 +187,7 @@ F-HOV は S。P7-B の対象は C# / VBA / PowerShell / cmd。cmd を対象外�
 | PS | ファイル内 `function` とファイル内変数（`param` / 代入左辺 / `foreach` イテレータ）。照合は `$` なし名前・OrdinalIgnoreCase。`$script:x` 等は名前 `x`。複数は先頭。ピッカーなし。ドットソース先・自動変数・`$env:` 等ドライブ・splat・`Set-Variable` は初期対象外。スコープに忠実な解決はしない。 | シグネチャ常時。F-DOC 枠。直前 `#`（S） |
 | cmd | 対象外 | F-DOC 枠。直前の連続 `rem` / `::`（cmd にユーザー関数宣言は無いのでシグネチャは出さない） |
 
-キーは D12 どおり F12。Peek / 参照検索は W。Object Browser は W。Markdown の見出し直前ホバーはフェーズ P8。
+キーは D12 どおり F12。Peek / 参照検索は W。Object Browser は W。Markdown の見出し直前ホバーはフェーズ P8 の対象になりうるが、F-MD 第1スライスではやらない。
 
 ### 枠コメント（F-DOC）
 
@@ -221,7 +221,7 @@ cmd     rem ------------------------
         rem ------------------------
 ```
 
-Markdown への同じコマンドはフェーズ P8。VB.NET の `'` 枠はフェーズ P9（VBA 例をコピーして流用しない。今は実装しない）。
+Markdown への同じコマンドはフェーズ P8 の対象になりうるが、F-MD 第1スライスではやらない。VB.NET の `'` 枠はフェーズ P9（VBA 例をコピーして流用しない。今は実装しない）。
 
 ### VBA キャピタライズ（F-VBA-CASE）
 
@@ -278,9 +278,9 @@ P4-A は F-DBG-CS。ディスク上 `.cs` を手動 csc と同じ単位（`/targ
 
 PS と CS は同時セッション禁止。Stopped の F5 は止まっているエンジンへ Continue。Idle F5: 無題「無題はデバッグできない。」／ディスク `.ps1` は P3／ディスク `.cs` は pendingDebugAfterBuild + `StartManualBuild`／その他「C# のデバッグはディスク上の .cs、PowerShell はディスク上の .ps1 だけです。」CS デバッグ中（Idle 以外、または pendingDebugAfterBuild）の Ctrl+Shift+B は拒否。PS デバッグ中のビルドは現行どおり可。デバッグ中 Ctrl+F5/F8 は現行「デバッグ中は実行できない。」
 
-## フェーズ P8（Markdown／参照／マクロ）— 今は実装しない
+## フェーズ P8（Markdown／参照／マクロ）
 
-P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。
+P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。F-MD 第1スライスは実装する。F-VBA-REF / F-MACRO は今は実装しない。
 
 | ID | 優先 | 内容 | 受け入れ |
 | --- | --- | --- | --- |
@@ -288,9 +288,15 @@ P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**�
 | F-VBA-REF | S | 開いている VBProject の参照 | 開いている VBProject の参照を一覧・追加・削除できる。`.bas` には書かない |
 | F-MACRO | S | キー記録／再生と PS 5.1 の薄いコマンド面 | キー記録を再生でき、同じコマンド名を PS 5.1 から呼べる。サクラファイルは動かない。F-PAL の後 |
 
+### P8 F-MD スライス
+
+| ID | P8 F-MD でやる | P8 F-MD でやらない |
+| --- | --- | --- |
+| F-MD | `.md` だけ `LanguageKind.Markdown`。行スキャナ（`MarkdownLexer` / `MarkdownSyntax`。正規表現なし）で ATX・リスト・``` フェンス・インライン `` ` `` / `*` `_` `**` `__`。見出しは Keyword、フェンスは String。プレビューは `MarkdownBlocks` + オーナー描画 `MarkdownPreviewControl`（見出し・段落・リスト・強調・フェンス。横 split、Ctrl+Shift+V）。ホスト知能は Plain と同様 no-op。同梱 DualFont。既存 Theme 色のみ | F-VBA-REF、F-MACRO、F-CMP / F-HOV / F-DOC の Markdown 拡張、CommonMark 完全、NuGet パーサ、WebBrowser、RichTextBox 着色、生 HTML 実行、新 Theme 色、新 `/r`、workspace.xml 属性、実行/デバッグ/csc/vbc/F-LIVE、~~~ / Setext / 引用 / 表 / 画像 / リンクプレビュー、フェンス内入れ子字句、Cascadia Bold / 源ノ角 Bold、P10 ビューバー、プレビュー全画面、下パネルタブ化 |
+
 ### Markdown（F-MD）
 
-ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（Regex 禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。見出し・段落・リスト・インライン強調・フェンス。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可。F-DOC の同じコマンドを足してよい。
+ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（正規表現禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。見出し・段落・リスト・インライン強調・フェンス。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可だが第1スライスではやらない。F-DOC の同じコマンドも第1スライスではやらない。
 
 ### VBAProject 参照（F-VBA-REF）
 

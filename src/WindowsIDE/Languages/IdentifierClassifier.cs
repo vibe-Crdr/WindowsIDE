@@ -5,11 +5,11 @@ namespace WindowsIDE.Languages
 {
     /// <summary>
     /// 行内の Text 識別子を Local / Instance / Method に再分類する。
-    /// Keyword / String / Comment / Number は変えない。Plain と C# は何もしない（C# は束縛オーバーレイ）。
+    /// Keyword / String / Comment / Number は変えない。Plain と C# と Markdown は何もしない（C# は束縛オーバーレイ）。
     /// </summary>
     public static class IdentifierClassifier
     {
-        /// <param name="language">言語。Plain は no-op。</param>
+        /// <param name="language">言語。Plain / Markdown は no-op。</param>
         /// <param name="line">対象行。null は空文字。</param>
         /// <param name="tokens">ScanLine が出したリスト。要素の Kind をその場で書き換える。</param>
         public static void Apply(LanguageKind language, string line, List<Token> tokens)
@@ -24,7 +24,7 @@ namespace WindowsIDE.Languages
                 line = "";
             }
 
-            if (language == LanguageKind.Plain || language == LanguageKind.CSharp)
+            if (language == LanguageKind.Plain || language == LanguageKind.CSharp || language == LanguageKind.Markdown)
             {
                 return;
             }

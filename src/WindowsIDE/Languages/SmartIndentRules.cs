@@ -33,7 +33,7 @@ namespace WindowsIDE.Languages
     public static class SmartIndentRules
     {
         /// <summary>
-        /// Enter 時点の計画を返す。cmd / Plain は CopyOnly。
+        /// Enter 時点の計画を返す。cmd / Plain / Markdown は CopyOnly。
         /// </summary>
         /// <param name="language">言語。</param>
         /// <param name="buffer">本文。</param>
@@ -52,7 +52,7 @@ namespace WindowsIDE.Languages
                 return plan;
             }
 
-            if (language == LanguageKind.Cmd || language == LanguageKind.Plain)
+            if (language == LanguageKind.Cmd || language == LanguageKind.Plain || language == LanguageKind.Markdown)
             {
                 return plan;
             }

@@ -29,6 +29,7 @@ src\WindowsIDE\Ui\ChromeTextLayout.cs
 src\WindowsIDE\Ui\DarkMenuRenderer.cs
 src\WindowsIDE\Ui\MainForm.cs
 src\WindowsIDE\Ui\FindBar.cs
+src\WindowsIDE\Ui\MarkdownPreviewControl.cs
 src\WindowsIDE\Ui\HoverInfoControl.cs
 src\WindowsIDE\Ui\ChromeMark.cs
 src\WindowsIDE\Ui\CreateBarGlyph.cs
@@ -74,6 +75,9 @@ src\WindowsIDE\Languages\VbaLexer.cs
 src\WindowsIDE\Languages\PowerShellLexer.cs
 src\WindowsIDE\Languages\CmdLexer.cs
 src\WindowsIDE\Languages\PlainLexer.cs
+src\WindowsIDE\Languages\MarkdownSyntax.cs
+src\WindowsIDE\Languages\MarkdownLexer.cs
+src\WindowsIDE\Languages\MarkdownBlocks.cs
 src\WindowsIDE\Languages\IdentifierClassifier.cs
 src\WindowsIDE\Languages\ClassifySpan.cs
 src\WindowsIDE\Languages\SemanticClassifier.cs

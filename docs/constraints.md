@@ -97,7 +97,7 @@ P10 実装時の候補（今は製品 `/r` に無い。足すときは [decision
 | IDE 本体 | C# **5** のみ |
 | ビルド / 起動補助 | Windows PowerShell 5.1 と cmd |
 | IDE が扱うユーザーコード | C# 5、VB.NET（指定 `vbc.exe`、Visual Basic 2012。フェーズ P9。今は実装しない）、VBA、PowerShell 5.1、cmd / `.bat`（ホスト言語。実行・デバッグ対象。VB.NET のデバッグは段階） |
-| IDE が扱う編集専用 | Markdown（`.md`）。ホストではない。実行・デバッグ・csc / vbc しない（フェーズ P8。今は実装しない） |
+| IDE が扱う編集専用 | Markdown（`.md`）。ホストではない。実行・デバッグ・csc / vbc しない（フェーズ P8。F-MD 第1スライス） |
 
 C# 6 以降の構文は、コンパイラが落とす。書かない。代表例は `.cursor/rules/csharp5.mdc`。
 

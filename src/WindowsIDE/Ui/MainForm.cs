@@ -38,6 +38,8 @@ namespace WindowsIDE.Ui
         private FileTreeCreateBar treeCreateBar;
         private TabStrip tabs;
         private FindBar findBar;
+        private SplitContainer previewSplit;
+        private MarkdownPreviewControl markdownPreview;
         private TextView editor;
         private BottomPane bottomPane;
         private CscRunner cscRunner;
@@ -78,6 +80,8 @@ namespace WindowsIDE.Ui
         private bool suppressNewUntitled;
         private bool windowMetricsApplied;
         private bool leftSplitterInitialized;
+        private bool previewWanted;
+        private bool previewSplitInitialized;
         private bool activatedRebuildQueued;
         private bool activatedRebuildMouseDefer;
         private bool activatedRebuildIdleHooked;
@@ -357,6 +361,7 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.I)
                     || keyData == (Keys.Control | Keys.Shift | Keys.E)
                     || keyData == (Keys.Control | Keys.D1)
+                    || keyData == (Keys.Control | Keys.Shift | Keys.V)
                     || keyData == (Keys.Control | Keys.Alt | Keys.N)
                     || keyData == (Keys.Control | Keys.Shift | Keys.N))
                 {
@@ -444,6 +449,12 @@ namespace WindowsIDE.Ui
             if (keyData == (Keys.Control | Keys.D1))
             {
                 this.OnFocusEditor(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.Shift | Keys.V))
+            {
+                this.OnToggleMarkdownPreview(this, EventArgs.Empty);
                 return true;
             }
 
@@ -693,6 +704,7 @@ namespace WindowsIDE.Ui
             ToolStripMenuItem view = this.CreateTop("表示(&V)");
             view.DropDownItems.Add(this.CreateDisplayCommand("エクスプローラー(&E)", "Ctrl+Shift+E", this.OnFocusExplorer));
             view.DropDownItems.Add(this.CreateDisplayCommand("編集器(&D)", "Ctrl+1", this.OnFocusEditor));
+            view.DropDownItems.Add(this.CreateDisplayCommand("プレビュー(&P)", "Ctrl+Shift+V", this.OnToggleMarkdownPreview));
             view.DropDownItems.Add(new ToolStripSeparator());
             this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
             view.DropDownItems.Add(this.viewTerminalItem);
@@ -1025,6 +1037,18 @@ namespace WindowsIDE.Ui
             this.findBar.ReplaceAllRequested += this.OnReplaceAllRequested;
             this.findBar.CloseRequested += this.OnFindCloseRequested;
 
+            this.previewSplit = new SplitContainer();
+            this.previewSplit.Dock = DockStyle.Fill;
+            this.previewSplit.Orientation = Orientation.Vertical;
+            this.previewSplit.BackColor = Theme.LineNumber;
+            this.previewSplit.Panel1.BackColor = Theme.EditorBackground;
+            this.previewSplit.Panel2.BackColor = Theme.EditorBackground;
+            this.previewSplit.Panel2Collapsed = true;
+            this.previewSplit.SizeChanged += this.OnPreviewSplitSizeChanged;
+
+            this.markdownPreview = new MarkdownPreviewControl();
+            this.markdownPreview.Dock = DockStyle.Fill;
+
             this.editor = new TextView();
             this.editor.Dock = DockStyle.Fill;
             this.editor.CaretMoved += this.OnEditorCaret;
@@ -1033,7 +1057,9 @@ namespace WindowsIDE.Ui
             this.editor.HoverCancel += this.OnEditorHoverCancel;
             this.editor.BreakpointToggleRequested += this.OnEditorBreakpointToggle;
 
-            editorColumn.Controls.Add(this.editor);
+            this.previewSplit.Panel1.Controls.Add(this.editor);
+            this.previewSplit.Panel2.Controls.Add(this.markdownPreview);
+            editorColumn.Controls.Add(this.previewSplit);
             editorColumn.Controls.Add(this.findBar);
             right.Controls.Add(editorColumn);
             right.Controls.Add(this.tabs);
@@ -1143,6 +1169,24 @@ namespace WindowsIDE.Ui
                 }
             }
 
+            if (this.previewSplit != null)
+            {
+                int splitterW = DpiUtil.ToPixels(DpiUtil.SplitterWidthDip, dpi);
+                if (splitterW < 1)
+                {
+                    splitterW = 1;
+                }
+
+                this.previewSplit.SplitterWidth = splitterW;
+                int paneMin = DpiUtil.ToPixels(80, dpi);
+                int needP = paneMin + paneMin + this.previewSplit.SplitterWidth;
+                if (this.previewSplit.Width == 0 || this.previewSplit.Width >= needP)
+                {
+                    this.previewSplit.Panel1MinSize = paneMin;
+                    this.previewSplit.Panel2MinSize = paneMin;
+                }
+            }
+
             this.StartPosition = FormStartPosition.Manual;
             int x = wa.Left + (wa.Width - this.Width) / 2;
             int y = wa.Top + (wa.Height - this.Height) / 2;
@@ -1166,6 +1210,10 @@ namespace WindowsIDE.Ui
         private void ApplyEditorSettings(int fontSize, int tabSize)
         {
             this.editor.ApplyFonts(this.fonts, fontSize, tabSize);
+            if (this.markdownPreview != null)
+            {
+                this.markdownPreview.ApplyFonts(this.fonts, fontSize);
+            }
             if (this.findBar != null)
             {
                 this.findBar.SetEditorInputFont(this.fonts, fontSize);
@@ -1201,6 +1249,7 @@ namespace WindowsIDE.Ui
             this.RefreshBreakpointMarks();
             this.editor.Focus();
             this.RefreshFindCount();
+            this.SyncMarkdownPreview();
         }
 
         private void ApplyWorkspaceToDocument(Document doc)
@@ -1611,6 +1660,104 @@ namespace WindowsIDE.Ui
         private void OnFocusEditor(object sender, EventArgs e)
         {
             this.FocusEditor();
+        }
+
+        /// <summary>
+        /// Markdown プレビューの表示を切り替える。非 Markdown では何もしない。
+        /// </summary>
+        private void OnToggleMarkdownPreview(object sender, EventArgs e)
+        {
+            Document doc = (this.editor == null) ? null : this.editor.Document;
+            if (doc == null || doc.Language != LanguageKind.Markdown)
+            {
+                return;
+            }
+
+            this.previewWanted = !this.previewWanted;
+            this.SyncMarkdownPreview();
+        }
+
+        private void OnPreviewSplitSizeChanged(object sender, EventArgs e)
+        {
+            if (this.previewSplit == null || this.previewSplit.Panel2Collapsed || this.previewSplitInitialized)
+            {
+                return;
+            }
+
+            this.TryInitPreviewSplit();
+        }
+
+        /// <summary>
+        /// プレビュー可視条件を合わせて畳む／出す。可視のときだけ Parse する。
+        /// </summary>
+        private void SyncMarkdownPreview()
+        {
+            if (this.previewSplit == null || this.markdownPreview == null)
+            {
+                return;
+            }
+
+            Document doc = (this.editor == null) ? null : this.editor.Document;
+            bool markdown = doc != null && doc.Language == LanguageKind.Markdown;
+            bool visible = this.previewWanted && markdown;
+            this.previewSplit.Panel2Collapsed = !visible;
+            if (!visible)
+            {
+                return;
+            }
+
+            this.TryInitPreviewSplit();
+            if (doc != null && doc.Buffer != null)
+            {
+                this.markdownPreview.SetBlocks(MarkdownBlocks.Parse(doc.Buffer));
+            }
+            else
+            {
+                this.markdownPreview.SetBlocks(null);
+            }
+        }
+
+        private void TryInitPreviewSplit()
+        {
+            if (this.previewSplit == null || this.previewSplitInitialized || this.previewSplit.Panel2Collapsed)
+            {
+                return;
+            }
+
+            int w = this.previewSplit.Width;
+            if (w <= 0)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int min = DpiUtil.ToPixels(80, dpi);
+            int splitterW = this.previewSplit.SplitterWidth;
+            if (splitterW < 1)
+            {
+                splitterW = 1;
+            }
+
+            int need = min + min + splitterW;
+            if (w < need)
+            {
+                return;
+            }
+
+            int dist = w / 2;
+            if (dist < min)
+            {
+                dist = min;
+            }
+
+            int maxDist = w - min - splitterW;
+            if (dist > maxDist)
+            {
+                dist = maxDist;
+            }
+
+            this.previewSplit.SplitterDistance = dist;
+            this.previewSplitInitialized = true;
         }
 
         /// <summary>
@@ -4810,6 +4957,7 @@ namespace WindowsIDE.Ui
             this.tabs.RefreshTabs();
             this.UpdateStatus();
             this.RefreshFindCount();
+            this.SyncMarkdownPreview();
             if (this.editor != null && this.editor.IsComposing)
             {
                 if (this.liveTimer != null)

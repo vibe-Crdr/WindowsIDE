@@ -36,6 +36,7 @@ src\WindowsIDE\Ui\CommonItemDialog.cs
 src\WindowsIDE\Ui\TabStripLayout.cs
 src\WindowsIDE\Ui\TabStrip.cs
 src\WindowsIDE\Ui\AboutForm.cs
+src\WindowsIDE\Ui\MarkdownPreviewControl.cs
 src\WindowsIDE\Ui\Fonts\FontLoader.cs
 src\WindowsIDE\Ui\Fonts\GlyphClassifier.cs
 src\WindowsIDE\Ui\Fonts\DualFontPainter.cs
@@ -67,6 +68,9 @@ src\WindowsIDE\Languages\VbaLexer.cs
 src\WindowsIDE\Languages\PowerShellLexer.cs
 src\WindowsIDE\Languages\CmdLexer.cs
 src\WindowsIDE\Languages\PlainLexer.cs
+src\WindowsIDE\Languages\MarkdownSyntax.cs
+src\WindowsIDE\Languages\MarkdownLexer.cs
+src\WindowsIDE\Languages\MarkdownBlocks.cs
 src\WindowsIDE\Languages\IdentifierClassifier.cs
 src\WindowsIDE\Languages\ClassifySpan.cs
 src\WindowsIDE\Languages\SemanticClassifier.cs

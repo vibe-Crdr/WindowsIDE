@@ -47,7 +47,7 @@ SMA_DLL = (
 BUNDLED_FONTS = (
     "assets/fonts/cascadia/CascadiaMono-Regular.ttf",
     "assets/fonts/cascadia/CascadiaMono-Bold.ttf",
-    "assets/fonts/source-han-sans/SourceHanSansJP-Regular.otf",
+    "assets/fonts/source-han-sans/SourceHanSansJP-Regular.ttf",
 )
 
 # PowerShell 7 tokens that must not appear in product/build scripts.

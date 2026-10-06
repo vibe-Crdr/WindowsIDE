@@ -33,7 +33,7 @@ Assert-FrameworkBclFamily -FrameworkDirectory $Fw
 
 $fontRegular = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Regular.ttf"
 $fontBold = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Bold.ttf"
-$fontSource = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Regular.otf"
+$fontSource = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Regular.ttf"
 if (-not (Test-Path -LiteralPath $fontRegular) -or -not (Test-Path -LiteralPath $fontBold) -or -not (Test-Path -LiteralPath $fontSource)) {
     Fail "Bundled fonts missing. Run build\fetch-fonts.ps1"
 }

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -1177,22 +1179,103 @@ namespace WindowsIDE.Tests
             string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
             string cascadiaRegular = Path.Combine(root, "assets", "fonts", "cascadia", "CascadiaMono-Regular.ttf");
             string cascadiaBold = Path.Combine(root, "assets", "fonts", "cascadia", "CascadiaMono-Bold.ttf");
-            string sourceHan = Path.Combine(root, "assets", "fonts", "source-han-sans", "SourceHanSansJP-Regular.otf");
+            string sourceHan = Path.Combine(root, "assets", "fonts", "source-han-sans", "SourceHanSansJP-Regular.ttf");
             if (!File.Exists(cascadiaRegular) || !File.Exists(cascadiaBold) || !File.Exists(sourceHan))
             {
                 Check("font assets present", false);
                 return;
             }
 
-            FontLoadResult result = FontLoader.LoadFromBytes(
-                File.ReadAllBytes(cascadiaRegular),
-                File.ReadAllBytes(cascadiaBold),
-                File.ReadAllBytes(sourceHan),
-                true);
+            byte[] regularBytes = File.ReadAllBytes(cascadiaRegular);
+            byte[] boldBytes = File.ReadAllBytes(cascadiaBold);
+            byte[] sourceBytes = File.ReadAllBytes(sourceHan);
+            FontLoadResult memory = FontLoader.LoadFromBytes(regularBytes, boldBytes, sourceBytes, false);
+            Check("memory route no fallback", memory != null && !memory.UsedFallback);
+            Check("memory route half family", memory.HalfWidthFamilyName == "Cascadia Mono");
+            Check("memory route full family", memory.FullWidthFamilyName == "源ノ角ゴシック JP");
+            Check("memory route full is not Cascadia", memory.FullWidthFamilyName != "Cascadia Mono");
+            Check("memory route cjk outline", FullWidthDiffersFromUiFont(memory));
+            Font boldFont = memory.CreateHalfWidthBold(32f);
+            Check("memory route bold", boldFont != null && boldFont.Name != null);
+            boldFont.Dispose();
+
+            FontLoadResult result = FontLoader.LoadFromBytes(regularBytes, boldBytes, sourceBytes, true);
             Check("file route no fallback", result != null && !result.UsedFallback);
             Check("file route half family", result.HalfWidthFamilyName == "Cascadia Mono");
-            bool fullNameOk = result.FullWidthFamilyName == "Source Han Sans JP" || result.FullWidthFamilyName == "源ノ角ゴシック JP";
-            Check("file route full family", fullNameOk);
+            Check("file route full family", result.FullWidthFamilyName == "源ノ角ゴシック JP");
+            Check("file route full is not Cascadia", result.FullWidthFamilyName != "Cascadia Mono");
+        }
+
+        /// <summary>
+        /// 全角の「あ」が Yu Gothic UI と同じなら、GDI+ が同梱 CJK を描いていない。
+        /// </summary>
+        private static bool FullWidthDiffersFromUiFont(FontLoadResult fonts)
+        {
+            if (fonts == null)
+            {
+                return false;
+            }
+
+            Font ui;
+            try
+            {
+                ui = new Font("Yu Gothic UI", 48f, FontStyle.Regular, GraphicsUnit.Pixel);
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+
+            Font full = null;
+            try
+            {
+                full = fonts.CreateFullWidth(48f);
+                int diff = GlyphDiff(full, ui, "あ");
+                return diff >= 30;
+            }
+            finally
+            {
+                if (full != null)
+                {
+                    full.Dispose();
+                }
+
+                ui.Dispose();
+            }
+        }
+
+        private static int GlyphDiff(Font mine, Font other, string text)
+        {
+            using (Bitmap left = DrawProbe(mine, text))
+            using (Bitmap right = DrawProbe(other, text))
+            {
+                int diff = 0;
+                for (int y = 0; y < left.Height; y++)
+                {
+                    for (int x = 0; x < left.Width; x++)
+                    {
+                        if (left.GetPixel(x, y).ToArgb() != right.GetPixel(x, y).ToArgb())
+                        {
+                            diff++;
+                        }
+                    }
+                }
+
+                return diff;
+            }
+        }
+
+        private static Bitmap DrawProbe(Font font, string text)
+        {
+            Bitmap bmp = new Bitmap(96, 96, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Black);
+                g.TextRenderingHint = TextRenderingHint.SingleBitPerPixelGridFit;
+                g.DrawString(text, font, Brushes.White, 4f, 4f);
+            }
+
+            return bmp;
         }
 
         private static void RunTabSwitchScroll()

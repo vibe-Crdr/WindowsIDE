@@ -41,6 +41,7 @@
 | D33 | ユーザー C# の Windows Forms を視覚編集する（R17 / F-WF-DSN）。IDE 本体 UI のデザイナーではない。VBA UserForm（`.frm` / `.frx`）ではない（D35 / F-UF-DSN / フェーズ P11）。VB.NET デザイナーは入れない。フェーズ P10。優先度 S。名前空間は `WindowsIDE.Designer`。今は実装しない。**フェーズ P10 は提案 P10（`namingMode` 既定）とは別** |
 | D34 | Markdown プレビューは Cascadia Mono Italic / BoldItalic と源ノ角 Bold を同梱して使う。本文 TextView・メニュー・ツリーは Regular のまま。源ノ角 Italic ファイルは取らない。P21（オーナー描画、WebBrowser 禁止）は維持する |
 | D35 | VBA の UserForm を WindowsIDE 内で視覚編集する（R18 / F-UF-DSN）。VBE のデザイナー窓の埋め込みではない。C# WinForms（R17 / F-WF-DSN / フェーズ P10）ではない。エンジンは `WindowsIDE.Designer` に混ぜない。名前空間は `WindowsIDE.Vba.Forms`（枠は `WindowsIDE.Ui`。Export/Import は `WindowsIDE.Vba`）。フェーズ P11。優先度 S。第1スライスは MSForms 標準コントロールのデザイン面と `.frm` テキスト往復、`.frx` は不透明、Excel は Type 3 の Export/Import を正にする。P2 完了スライスに混ぜない。D31 の「パーサは UserForm を拾わない」は維持する。今は実装しない。**フェーズ P11 は採用済み提案 P11（言語は拡張子のみ）とは別** |
+| D36 | 全角の同梱ファイル（Regular と Bold）は公式 Source Han Sans JP Subset OTF 2.005R を静的 TrueType に変換したもの。GDI+ の `DrawString` は CFF を描かず Yu Gothic UI に落ち、ステータスの全角名まで Cascadia Mono に見えることがある。変換は OFL の Modified Version なので、ユーザーに見せるファミリー名は Reserved Font Name「Source」を使わず「源ノ角ゴシック JP」。可変フォントは禁止のまま。読み込みはファイルごとに `PrivateFontCollection` を分け、ステータス名は name テーブル。GDI が Cascadia Mono と返す全角顔、または「あ」が Yu Gothic UI と同じ顔は成功にしない。Markdown のウェイト分担は D34 のまま |
 
 ## P0 で採用した提案
 

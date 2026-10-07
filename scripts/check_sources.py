@@ -49,8 +49,8 @@ BUNDLED_FONTS = (
     "assets/fonts/cascadia/CascadiaMono-Bold.ttf",
     "assets/fonts/cascadia/CascadiaMono-Italic.ttf",
     "assets/fonts/cascadia/CascadiaMono-BoldItalic.ttf",
-    "assets/fonts/source-han-sans/SourceHanSansJP-Regular.otf",
-    "assets/fonts/source-han-sans/SourceHanSansJP-Bold.otf",
+    "assets/fonts/source-han-sans/SourceHanSansJP-Regular.ttf",
+    "assets/fonts/source-han-sans/SourceHanSansJP-Bold.ttf",
 )
 
 # PowerShell 7 tokens that must not appear in product/build scripts.

@@ -35,8 +35,8 @@ $fontRegular = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Regular.t
 $fontBold = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Bold.ttf"
 $fontItalic = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-Italic.ttf"
 $fontBoldItalic = Join-Path $RepoRoot "assets\fonts\cascadia\CascadiaMono-BoldItalic.ttf"
-$fontSource = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Regular.otf"
-$fontSourceBold = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Bold.otf"
+$fontSource = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Regular.ttf"
+$fontSourceBold = Join-Path $RepoRoot "assets\fonts\source-han-sans\SourceHanSansJP-Bold.ttf"
 if (-not (Test-Path -LiteralPath $fontRegular) -or -not (Test-Path -LiteralPath $fontBold) -or -not (Test-Path -LiteralPath $fontItalic) -or -not (Test-Path -LiteralPath $fontBoldItalic) -or -not (Test-Path -LiteralPath $fontSource) -or -not (Test-Path -LiteralPath $fontSourceBold)) {
     Fail "Bundled fonts missing. Run build\fetch-fonts.ps1"
 }

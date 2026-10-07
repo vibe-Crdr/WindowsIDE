@@ -18,8 +18,8 @@
 /resource:assets\fonts\cascadia\CascadiaMono-Bold.ttf,WindowsIDE.Fonts.CascadiaMonoBold
 /resource:assets\fonts\cascadia\CascadiaMono-Italic.ttf,WindowsIDE.Fonts.CascadiaMonoItalic
 /resource:assets\fonts\cascadia\CascadiaMono-BoldItalic.ttf,WindowsIDE.Fonts.CascadiaMonoBoldItalic
-/resource:assets\fonts\source-han-sans\SourceHanSansJP-Regular.otf,WindowsIDE.Fonts.SourceHanSansJpRegular
-/resource:assets\fonts\source-han-sans\SourceHanSansJP-Bold.otf,WindowsIDE.Fonts.SourceHanSansJpBold
+/resource:assets\fonts\source-han-sans\SourceHanSansJP-Regular.ttf,WindowsIDE.Fonts.SourceHanSansJpRegular
+/resource:assets\fonts\source-han-sans\SourceHanSansJP-Bold.ttf,WindowsIDE.Fonts.SourceHanSansJpBold
 /resource:assets\fonts\cascadia\LICENSE,WindowsIDE.Fonts.CascadiaLicense
 /resource:assets\fonts\source-han-sans\LICENSE.txt,WindowsIDE.Fonts.SourceHanSansLicense
 src\WindowsIDE\Program.cs

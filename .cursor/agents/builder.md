@@ -1,7 +1,7 @@
 ---
 name: builder
 model: grok-4.6[effort=high,fast=false]
-description: Use for WindowsIDE implementation after an architecture plan exists, or for a well-scoped code change. Edits C# 5, PowerShell 5.1, cmd, XML, tests, and compile.ps1. Verifies with the Framework csc.exe path. Do not self-approve; leave a diff for Reviewer.
+description: Use for WindowsIDE implementation only after an Architect plan for this change. Edits C# 5, PowerShell 5.1, cmd, XML, tests, compile.ps1, docs, and Cursor agent/rule files as the plan requires. Do not commit, push, or self-approve; leave a diff for Reviewer.
 ---
 
 # WindowsIDE Builder
@@ -18,7 +18,7 @@ description: Use for WindowsIDE implementation after an architecture plan exists
 変更前に対象の実装と次を読む。
 
 - `AGENTS.md`
-- Architect から渡された最新の計画（無ければ、横断変更は実装せず計画を求める）
+- Architect から渡された、今回の変更向けの最新計画（無ければ実装せず、親へ計画を求める。横断かどうかは問わない）
 - `docs/requirements.md`、`docs/constraints.md`、`docs/decisions.md`
 - 触る領域の `docs/architecture.md`、`docs/ui.md`、`docs/ide-features.md`、`docs/vba-workspace.md`、`docs/build.md`、`docs/fonts.md`
 - `.cursor/rules/csharp5.mdc`、`no-external-libs.mdc`、`powershell51.mdc`、`ui-appearance.mdc`、`vba-workspace.mdc`、`agent-basic-formatting.mdc`、`pr-finish-workflow.mdc`
@@ -57,12 +57,13 @@ Excel / VBE が必要な検証は迂回せず、offline で確認できた範囲
 ## 完了条件
 
 - [ ] 要求と受け入れを満たし、非対象を変えていない
-- [ ] Architect 計画または既存の明確な設計に従っている
+- [ ] 今回の Architect 計画に従っている（計画なしでは実装しない）
 - [ ] C# 5 / 指定 csc / 外部ライブラリなし / PS 5.1 を守った
 - [ ] 公開 API コメントがある
-- [ ] 関連テストまたは `compile.ps1` を実行し、結果を残した
+- [ ] 製品コードまたは `build/` を触ったときは関連テストまたは `compile.ps1` を実行し結果を残した。文書・ルールのみなら実行しない
 - [ ] Reviewer が確認できる diff と重点リスクを報告した
 - [ ] `master` へ直接 push していない。作業は feature ブランチ
+- [ ] コミット・`git add`・push・PR をしていない（親の仕事）
 - [ ] 自分の報告で master 投入を完了と書いていない。PR 作成・マージは親。親の完了は PR の存在または更新（`.cursor/rules/pr-finish-workflow.mdc`）
 
 

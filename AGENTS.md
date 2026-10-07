@@ -9,7 +9,7 @@
 3. [docs/constraints.md](docs/constraints.md)
 4. [docs/decisions.md](docs/decisions.md)
 5. 該当する [docs/architecture.md](docs/architecture.md)、[docs/ui.md](docs/ui.md)、[docs/ide-features.md](docs/ide-features.md)、[docs/vba-workspace.md](docs/vba-workspace.md)、[docs/build.md](docs/build.md)
-6. `.cursor/rules/`（とくに `windows-ide-requirements.mdc`。完了時は `pr-finish-workflow.mdc`）
+6. `.cursor/rules/`（とくに `windows-ide-requirements.mdc`。ファイルを変える開発は `dev-pipeline.mdc`。完了時は `pr-finish-workflow.mdc`）
 
 文書と実装が食い違ったら、勝手に片方へ寄せず、食い違いを書いてから文書か実装を直す。
 
@@ -28,18 +28,19 @@
 ## Subagents
 
 `.cursor/agents/` の 3 体。言語別・画面別エージェントは置かない。コード探索は組み込み Explore、長いシェル出力は組み込み Bash。
+親はオーケストレーションだけ（実装ファイルは編集しない）。
 
 | 呼び出し | 役割 |
 | --- | --- |
 | `/architect` | 実装前の設計。読み取り専用。Builder へ手順を渡す |
-| `/builder` | 計画後の実装。指定 `csc.exe` で検証する |
+| `/builder` | Architect 計画後の実装。指定 `csc.exe` で検証する。コミットしない |
 | `/reviewer` | 実装後・完了前の独立レビュー。読み取り専用。修正は Builder へ返す |
 
-横断変更は architect → builder → reviewer の順。親が「完了」と自己申告しない。実装セッションの完了は `master` 向け PR を開くか更新すること。詳細は `.cursor/rules/pr-finish-workflow.mdc`。
+開発（リポジトリのファイルを変える作業）は必ず architect → builder → reviewer。正は `.cursor/rules/dev-pipeline.mdc`。親が「完了」と自己申告しない。実装セッションの完了は `master` 向け PR を開くか更新すること。詳細は `.cursor/rules/pr-finish-workflow.mdc`。
 
 ## Git / PR
 
-実装の完了は `master` への直接 push ではない。feature ブランチで作業し、architect → builder → reviewer のあと親が `master` 向け GitHub pull request を開く（同一タスクの続きは同じ PR を更新）。マージしない。規則の正は `.cursor/rules/pr-finish-workflow.mdc`。
+実装の完了は `master` への直接 push ではない。feature ブランチで、親がコミットし `master` 向け GitHub pull request を開く（同一タスクの続きは同じ PR を更新）。マージしない。規則の正は `.cursor/rules/pr-finish-workflow.mdc`。
 
 ## MCP
 

@@ -1,0 +1,41 @@
+---
+description: 開発は常に architect → builder → reviewer。親は実装ファイルを編集しない
+alwaysApply: true
+---
+
+# Dev pipeline
+
+リポジトリのファイルを変える開発は、規模・横断の有無を問わず必ずこの順。親（メイン）はオーケストレーションだけ。正はこのファイル。`AGENTS.md` と `.cursor/agents/` は短く追従する。PR の正は `.cursor/rules/pr-finish-workflow.mdc`。
+
+1. 親が Architect に設計を依頼する。
+2. 計画を受けて親が feature ブランチを用意し、Builder に実装を依頼する。
+3. 差分を受けて親が Reviewer にレビューを依頼する。
+4. CHANGES REQUIRED / BLOCK なら親が Builder へ差し戻し、再度 Reviewer。
+5. 承認後、変更があれば親がコミットし、`master` 向け PR を開く（マージしない、`master` 直 push しない）。
+
+「横断変更だけパイプライン」は廃した。誤字・1 行の仕様・コメント・ルール文言も開発であり、省かない。
+
+サブエージェントは `.cursor/agents/` の architect / builder / reviewer の 3 体だけ。言語別・画面別は足さない。コード探索の Explore、長いシェルの Bash は親が使ってよい。Architect が探索を求めたら親が Explore を起動する。Explore の結果で親がファイルを直さない。
+
+## 例外（これ以外はパイプライン必須）
+
+- ファイルを変えない質問・説明・読み取り。親が答えてよい。Architect が変更不要と返したら Builder / Reviewer / PR はしない。
+- stop hook の codebase-memory `index_repository`（project `WindowsIDE`）。親が実行してよい。
+- 当該ターンでユーザーが親へ実装を明示したとき（「親が直接直せ」など）。「小さい」「急いで」「横断ではない」は足りない。
+
+## 親がやってよいこと
+
+- 要求の受け取り、順番の守備、計画・差分・指摘の受け渡し、Builder への差し戻し
+- feature ブランチの作成・切替、コミット、push、PR（マージしない）
+- メモリ検索・記録、MCP の使い分け判断（実装そのものは Builder）
+- 調査のための Explore、および Architect が求めた Explore
+
+## 親がやってはいけないこと
+
+- 設計を省いて実装する
+- ソース、テスト、`build/`、`scripts/`、`docs/`、`.cursor/rules`、`.cursor/agents`、`AGENTS.md`、その他作業ツリーを自分で編集する
+- Reviewer を飛ばして完了と書く
+- 指摘を自分で直す
+- Builder を飛ばす
+
+Builder はコミット・`git add`・push・PR をしない。Reviewer は直さない。修正は Builder。Architect 計画が無い実装は Reviewer が CHANGES REQUIRED 以上にする。

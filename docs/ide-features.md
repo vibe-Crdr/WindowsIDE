@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P10。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9、WinForms デザイナーはフェーズ P10。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P10 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB / F-WF-DSN から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
+凡例: M = 必須（P2 まで）。S = べき（P3–P11。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9、WinForms デザイナーはフェーズ P10、VBA UserForm デザイナーはフェーズ P11。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P11 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB / F-WF-DSN / F-UF-DSN から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
 
 ## P0 スライス
 
@@ -103,7 +103,7 @@ C# 束縛の残り外れ（文書化）: 打ち途中の構文エラー区間、
 
 ## P2 F-VBA-SYNC スライス
 
-R7 の VBA ディレクトリ ↔ Excel 明示プル／プッシュ。Compile / Run / References / UserForm は入れない。
+R7 の VBA ディレクトリ ↔ Excel 明示プル／プッシュ。Compile / Run / References / UserForm は入れない。UserForm（`.frm` / `.frx`）はフェーズ P11（F-UF-DSN）。残 P2 に入れない。
 
 | ID | P2 F-VBA-SYNC でやる | P2 F-VBA-SYNC でやらない |
 | --- | --- | --- |
@@ -280,7 +280,7 @@ PS と CS は同時セッション禁止。Stopped の F5 は止まっている�
 
 ## フェーズ P8（Markdown／参照／マクロ）
 
-P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。F-MD 第1スライスは実装する。F-VBA-REF / F-MACRO は今は実装しない。
+P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。F-MD 第1スライスと第2スライスは実装済み。F-VBA-REF / F-MACRO は今は実装しない。
 
 | ID | 優先 | 内容 | 受け入れ |
 | --- | --- | --- | --- |
@@ -292,11 +292,12 @@ P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**�
 
 | ID | P8 F-MD でやる | P8 F-MD でやらない |
 | --- | --- | --- |
-| F-MD | `.md` だけ `LanguageKind.Markdown`。行スキャナ（`MarkdownLexer` / `MarkdownSyntax`。正規表現なし）で ATX・リスト・``` フェンス・インライン `` ` `` / `*` `_` `**` `__`。見出しは Keyword、フェンスは String。プレビューは `MarkdownBlocks` + オーナー描画 `MarkdownPreviewControl`（見出し・段落・リスト・強調・フェンス。横 split、Ctrl+Shift+V）。ホスト知能は Plain と同様 no-op。同梱 DualFont。既存 Theme 色のみ | F-VBA-REF、F-MACRO、F-CMP / F-HOV / F-DOC の Markdown 拡張、CommonMark 完全、NuGet パーサ、WebBrowser、RichTextBox 着色、生 HTML 実行、新 Theme 色、新 `/r`、workspace.xml 属性、実行/デバッグ/csc/vbc/F-LIVE、~~~ / Setext / 引用 / 表 / 画像 / リンクプレビュー、フェンス内入れ子字句、Cascadia Bold / 源ノ角 Bold、P10 ビューバー、プレビュー全画面、下パネルタブ化 |
+| F-MD 第1 | `.md` だけ `LanguageKind.Markdown`。行スキャナ（`MarkdownLexer` / `MarkdownSyntax`。正規表現なし）で ATX・リスト・``` フェンス・インライン `` ` `` / `*` `_` `**` `__`。見出しは Keyword、フェンスは String。プレビューは `MarkdownBlocks` + オーナー描画 `MarkdownPreviewControl`（見出し・段落・リスト・強調・フェンス。横 split、Ctrl+Shift+V）。ホスト知能は Plain と同様 no-op。同梱 DualFont。既存 Theme 色のみ | F-VBA-REF、F-MACRO、F-CMP / F-HOV / F-DOC の Markdown 拡張、CommonMark 完全、NuGet パーサ、WebBrowser、RichTextBox 着色、生 HTML 実行、新 Theme 色、新 `/r`、workspace.xml 属性、実行/デバッグ/csc/vbc/F-LIVE、フェンス内入れ子字句、P10 ビューバー、プレビュー全画面、下パネルタブ化 |
+| F-MD 第2 | プレビューが扱う全書式を視覚上区別する。ATX/Setext、段落・ハードブレーク、引用ネスト、HR、入れ子リスト・タスク、``` と ~~~、インデントコード、GFM パイプ表、Strong/Emphasis/両方、取り消し線、インライン code 帯、リンク下線、相対ローカル画像。半角 Cascadia Bold/Italic/BoldItalic と源ノ角 Bold を同梱。全角 Italic は合成 | CommonMark 完全、脚注、定義リスト、Math、Mermaid、GFM アラート、絵文字 shortcode、リモート画像、HTML 実行、フェンス内ホスト字句、リンクの Process.Start、源ノ角 Italic ファイル、Cascadia Code / Variable、新 Theme 色、新 `/r`、workspace.xml、TextView 本文の Bold、F-VBA-REF / F-MACRO / F-CMP / F-HOV / F-DOC |
 
 ### Markdown（F-MD）
 
-ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（正規表現禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。見出し・段落・リスト・インライン強調・フェンス。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可だが第1スライスではやらない。F-DOC の同じコマンドも第1スライスではやらない。
+ホスト言語にしない（D4）。ホスト字句は P9 で VB.NET を足す。Markdown は R14 で R3 に入れない。拡張子 `.md` のみ（P11）。`LanguageKind.Markdown`。行スキャナ（正規表現禁止）。実行・デバッグ・csc / vbc・F-LIVE しない。見出しは既存 Keyword 色、コードフェンスは String。新しいテーマ色は足さない。プレビューはオーナー描画サブセット（採用済み P21。同梱フォント。WebBrowser は使わない）。第1スライス: 見出し・段落・リスト・インライン強調・フェンス。第2スライス: 表・引用・HR・入れ子リスト・タスク・取り消し線・リンク下線・ローカル画像と、太字・斜体・コードブロック枠。本文強調の文字色は Foreground（書式はウェイト／斜体）。見出しは Keyword＋太字。CommonMark 完全は W。生 HTML の実行はしない。F-CMP の Markdown はファイル内見出し・リンク先程度。F-HOV は見出し直前でも可だが第1スライスではやらない。F-DOC の同じコマンドも第1スライスではやらない。
 
 ### VBAProject 参照（F-VBA-REF）
 
@@ -368,7 +369,37 @@ P7-A / P8 に押し込まない。新しい M は作らない。設定 XML の�
 
 ### フェーズ P10 の非対象
 
-WPF、データバインド一式、WebBrowser、任意 GAC スキャン、ユーザーアセンブリ Load、ユーザー EXE を IDE に Load すること、ユーザー Form コンストラクタを IDE で走らせること、VBA UserForm、VB.NET デザイナー、Object Browser、サードパーティデザイナー、Roslyn、NuGet、csproj、IDE 本体 UI のデザイナー化、Excel COM 上へのデザイナー、左ツリーをツールボックスに差し替えること、下パネルへツールボックスを置くこと、P7 / P8 / P9 への混入、今の `workspace.xml` 新規属性、製品 `/r` の確定追加（P38 待ち）、ユーザー `/target:winexe` の確定（P39 待ち）、`Microsoft.CSharp` を製品またはユーザー `/r` に足すこと。
+WPF、データバインド一式、WebBrowser、任意 GAC スキャン、ユーザーアセンブリ Load、ユーザー EXE を IDE に Load すること、ユーザー Form コンストラクタを IDE で走らせること、VBA UserForm（フェーズ P11 / F-UF-DSN。P10 では解かない）、VB.NET デザイナー、Object Browser、サードパーティデザイナー、Roslyn、NuGet、csproj、IDE 本体 UI のデザイナー化、Excel COM 上へのデザイナー、左ツリーをツールボックスに差し替えること、下パネルへツールボックスを置くこと、P7 / P8 / P9 への混入、今の `workspace.xml` 新規属性、製品 `/r` の確定追加（P38 待ち）、ユーザー `/target:winexe` の確定（P39 待ち）、`Microsoft.CSharp` を製品またはユーザー `/r` に足すこと。
+
+## フェーズ P11（VBA UserForm デザイナー）— 今は実装しない
+
+Excel VBA の UserForm（`.frm` / `.frx`）を VBE のフォームデザイナー相当で WindowsIDE 内から視覚編集する（R18 / F-UF-DSN）。**VBE のデザイナー窓の埋め込みは不可。** C# WinForms（R17 / F-WF-DSN / フェーズ P10）ではない。IDE 本体 UI のデザイナーではない。VB.NET フォームではない。P2 / P7 / P8 / P9 / P10 に押し込まない。P2 完了スライスは壊さない（`.frm` 同期は残 P2 ではない）。F-IG と混ぜない。新しい M は作らない。設定 XML の新規属性は今増やさない。製品 `/r` は増やさない（System.Design を UserForm のために足さない。P38 は C# 側）。**フェーズ番号の P11 は、採用済み提案 P11（言語は拡張子のみ）とは別である。**
+
+着手順の目安（コードを書くとき）: P11-A（切替・MSForms ツールボックス・デザイン面・プロパティ・`.frm` テキスト往復・Type 3 の Excel Export/Import）→ 後スライス（TabStrip / MultiPage、Picture、イベント配線、`.frm` を `LanguageKind.Vba` にする）。今はコードを書かない。
+
+| ID | 優先 | 内容 | 受け入れ |
+| --- | --- | --- | --- |
+| F-UF-DSN | S | VBA UserForm の視覚編集 | `.frm` タブでデザイン面が開き、必須コントロールを置いてプロパティを変え、保存すると `.frm` テキストに反映される。既存 `.frx` を Picture 未変更なら壊さない。プルが Type 3 を `.frm`+`.frx` にし、プッシュが Import で Excel に戻る。Code ビューのコードビハインドがデザイン切替で消えない。今は実装しない |
+
+### P11-A（第1スライス、S）
+
+| 項目 | やる | やらない |
+| --- | --- | --- |
+| 切替 | 同一 `.frm` タブでデザイン / コード。FindBar 直下〜同列の薄いビューバー（役割は F-WF-DSN に揃える。型も名前空間も共有しない） | 別ウィンドウ、`Foo.Designer.cs` 分割、VBE 窓の埋め込み |
+| ツールボックス | 選択ポインタ + 固定リストの MSForms 標準（Label, TextBox, CommandButton, CheckBox, OptionButton, ListBox, ComboBox, Frame, ToggleButton, ScrollBar, SpinButton, Image は配置とサイズのみ） | TabStrip / MultiPage（P49）、RefEdit（P46）、Additional Controls、任意 ActiveX、WinForms コントロール |
+| デザイン面 | オーナー描画。置き・選択・移動・リサイズ。ルートはディスク `.frm` のフォーム | `UserForm.Show`、IDE プロセスへの MSForms Load、実行時フォーム |
+| プロパティ | Caption / Name / Left / Top / Width / Height / Visible / Enabled 等、`.frm` テキストに出るスカラー。新 Theme 色なし | 視覚アンカー、Picture の完全編集、新 Theme 色、System.Design |
+| `.frm` | VERSION / BEGIN / END と既知 ProgID を読み書き。未知 Begin と未知プロパティ行は保存で捨てない。コードビハインドは BEGIN/END と Attribute の後 | CodeModule 置換だけでレイアウトを書くこと、百科事典的な全プロパティ必須 |
+| `.frx` | 不透明バイト。既存は無変更で隣に置く | OLE 自前パース、空 `.frx` の自前合成（P50） |
+| 同期 | Type 3 のプルは `VBComponent.Export`（`.frm` + `.frx`）。プッシュは既存フォームを Remove + Import。部分適用しない。Excel のみフォームは黙って消さない。F-VBA-SYNC の P11 拡張 | 残 P2 への混入、CodeModule.Lines でのレイアウト置換 |
+
+生成物契約: 1 ファイル（`.frm`）の 2 ビュー。sidecar `.frx` は同名。新規は Picture 無し `.frm`（P50）。無題はデザイン不可。現状 `.frm` は Plain（テスト固定）。P11 実装時に `LanguageKind.Vba` にする（専用 enum は作らない。P53）。`.frx` は言語ではない。
+
+名前空間: エンジンとキャンバスは `WindowsIDE.Vba.Forms`。Export/Import・列挙・`VbaComponentKind.UserForm = 3` は既存 `WindowsIDE.Vba`（WinForms 非依存を維持）。枠は `WindowsIDE.Ui`。コード面は既存 `TextView`。**`WindowsIDE.Designer` に混ぜない。** Languages は Theme / WinForms / Designer 非参照のまま。vba-map の `type="form"` は今足さない（P45）。
+
+### フェーズ P11 の非対象
+
+VBE デザイナー窓の埋め込み、C# WinForms（F-WF-DSN）への相乗り、`WindowsIDE.Designer` 共有、VB.NET フォーム、IDE 本体 UI のデザイナー化、任意 ActiveX、RefEdit（P46）、TabStrip / MultiPage（P49 は P11-A 外）、画像の完全編集、WinForms コントロールを MSForms に見せかけること、ユーザー EXE Load、`UserForm.Show` をデザイン操作で走らせること、`.frx` OLE の自前パース、System.Design `/r`、PIA `/r`、新しい M、残 P2 への `.frm` 必須化、今の `workspace.xml` 新規属性、今の `vba-map` への `form`（P45 待ち）、D31 パーサに UserForm レイアウトを必須にすること、P2 / P7 / P8 / P9 / P10 への混入。
 
 ## ワークベンチ
 
@@ -381,6 +412,7 @@ WPF、データバインド一式、WebBrowser、任意 GAC スキャン、ユ�
 | F-QO | S | クイックオープン | ワークスペース内ファイル名で開く |
 | F-SET | M | 設定 UI または XML 編集 | フォントサイズと VBA `namingMode` を切替できる。半角フォントは Cascadia Mono 固定。P2 の namingMode は vba-map + VBA メニュー。設定画面なし |
 | F-WF-DSN | S | ユーザー C# WinForms の視覚編集 | ディスク上の対ファイルをデザイン面で編集でき、`InitializeComponent` が `Designer.cs` に書き戻る。IDE 本体 UI と VBA UserForm は対象外。フェーズ P10。今は実装しない |
+| F-UF-DSN | S | VBA UserForm の視覚編集 | ディスク上の `.frm` をデザイン面で編集でき、保存が `.frm` テキストに書き戻る。`.frx` は不透明。Excel Type 3 は Export/Import。C# の F-WF-DSN とは別。フェーズ P11。今は実装しない |
 
 ## 編集器
 
@@ -418,6 +450,7 @@ WPF、データバインド一式、WebBrowser、任意 GAC スキャン、ユ�
 | F-LIVE | S | 常時コンパイル（診断のみ） | 入力停止後にデバウンスした Framework `csc.exe` が走り、失敗が問題一覧と波線に出る。生成物は起動されない。フェーズ P7-C。csc 専用（VBA Compile は F-VBA-BLD。VB.NET は F-VB-LIVE） |
 | F-SQU | S | 構文エラーの波線 | C# は csc 診断位置、PS は `ParseInput` エラー位置、VBA は F-VBA-BLD の位置に、エラー色の波線が付く。cmd は波線なし。フェーズ P7-C |
 | F-VBA-BLD | S | VBA Compile 診断 | プッシュ後の Excel Compile 失敗が問題一覧と波線に出る。Run されない。Excel 未起動のライブは走らない。フェーズ P7-C |
+| F-UF-DSN | S | VBA UserForm の視覚編集 | `.frm` をデザイン面で置き・動かし・プロパティ変更でき、`.frm` テキストに書き戻る。Type 3 のプル／プッシュは Export/Import。フェーズ P11。今は実装しない |
 
 ## デバッグ
 
@@ -456,4 +489,4 @@ WPF、データバインド一式、WebBrowser、任意 GAC スキャン、ユ�
 | F-EXT | 拡張マーケット | 外部コード導入になる |
 | F-AI | 製品内チャット | ホスト言語外・ネット前提になりやすい |
 
-フェーズ P7 の非対象は「フェーズ P7（編集器インテリジェンス）」節に列挙する。フェーズ P8 の非対象は「フェーズ P8」節に列挙する。フェーズ P10 の非対象は「フェーズ P10」節に列挙する。F-LSP は W のまま。
+フェーズ P7 の非対象は「フェーズ P7（編集器インテリジェンス）」節に列挙する。フェーズ P8 の非対象は「フェーズ P8」節に列挙する。フェーズ P10 の非対象は「フェーズ P10」節に列挙する。フェーズ P11 の非対象は「フェーズ P11」節に列挙する。F-LSP は W のまま。

@@ -1709,10 +1709,18 @@ namespace WindowsIDE.Ui
             this.TryInitPreviewSplit();
             if (doc != null && doc.Buffer != null)
             {
+                string dir = null;
+                if (!string.IsNullOrEmpty(doc.FilePath))
+                {
+                    dir = Path.GetDirectoryName(doc.FilePath);
+                }
+
+                this.markdownPreview.SetDocumentDirectory(dir);
                 this.markdownPreview.SetBlocks(MarkdownBlocks.Parse(doc.Buffer));
             }
             else
             {
+                this.markdownPreview.SetDocumentDirectory(null);
                 this.markdownPreview.SetBlocks(null);
             }
         }

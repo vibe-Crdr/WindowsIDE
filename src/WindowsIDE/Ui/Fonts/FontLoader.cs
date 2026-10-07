@@ -18,16 +18,22 @@ namespace WindowsIDE.Ui.Fonts
         private FontFamily halfFamily;
         private FontFamily fullFamily;
         private FontFamily boldFamily;
+        private FontFamily italicFamily;
+        private FontFamily boldItalicFamily;
+        private FontFamily fullBoldFamily;
         private bool usedFallback;
         private string errorMessage;
         private string halfWidthFamilyName;
         private string fullWidthFamilyName;
 
-        internal FontLoadResult(FontFamily halfFamily, FontFamily fullFamily, FontFamily boldFamily, bool usedFallback, string errorMessage, string halfWidthFamilyName, string fullWidthFamilyName)
+        internal FontLoadResult(FontFamily halfFamily, FontFamily fullFamily, FontFamily boldFamily, FontFamily italicFamily, FontFamily boldItalicFamily, FontFamily fullBoldFamily, bool usedFallback, string errorMessage, string halfWidthFamilyName, string fullWidthFamilyName)
         {
             this.halfFamily = halfFamily;
             this.fullFamily = fullFamily;
             this.boldFamily = boldFamily;
+            this.italicFamily = italicFamily;
+            this.boldItalicFamily = boldItalicFamily;
+            this.fullBoldFamily = fullBoldFamily;
             this.usedFallback = usedFallback;
             this.errorMessage = errorMessage;
             this.halfWidthFamilyName = string.IsNullOrEmpty(halfWidthFamilyName) ? "Consolas" : halfWidthFamilyName;
@@ -69,12 +75,73 @@ namespace WindowsIDE.Ui.Fonts
         }
 
         /// <summary>
-        /// 同梱 Bold。P0 の TextView では使わない。
+        /// 同梱 Bold。TextView では使わない。Markdown プレビューが使う。
         /// </summary>
+        /// <param name="pixelSize">ピクセルサイズ。</param>
+        /// <returns>半角 Bold フォント。</returns>
         public Font CreateHalfWidthBold(float pixelSize)
         {
             FontFamily fam = (this.boldFamily != null) ? this.boldFamily : this.halfFamily;
             return CreateFont(fam, pixelSize, FontStyle.Bold);
+        }
+
+        /// <summary>
+        /// 同梱 Italic。Markdown プレビューが使う。
+        /// </summary>
+        /// <param name="pixelSize">ピクセルサイズ。</param>
+        /// <returns>半角 Italic フォント。</returns>
+        public Font CreateHalfWidthItalic(float pixelSize)
+        {
+            FontFamily fam = (this.italicFamily != null) ? this.italicFamily : this.halfFamily;
+            return CreateFont(fam, pixelSize, FontStyle.Italic);
+        }
+
+        /// <summary>
+        /// 同梱 BoldItalic。Markdown プレビューが使う。
+        /// </summary>
+        /// <param name="pixelSize">ピクセルサイズ。</param>
+        /// <returns>半角 BoldItalic フォント。</returns>
+        public Font CreateHalfWidthBoldItalic(float pixelSize)
+        {
+            FontFamily fam = this.boldItalicFamily;
+            if (fam == null)
+            {
+                fam = (this.boldFamily != null) ? this.boldFamily : this.halfFamily;
+            }
+
+            return CreateFont(fam, pixelSize, FontStyle.Bold | FontStyle.Italic);
+        }
+
+        /// <summary>
+        /// 同梱源ノ角 Bold。Markdown プレビューが使う。
+        /// </summary>
+        /// <param name="pixelSize">ピクセルサイズ。</param>
+        /// <returns>全角 Bold フォント。</returns>
+        public Font CreateFullWidthBold(float pixelSize)
+        {
+            FontFamily fam = (this.fullBoldFamily != null) ? this.fullBoldFamily : this.fullFamily;
+            return CreateFont(fam, pixelSize, FontStyle.Bold);
+        }
+
+        /// <summary>
+        /// 全角 Italic。源ノ角 Italic ファイルは無く、FontStyle 合成（失敗時 Regular）。
+        /// </summary>
+        /// <param name="pixelSize">ピクセルサイズ。</param>
+        /// <returns>全角 Italic または Regular。</returns>
+        public Font CreateFullWidthItalic(float pixelSize)
+        {
+            return CreateFont(this.fullFamily, pixelSize, FontStyle.Italic);
+        }
+
+        /// <summary>
+        /// 全角 BoldItalic。Bold 実ファイルに Italic 合成（失敗時 Bold / Regular）。
+        /// </summary>
+        /// <param name="pixelSize">ピクセルサイズ。</param>
+        /// <returns>全角 BoldItalic または退避フォント。</returns>
+        public Font CreateFullWidthBoldItalic(float pixelSize)
+        {
+            FontFamily fam = (this.fullBoldFamily != null) ? this.fullBoldFamily : this.fullFamily;
+            return CreateFont(fam, pixelSize, FontStyle.Bold | FontStyle.Italic);
         }
 
         private static Font CreateFont(FontFamily family, float pixelSize, FontStyle style)
@@ -92,7 +159,25 @@ namespace WindowsIDE.Ui.Fonts
                 }
                 catch (ArgumentException)
                 {
+                }
+
+                if ((style & FontStyle.Bold) != 0 && (style & FontStyle.Italic) != 0)
+                {
+                    try
+                    {
+                        return new Font(family, pixelSize, FontStyle.Bold, GraphicsUnit.Pixel);
+                    }
+                    catch (ArgumentException)
+                    {
+                    }
+                }
+
+                try
+                {
                     return new Font(family, pixelSize, FontStyle.Regular, GraphicsUnit.Pixel);
+                }
+                catch (ArgumentException)
+                {
                 }
             }
 
@@ -126,8 +211,11 @@ namespace WindowsIDE.Ui.Fonts
         {
             byte[] regular = ReadResource("WindowsIDE.Fonts.CascadiaMonoRegular");
             byte[] bold = ReadResource("WindowsIDE.Fonts.CascadiaMonoBold");
+            byte[] italic = ReadResource("WindowsIDE.Fonts.CascadiaMonoItalic");
+            byte[] boldItalic = ReadResource("WindowsIDE.Fonts.CascadiaMonoBoldItalic");
             byte[] sourceHan = ReadResource("WindowsIDE.Fonts.SourceHanSansJpRegular");
-            return LoadFromBytes(regular, bold, sourceHan);
+            byte[] sourceHanBold = ReadResource("WindowsIDE.Fonts.SourceHanSansJpBold");
+            return LoadFromBytes(regular, bold, italic, boldItalic, sourceHan, sourceHanBold);
         }
 
         /// <summary>
@@ -152,6 +240,37 @@ namespace WindowsIDE.Ui.Fonts
         /// <returns>読み込み結果。</returns>
         public static FontLoadResult LoadFromBytes(byte[] cascadiaRegular, byte[] cascadiaBold, byte[] sourceHan, bool skipMemoryRoute)
         {
+            return LoadFromBytes(cascadiaRegular, cascadiaBold, null, null, sourceHan, null, skipMemoryRoute);
+        }
+
+        /// <summary>
+        /// 6 ファイル経路。Italic / BoldItalic / 源ノ角 Bold を含めて読む。
+        /// </summary>
+        /// <param name="cascadiaRegular">Cascadia Mono Regular。</param>
+        /// <param name="cascadiaBold">Cascadia Mono Bold。</param>
+        /// <param name="cascadiaItalic">Cascadia Mono Italic。null なら合成。</param>
+        /// <param name="cascadiaBoldItalic">Cascadia Mono BoldItalic。null なら合成。</param>
+        /// <param name="sourceHan">源ノ角 Regular の静的 TTF。</param>
+        /// <param name="sourceHanBold">源ノ角 Bold の静的 TTF。null なら合成。</param>
+        /// <returns>読み込み結果。</returns>
+        public static FontLoadResult LoadFromBytes(byte[] cascadiaRegular, byte[] cascadiaBold, byte[] cascadiaItalic, byte[] cascadiaBoldItalic, byte[] sourceHan, byte[] sourceHanBold)
+        {
+            return LoadFromBytes(cascadiaRegular, cascadiaBold, cascadiaItalic, cascadiaBoldItalic, sourceHan, sourceHanBold, false);
+        }
+
+        /// <summary>
+        /// 6 ファイル経路。skipMemoryRoute で一時ファイル経路を検証できる。
+        /// </summary>
+        /// <param name="cascadiaRegular">Cascadia Mono Regular。</param>
+        /// <param name="cascadiaBold">Cascadia Mono Bold。</param>
+        /// <param name="cascadiaItalic">Cascadia Mono Italic。</param>
+        /// <param name="cascadiaBoldItalic">Cascadia Mono BoldItalic。</param>
+        /// <param name="sourceHan">源ノ角 Regular の静的 TTF。</param>
+        /// <param name="sourceHanBold">源ノ角 Bold の静的 TTF。</param>
+        /// <param name="skipMemoryRoute">true なら AddMemoryFont を試さない。</param>
+        /// <returns>読み込み結果。</returns>
+        public static FontLoadResult LoadFromBytes(byte[] cascadiaRegular, byte[] cascadiaBold, byte[] cascadiaItalic, byte[] cascadiaBoldItalic, byte[] sourceHan, byte[] sourceHanBold, bool skipMemoryRoute)
+        {
             Cleanup();
             EnsureState();
             SweepStaleTempFiles();
@@ -160,13 +279,22 @@ namespace WindowsIDE.Ui.Fonts
 
             FontFamily half;
             FontFamily bold;
+            FontFamily italic;
+            FontFamily boldItalic;
             FontFamily full;
+            FontFamily fullBold;
             string halfName;
             string boldName;
+            string italicName;
+            string boldItalicName;
             string fullName;
+            string fullBoldName;
             int halfRoute = TryLoadFamily(cascadiaRegular, halfNames, ".ttf", skipMemoryRoute, false, out half, out halfName);
             TryLoadFamily(cascadiaBold, halfNames, ".ttf", skipMemoryRoute, false, out bold, out boldName);
+            TryLoadFamily(cascadiaItalic, halfNames, ".ttf", skipMemoryRoute, false, out italic, out italicName);
+            TryLoadFamily(cascadiaBoldItalic, halfNames, ".ttf", skipMemoryRoute, false, out boldItalic, out boldItalicName);
             int fullRoute = TryLoadFamily(sourceHan, fullNames, ".ttf", skipMemoryRoute, true, out full, out fullName);
+            TryLoadFamily(sourceHanBold, fullNames, ".ttf", skipMemoryRoute, true, out fullBold, out fullBoldName);
 
             bool fallback = false;
             if (halfRoute == RouteFail)
@@ -215,8 +343,8 @@ namespace WindowsIDE.Ui.Fonts
                 error = "同梱フォントの読み込みに失敗したため、全角を " + fullName + " に退避しています。";
             }
 
-            lastResult = new FontLoadResult(half, full, bold, fallback, error, halfName, fullName);
-            Log("font load: half=" + halfName + " (" + RouteLabel(halfRoute) + "), bold=" + boldName + ", full=" + fullName + " (" + RouteLabel(fullRoute) + ")");
+            lastResult = new FontLoadResult(half, full, bold, italic, boldItalic, fullBold, fallback, error, halfName, fullName);
+            Log("font load: half=" + halfName + " (" + RouteLabel(halfRoute) + "), bold=" + boldName + ", italic=" + italicName + ", boldItalic=" + boldItalicName + ", full=" + fullName + " (" + RouteLabel(fullRoute) + "), fullBold=" + fullBoldName);
             return lastResult;
         }
 
@@ -632,16 +760,49 @@ namespace WindowsIDE.Ui.Fonts
             return null;
         }
 
+        private static FontStyle FirstAvailableStyle(FontFamily family)
+        {
+            FontStyle[] styles = new FontStyle[]
+            {
+                FontStyle.Regular,
+                FontStyle.Bold,
+                FontStyle.Italic,
+                FontStyle.Bold | FontStyle.Italic
+            };
+            if (family == null)
+            {
+                return FontStyle.Regular;
+            }
+
+            for (int i = 0; i < styles.Length; i++)
+            {
+                try
+                {
+                    if (family.IsStyleAvailable(styles[i]))
+                    {
+                        return styles[i];
+                    }
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
+            return FontStyle.Regular;
+        }
+
         /// <summary>
         /// GDI+ DrawString が CFF を描けないとき全角は Yu Gothic UI になる。
-        /// その顔は同梱成功にしない。Yu Gothic UI が無い環境では検査しない。
+        /// その顔は同梱成功にしない。Yu Gothic UI が無い環境、または同じスタイルが無いときは検査しない。
+        /// Bold だけのコレクションは Regular が無くても Bold で比べる。
         /// </summary>
         private static bool HasDistinctCjkOutline(FontFamily family)
         {
+            FontStyle style = FirstAvailableStyle(family);
             Font ui = null;
             try
             {
-                ui = new Font("Yu Gothic UI", ProbeFontPx, FontStyle.Regular, GraphicsUnit.Pixel);
+                ui = new Font("Yu Gothic UI", ProbeFontPx, style, GraphicsUnit.Pixel);
             }
             catch (ArgumentException)
             {
@@ -651,7 +812,7 @@ namespace WindowsIDE.Ui.Fonts
             Font mine = null;
             try
             {
-                mine = new Font(family, ProbeFontPx, FontStyle.Regular, GraphicsUnit.Pixel);
+                mine = new Font(family, ProbeFontPx, style, GraphicsUnit.Pixel);
                 int diff;
                 int ink;
                 if (!CompareGlyph(mine, ui, "あ", out diff, out ink))

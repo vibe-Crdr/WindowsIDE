@@ -59,6 +59,8 @@ P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.c
 
 フェーズ P10（F-WF-DSN。今は実装しない）の製品 `/r` 候補は、同じ Framework フォルダの `System.Design.dll` と `System.Drawing.Design.dll` である。足すときは [decisions.md](decisions.md) の提案 P38 を採用してから。**今は rsp に足さない。** ユーザー手動 csc には足さない（ユーザーは既存 6 DLL で足りる。Design は IDE のホスト用）。`Microsoft.CSharp.dll` は製品にもユーザーにも足さない。
 
+フェーズ P11（F-UF-DSN。今は実装しない）は製品 `/r` を増やさない。System.Design を UserForm のために足さない（P38 は C# WinForms 側）。Office PIA も足さない。Excel は遅延バインディングの Export/Import のみ。
+
 ## ユーザー手動 csc（F-CS-BLD）
 
 製品の `compile.ps1`（`/target:winexe`、SMA、フォント `/resource`）と混同しない。IDE がユーザー `.cs` を手動ビルドするときだけ、同じ指定 `csc.exe` を別プロセスで呼ぶ。
@@ -119,10 +121,10 @@ powershell.exe -NoProfile -File .\build\compile-tests.ps1
 
 1. 固定パスの csc を使い、バナー（`for C# 5`）をログする
 2. BCL が 4.8 ファミリーであることを検査し FileVersion をログする
-3. 同梱フォント 3 ファイルが無ければ失敗する
+3. 同梱フォント 6 ファイルが無ければ失敗する
 4. 出力が x64 PE である（スクリプトが PE ヘッダを読む）
 5. 出力フォルダに第三者 DLL が増えていない
-6. 埋め込みリソース名 `WindowsIDE.Fonts.CascadiaMonoRegular` / `CascadiaMonoBold` / `SourceHanSansJpRegular` がある
+6. 埋め込みリソース名 `WindowsIDE.Fonts.CascadiaMonoRegular` / `CascadiaMonoBold` / `CascadiaMonoItalic` / `CascadiaMonoBoldItalic` / `SourceHanSansJpRegular` / `SourceHanSansJpBold` がある
 7. `app.config` を `WindowsIDE.exe.config` としてコピーする
 
-製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 3 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL の 4.8 ファミリー検査と FileVersion ログ、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。
+製品ビルドの正は Windows 上の `build/compile.ps1` と指定 `csc.exe` である。Linux Cloud Agent にはその `csc.exe` が無い。Cursor 用の `scripts/check_sources.py` は、製品 C# の UTF-8 BOM、同梱フォント 6 ファイルと Cascadia Code の不在、`build/*.rsp` の `/r:` 範囲とソース列挙、NuGet 痕跡を見る。PowerShell 7 構文は警告のみとする。このスクリプトは製品 EXE に入れない。csc バナー、BCL の 4.8 ファミリー検査と FileVersion ログ、x64 PE、埋め込みリソース名の検査は `compile.ps1` に残す。

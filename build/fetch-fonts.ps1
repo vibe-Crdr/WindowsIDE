@@ -147,12 +147,22 @@ Get-OfficialFile -Urls @(
 
 $cascadiaRegular = Join-Path $CascadiaDir "CascadiaMono-Regular.ttf"
 $cascadiaBold = Join-Path $CascadiaDir "CascadiaMono-Bold.ttf"
+$cascadiaItalic = Join-Path $CascadiaDir "CascadiaMono-Italic.ttf"
+$cascadiaBoldItalic = Join-Path $CascadiaDir "CascadiaMono-BoldItalic.ttf"
 $sourceHan = Join-Path $SourceHanDir "SourceHanSansJP-Regular.ttf"
-$leftoverOtf = Join-Path $SourceHanDir "SourceHanSansJP-Regular.otf"
-if (Test-Path -LiteralPath $leftoverOtf) {
-    Remove-Item -LiteralPath $leftoverOtf -Force
-    Write-Host ("Removed CFF file that GDI+ cannot draw: " + $leftoverOtf)
+$sourceHanBold = Join-Path $SourceHanDir "SourceHanSansJP-Bold.ttf"
+
+$leftoverRegularOtf = Join-Path $SourceHanDir "SourceHanSansJP-Regular.otf"
+$leftoverBoldOtf = Join-Path $SourceHanDir "SourceHanSansJP-Bold.otf"
+if (Test-Path -LiteralPath $leftoverRegularOtf) {
+    Remove-Item -LiteralPath $leftoverRegularOtf -Force
+    Write-Host ("Removed CFF file that GDI+ cannot draw: " + $leftoverRegularOtf)
 }
+if (Test-Path -LiteralPath $leftoverBoldOtf) {
+    Remove-Item -LiteralPath $leftoverBoldOtf -Force
+    Write-Host ("Removed CFF file that GDI+ cannot draw: " + $leftoverBoldOtf)
+}
+
 if (Test-ExistingFont -Path $sourceHan -MinimumBytes 1000000) {
     Write-Host ("Already present: " + $sourceHan)
 } else {
@@ -165,13 +175,30 @@ if (Test-ExistingFont -Path $sourceHan -MinimumBytes 1000000) {
     throw ("Source Han TTF is missing. Convert the downloaded OTF with scripts\convert_source_han_ttf.py (needs fonttools). Product builds do not run Python. Input: " + $sourceHanOtf + " Output: " + $sourceHan)
 }
 
+if (Test-ExistingFont -Path $sourceHanBold -MinimumBytes 1000000) {
+    Write-Host ("Already present: " + $sourceHanBold)
+} else {
+    Ensure-Directory $TempRoot
+    $sourceHanBoldOtf = Join-Path $TempRoot "SourceHanSansJP-Bold.otf"
+    Get-OfficialFile -Urls @(
+        "https://github.com/adobe-fonts/source-han-sans/raw/2.005R/SubsetOTF/JP/SourceHanSansJP-Bold.otf",
+        "https://github.com/adobe-fonts/source-han-sans/raw/release/SubsetOTF/JP/SourceHanSansJP-Bold.otf"
+    ) -OutFile $sourceHanBoldOtf -MinimumBytes 1000000
+    throw ("Source Han TTF is missing. Convert the downloaded OTF with scripts\convert_source_han_ttf.py (needs fonttools). Product builds do not run Python. Input: " + $sourceHanBoldOtf + " Output: " + $sourceHanBold)
+}
+
 $cascadiaZip = "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip"
 $cascadiaEntries = @{}
 $cascadiaEntries["ttf\static\CascadiaMono-Regular.ttf"] = $cascadiaRegular
 $cascadiaEntries["ttf\static\CascadiaMono-Bold.ttf"] = $cascadiaBold
+$cascadiaEntries["ttf\static\CascadiaMono-Italic.ttf"] = $cascadiaItalic
+$cascadiaEntries["ttf\static\CascadiaMono-BoldItalic.ttf"] = $cascadiaBoldItalic
 Get-ZipEntries -ZipUrl $cascadiaZip -Entries $cascadiaEntries -MinimumBytes 100000
 
 Write-Host "Fonts ready."
 Write-Host ("  " + $cascadiaRegular)
 Write-Host ("  " + $cascadiaBold)
+Write-Host ("  " + $cascadiaItalic)
+Write-Host ("  " + $cascadiaBoldItalic)
 Write-Host ("  " + $sourceHan)
+Write-Host ("  " + $sourceHanBold)

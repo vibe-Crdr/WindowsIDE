@@ -16,7 +16,10 @@
 /r:C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll
 /resource:assets\fonts\cascadia\CascadiaMono-Regular.ttf,WindowsIDE.Fonts.CascadiaMonoRegular
 /resource:assets\fonts\cascadia\CascadiaMono-Bold.ttf,WindowsIDE.Fonts.CascadiaMonoBold
+/resource:assets\fonts\cascadia\CascadiaMono-Italic.ttf,WindowsIDE.Fonts.CascadiaMonoItalic
+/resource:assets\fonts\cascadia\CascadiaMono-BoldItalic.ttf,WindowsIDE.Fonts.CascadiaMonoBoldItalic
 /resource:assets\fonts\source-han-sans\SourceHanSansJP-Regular.ttf,WindowsIDE.Fonts.SourceHanSansJpRegular
+/resource:assets\fonts\source-han-sans\SourceHanSansJP-Bold.ttf,WindowsIDE.Fonts.SourceHanSansJpBold
 /resource:assets\fonts\cascadia\LICENSE,WindowsIDE.Fonts.CascadiaLicense
 /resource:assets\fonts\source-han-sans\LICENSE.txt,WindowsIDE.Fonts.SourceHanSansLicense
 src\WindowsIDE\Program.cs
@@ -78,6 +81,7 @@ src\WindowsIDE\Languages\PlainLexer.cs
 src\WindowsIDE\Languages\MarkdownSyntax.cs
 src\WindowsIDE\Languages\MarkdownLexer.cs
 src\WindowsIDE\Languages\MarkdownBlocks.cs
+src\WindowsIDE\Languages\MarkdownLocalPath.cs
 src\WindowsIDE\Languages\IdentifierClassifier.cs
 src\WindowsIDE\Languages\ClassifySpan.cs
 src\WindowsIDE\Languages\SemanticClassifier.cs

@@ -1,10 +1,12 @@
-# Convert the official Source Han Sans JP Regular CFF OTF into a static TrueType
-# file that GDI+ DrawString can rasterize. Format conversion is an OFL Modified
-# Version, so the user-facing family name must not use the Reserved Font Name
-# "Source". The bundled name is 源ノ角ゴシック JP.
+# Convert an official Source Han Sans JP CFF OTF (Regular or Bold) into a static
+# TrueType file that GDI+ DrawString can rasterize. Format conversion is an OFL
+# Modified Version, so the user-facing family name must not use the Reserved
+# Font Name "Source". The bundled family name is 源ノ角ゴシック JP. The PostScript
+# name follows the input weight (GennoKakuGothicJP-Regular / GennoKakuGothicJP-Bold).
 
 from __future__ import print_function
 
+import os
 import sys
 
 from fontTools.pens.cu2quPen import Cu2QuPen
@@ -12,8 +14,24 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont, newTable
 
 FAMILY = "源ノ角ゴシック JP"
-POSTSCRIPT = "GennoKakuGothicJP-Regular"
 MAX_ERR = 1.0
+
+
+def postscript_name(input_path):
+    """入力ファイル名のウェイトから、Reserved Font Name を含まない PostScript 名を返す。"""
+    base = os.path.basename(input_path).lower()
+    if "bolditalic" in base:
+        weight = "BoldItalic"
+    elif "bold" in base:
+        weight = "Bold"
+    elif "italic" in base:
+        weight = "Italic"
+    else:
+        weight = "Regular"
+    name = "GennoKakuGothicJP-" + weight
+    if "source" in name.lower():
+        raise SystemExit("PostScript name must not contain the Reserved Font Name Source")
+    return name
 
 
 def glyphs_to_quadratic(glyphs):
@@ -32,7 +50,7 @@ def glyphs_to_quadratic(glyphs):
     return quad
 
 
-def otf_to_ttf(tt_font):
+def otf_to_ttf(tt_font, postscript):
     if tt_font.sfntVersion != "OTTO":
         raise SystemExit("input is not a CFF OTF")
     if "CFF " not in tt_font:
@@ -81,10 +99,12 @@ def otf_to_ttf(tt_font):
         del tt_font["DSIG"]
 
     tt_font.sfntVersion = "\000\001\000\000"
-    rewrite_names(tt_font)
+    rewrite_names(tt_font, postscript)
 
 
-def rewrite_names(tt_font):
+def rewrite_names(tt_font, postscript):
+    if "source" in FAMILY.lower() or "source" in postscript.lower():
+        raise SystemExit("converted name must not use the Reserved Font Name Source")
     name = tt_font["name"]
     kept = []
     for rec in name.names:
@@ -93,7 +113,7 @@ def rewrite_names(tt_font):
         if rec.nameID in (1, 4, 16):
             rec.string = FAMILY
         elif rec.nameID == 6:
-            rec.string = POSTSCRIPT
+            rec.string = postscript
         kept.append(rec)
     if not kept:
         raise SystemExit("name table has no Windows Unicode records")
@@ -105,7 +125,7 @@ def main(argv):
         print("usage: convert_source_han_ttf.py INPUT.otf OUTPUT.ttf", file=sys.stderr)
         return 2
     font = TTFont(argv[1])
-    otf_to_ttf(font)
+    otf_to_ttf(font, postscript_name(argv[1]))
     font.save(argv[2])
     print("saved " + argv[2], flush=True)
     return 0

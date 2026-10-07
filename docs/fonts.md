@@ -17,26 +17,30 @@
 
 ## 同梱ファイルと公式 URL（P0）
 
-可変フォント（Variable）と Cascadia Code / NF は使わない。静的 Regular（と半角 Bold）だけ。CJK の他ウェイトとフル OTC は入れない。
+可変フォント（Variable）と Cascadia Code / NF は使わない。同梱は静的 TTF だけ。CJK は Bold 以外の他ウェイトとフル OTC は入れない。源ノ角 Italic ファイルは取らない。
 
 | 用途 | ファイル | 論理名（`/resource`） |
 | --- | --- | --- |
 | 半角 Regular | `assets/fonts/cascadia/CascadiaMono-Regular.ttf` | `WindowsIDE.Fonts.CascadiaMonoRegular` |
-| 半角 Bold（同梱のみ。P0 の TextView は未使用） | `assets/fonts/cascadia/CascadiaMono-Bold.ttf` | `WindowsIDE.Fonts.CascadiaMonoBold` |
+| 半角 Bold（TextView は未使用。Markdown プレビューが使う） | `assets/fonts/cascadia/CascadiaMono-Bold.ttf` | `WindowsIDE.Fonts.CascadiaMonoBold` |
+| 半角 Italic（Markdown プレビュー） | `assets/fonts/cascadia/CascadiaMono-Italic.ttf` | `WindowsIDE.Fonts.CascadiaMonoItalic` |
+| 半角 BoldItalic（Markdown プレビュー） | `assets/fonts/cascadia/CascadiaMono-BoldItalic.ttf` | `WindowsIDE.Fonts.CascadiaMonoBoldItalic` |
 | 半角ライセンス | `assets/fonts/cascadia/LICENSE` | About から読む（埋め込み可） |
 | 全角 Regular | `assets/fonts/source-han-sans/SourceHanSansJP-Regular.ttf` | `WindowsIDE.Fonts.SourceHanSansJpRegular` |
+| 全角 Bold（Markdown プレビュー。CJK の他ウェイトは入れない） | `assets/fonts/source-han-sans/SourceHanSansJP-Bold.ttf` | `WindowsIDE.Fonts.SourceHanSansJpBold` |
 | 全角ライセンス | `assets/fonts/source-han-sans/LICENSE.txt` | About から読む（埋め込み可） |
 
 取得は `build/fetch-fonts.ps1`。公式の **個別ファイル**を優先し、143MB 級の zip 全体はリポジトリに残さない。
 
 | ファイル | URL |
 | --- | --- |
-| Cascadia Mono Regular/Bold 静的 TTF | 公式タグ [v2407.24](https://github.com/microsoft/cascadia-code/releases/tag/v2407.24)。GitHub release に個別 TTF が無いため、スクリプトは `CascadiaCode-2407.24.zip` を `%TEMP%` へ取り、`ttf/static/CascadiaMono-Regular.ttf` と `ttf/static/CascadiaMono-Bold.ttf` だけ残して zip を消す。Cascadia Code / Variable / NF は残さない |
+| Cascadia Mono Regular/Bold/Italic/BoldItalic 静的 TTF | 公式タグ [v2407.24](https://github.com/microsoft/cascadia-code/releases/tag/v2407.24)。GitHub release に個別 TTF が無いため、スクリプトは `CascadiaCode-2407.24.zip` を `%TEMP%` へ取り、`ttf/static/CascadiaMono-Regular.ttf` / `Bold.ttf` / `Italic.ttf` / `BoldItalic.ttf` だけ残して zip を消す。エントリが無ければ止める（Cascadia Code に逃げない）。Cascadia Code / Variable / NF は残さない |
 | Cascadia LICENSE | `https://raw.githubusercontent.com/microsoft/cascadia-code/v2407.24/LICENSE` |
 | 源ノ角ゴシック JP Regular の元ファイル（2.005R、言語サブセット OTF） | `https://github.com/adobe-fonts/source-han-sans/raw/2.005R/SubsetOTF/JP/SourceHanSansJP-Regular.otf`（失敗時は `release` ブランチの同パス）。製品に入れるのはこれを静的 TTF に変換したファイル |
+| 源ノ角ゴシック JP Bold の元ファイル（2.005R、言語サブセット OTF） | `https://github.com/adobe-fonts/source-han-sans/raw/2.005R/SubsetOTF/JP/SourceHanSansJP-Bold.otf`（失敗時は `release` ブランチの同パス）。製品に入れるのはこれを静的 TTF に変換したファイル |
 | 源ノ角 LICENSE.txt | `https://raw.githubusercontent.com/adobe-fonts/source-han-sans/2.005R/LICENSE.txt` |
 
-可変フォントは禁止。半角は公式の静的 TTF。全角の公式ファイルは静的 OTF（CFF）だが、GDI+ の `DrawString` は CFF を描かず Yu Gothic UI に落ちる。同梱するのは `scripts/convert_source_han_ttf.py` で公式 OTF から作った静的 TTF で、リポジトリに置く。製品ビルドと `build/fetch-fonts.ps1` は Python を起動しない。TTF が無いとき fetch-fonts は公式 OTF を `%TEMP%\WindowsIDE-fonts` に取るだけで、変換は手動（fonttools が要る）。変換は OFL の Modified Version なので、ユーザーに見せるファミリー名は Reserved Font Name「Source」を使わず **源ノ角ゴシック JP** とする。`assets/fonts/source-han-sans/SourceHanSansJP-Regular.otf` が残っていたら fetch-fonts が消す。
+可変フォントは禁止。半角は公式の静的 TTF。全角の公式ファイルは静的 OTF（CFF）だが、GDI+ の `DrawString` は CFF を描かず Yu Gothic UI に落ちる。同梱するのは `scripts/convert_source_han_ttf.py` で公式 OTF から作った静的 TTF（Regular と Bold）で、リポジトリに置く。製品ビルドと `build/fetch-fonts.ps1` は Python を起動しない。TTF が無いとき fetch-fonts は公式 OTF を `%TEMP%\WindowsIDE-fonts` に取るだけで、変換は手動（fonttools が要る）。変換は OFL の Modified Version なので、ユーザーに見せるファミリー名は Reserved Font Name「Source」を使わず **源ノ角ゴシック JP** とする。PostScript 名は `GennoKakuGothicJP-Regular` / `GennoKakuGothicJP-Bold`。`assets/fonts/source-han-sans/` に `SourceHanSansJP-Regular.otf` または `SourceHanSansJP-Bold.otf` が残っていたら fetch-fonts が消す。
 
 ## 読み込み方法（インボックスのみ）
 
@@ -64,7 +68,7 @@ GDI 登録系（`gdi32.AddFontMemResourceEx` / `AddFontResourceEx(FR_PRIVATE)`�
 
 ## グリフ振り分け
 
-ASCII 印字（U+0020–U+007E）と半角カナ（U+FF61–U+FF9F）は Cascadia Mono。それ以外とサロゲートペアは源ノ角（全角側）。P0 本文描画は Regular のみ。
+ASCII 印字（U+0020–U+007E）と半角カナ（U+FF61–U+FF9F）は Cascadia Mono。それ以外とサロゲートペアは源ノ角（全角側）。P0 / TextView 本文・メニュー・ツリーは Regular のみ。Markdown プレビューは Bold / Italic / BoldItalic（半角は実ファイル、全角 Italic は FontStyle 合成。源ノ角 Italic ファイルは取らない）。
 
 ## ビルド
 
@@ -73,7 +77,10 @@ ASCII 印字（U+0020–U+007E）と半角カナ（U+FF61–U+FF9F）は Cascadi
 ```text
 /resource:assets\fonts\cascadia\CascadiaMono-Regular.ttf,WindowsIDE.Fonts.CascadiaMonoRegular
 /resource:assets\fonts\cascadia\CascadiaMono-Bold.ttf,WindowsIDE.Fonts.CascadiaMonoBold
+/resource:assets\fonts\cascadia\CascadiaMono-Italic.ttf,WindowsIDE.Fonts.CascadiaMonoItalic
+/resource:assets\fonts\cascadia\CascadiaMono-BoldItalic.ttf,WindowsIDE.Fonts.CascadiaMonoBoldItalic
 /resource:assets\fonts\source-han-sans\SourceHanSansJP-Regular.ttf,WindowsIDE.Fonts.SourceHanSansJpRegular
+/resource:assets\fonts\source-han-sans\SourceHanSansJP-Bold.ttf,WindowsIDE.Fonts.SourceHanSansJpBold
 ```
 
 論理名は `WindowsIDE.Fonts.*` で固定し、コード側と食い違わせない。

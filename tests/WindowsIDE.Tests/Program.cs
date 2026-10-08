@@ -3019,6 +3019,53 @@ namespace WindowsIDE.Tests
             Check("md fence raw hash", blocks[3].FenceLines[1] == "# not heading");
             Check("md em strong", HasInlineKind(blocks[4], MarkdownInlineKind.Emphasis) && HasInlineKind(blocks[4], MarkdownInlineKind.Strong));
             Check("md html literal", blocks[5].Kind == MarkdownBlockKind.Paragraph && InlineText(blocks[5]) == "<b>x</b>");
+
+            TextBuffer boundary = new TextBuffer();
+            boundary.SetText("6. 該当する `docs/architecture.md`、`docs/ui.md`");
+            List<MarkdownBlock> boundaryBlocks = MarkdownBlocks.Parse(boundary);
+            Check("md list boundary count", boundaryBlocks.Count == 1 && boundaryBlocks[0].Kind == MarkdownBlockKind.ListItem && boundaryBlocks[0].Inlines.Count == 4);
+            Check("md list boundary text", boundaryBlocks[0].Inlines[0].Kind == MarkdownInlineKind.Text && boundaryBlocks[0].Inlines[0].Text == "該当する ");
+            Check("md list boundary arch", boundaryBlocks[0].Inlines[1].Kind == MarkdownInlineKind.Code && boundaryBlocks[0].Inlines[1].Text == "docs/architecture.md");
+            Check("md list boundary comma", boundaryBlocks[0].Inlines[2].Kind == MarkdownInlineKind.Text && boundaryBlocks[0].Inlines[2].Text == "、");
+            Check("md list boundary ui", boundaryBlocks[0].Inlines[3].Kind == MarkdownInlineKind.Code && boundaryBlocks[0].Inlines[3].Text == "docs/ui.md");
+
+            TextBuffer gap = new TextBuffer();
+            gap.SetText("`a` `b`");
+            List<MarkdownBlock> gapBlocks = MarkdownBlocks.Parse(gap);
+            Check("md inline gap count", gapBlocks.Count == 1 && gapBlocks[0].Inlines.Count == 3);
+            Check("md inline gap a", gapBlocks[0].Inlines[0].Kind == MarkdownInlineKind.Code && gapBlocks[0].Inlines[0].Text == "a");
+            Check("md inline gap space", gapBlocks[0].Inlines[1].Kind == MarkdownInlineKind.Text && gapBlocks[0].Inlines[1].Text == " " && gapBlocks[0].Inlines[1].Text.Length == 1);
+            Check("md inline gap b", gapBlocks[0].Inlines[2].Kind == MarkdownInlineKind.Code && gapBlocks[0].Inlines[2].Text == "b");
+
+            TextBuffer codeNext = new TextBuffer();
+            codeNext.SetText("`code` next");
+            List<MarkdownBlock> codeNextBlocks = MarkdownBlocks.Parse(codeNext);
+            Check("md inline code next count", codeNextBlocks.Count == 1 && codeNextBlocks[0].Inlines.Count == 2);
+            Check("md inline code next code", codeNextBlocks[0].Inlines[0].Kind == MarkdownInlineKind.Code && codeNextBlocks[0].Inlines[0].Text == "code");
+            Check("md inline code next text", codeNextBlocks[0].Inlines[1].Kind == MarkdownInlineKind.Text && codeNextBlocks[0].Inlines[1].Text == " next");
+
+            MarkdownPreviewSlice keepEnd = MarkdownPreviewText.Take("該当する ", 0, 5);
+            Check("md take keep end", keepEnd.DrawText == "該当する " && keepEnd.Consumed == 5 && !keepEnd.BreakLine);
+            MarkdownPreviewSlice onlySpace = MarkdownPreviewText.Take(" ", 0, 1);
+            Check("md take only space", onlySpace.DrawText == " " && onlySpace.DrawText.Length == 1 && onlySpace.Consumed == 1 && !onlySpace.BreakLine);
+            MarkdownPreviewSlice wordBreak = MarkdownPreviewText.Take("hello world", 0, 6);
+            Check("md take word break", wordBreak.DrawText == "hello" && wordBreak.Consumed == 6 && wordBreak.BreakLine);
+            MarkdownPreviewSlice wordRest = MarkdownPreviewText.Take("hello world", 6, 5);
+            Check("md take word rest", wordRest.DrawText == "world" && wordRest.Consumed == 5 && !wordRest.BreakLine);
+            MarkdownPreviewSlice doubleGap = MarkdownPreviewText.Take("hello  world", 0, 7);
+            Check("md take double gap", doubleGap.DrawText == "hello" && doubleGap.Consumed == 7 && doubleGap.BreakLine);
+            MarkdownPreviewSlice whole = MarkdownPreviewText.Take("hello world", 0, 11);
+            Check("md take whole line", whole.DrawText == "hello world" && whole.Consumed == 11 && !whole.BreakLine);
+            MarkdownPreviewSlice spaceRun = MarkdownPreviewText.Take("   ", 0, 2);
+            Check("md take space run", spaceRun.DrawText == "  " && spaceRun.DrawText.Length == 2 && spaceRun.Consumed == 2 && spaceRun.BreakLine);
+            MarkdownPreviewSlice spaceRest = MarkdownPreviewText.Take("   ", 2, 1);
+            Check("md take space rest", spaceRest.DrawText == " " && spaceRest.Consumed == 1 && !spaceRest.BreakLine);
+            MarkdownPreviewSlice overflow = MarkdownPreviewText.Take("hello ", 0, 5);
+            Check("md take overflow word", overflow.DrawText == "hello" && overflow.Consumed == 5 && overflow.BreakLine);
+            MarkdownPreviewSlice overflowSpace = MarkdownPreviewText.Take("hello ", 5, 1);
+            Check("md take overflow space", overflowSpace.DrawText == " " && overflowSpace.Consumed == 1 && !overflowSpace.BreakLine);
+            MarkdownPreviewSlice hardSplit = MarkdownPreviewText.Take("helloworld", 0, 5);
+            Check("md take hard split", hardSplit.DrawText == "hello" && hardSplit.Consumed == 5 && hardSplit.BreakLine);
         }
 
         private static void RunMarkdownBlocksSlice2()

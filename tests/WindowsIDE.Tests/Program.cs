@@ -90,6 +90,7 @@ namespace WindowsIDE.Tests
             RunPowerShellDebugger();
             RunCsharpDebugger();
             RunDualFontPainter();
+            RunCjkGrayscaleHint();
             RunUiMnemonic();
             RunDualFontMenuItemPreferredSize();
             RunNativeCaption();
@@ -2285,6 +2286,319 @@ namespace WindowsIDE.Tests
 
                 Check("Draw leaves pixels left of clip black", leftBlack);
             }
+        }
+
+        /// <summary>
+        /// 全角 DrawString は AntiAlias、半角は ClearType。測幅は hint 非依存。
+        /// </summary>
+        private static void RunCjkGrayscaleHint()
+        {
+            DualFontPainter.ApplyTextRenderingHint(null, false);
+            Check("ApplyTextRenderingHint null does not throw", true);
+
+            using (Bitmap hintBmp = new Bitmap(8, 8))
+            using (Graphics hintG = Graphics.FromImage(hintBmp))
+            {
+                DualFontPainter.ApplyTextRenderingHint(hintG, true);
+                Check("half hint ClearTypeGridFit", hintG.TextRenderingHint == TextRenderingHint.ClearTypeGridFit);
+                DualFontPainter.ApplyTextRenderingHint(hintG, false);
+                Check("full hint AntiAlias", hintG.TextRenderingHint == TextRenderingHint.AntiAlias);
+            }
+
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            InspectCjkGrayscaleSource(repo);
+
+            string cascadiaRegular = Path.Combine(repo, "assets", "fonts", "cascadia", "CascadiaMono-Regular.ttf");
+            string sourceHan = Path.Combine(repo, "assets", "fonts", "source-han-sans", "SourceHanSansJP-Regular.ttf");
+            if (!File.Exists(cascadiaRegular) || !File.Exists(sourceHan))
+            {
+                Check("cjk grayscale font assets present", false);
+                return;
+            }
+
+            byte[] regularBytes = File.ReadAllBytes(cascadiaRegular);
+            byte[] sourceBytes = File.ReadAllBytes(sourceHan);
+            FontLoadResult fonts = FontLoader.LoadFromBytes(regularBytes, regularBytes, sourceBytes, false);
+            if (fonts == null || fonts.UsedFallback)
+            {
+                Check("cjk grayscale bundled fonts load", false);
+                return;
+            }
+
+            Font half = fonts.CreateHalfWidth(16f);
+            Font full = fonts.CreateFullWidth(16f);
+            try
+            {
+                using (StringFormat fmt = (StringFormat)StringFormat.GenericTypographic.Clone())
+                {
+                    fmt.FormatFlags = fmt.FormatFlags | StringFormatFlags.MeasureTrailingSpaces | StringFormatFlags.NoWrap | StringFormatFlags.FitBlackBox;
+                    AssertMeasureIndependentOfHint(half, full, fmt);
+                    AssertCjkDrawGrayscale(half, full, fmt);
+                    AssertMixedKeepClearType(half, full, fmt);
+                }
+            }
+            finally
+            {
+                if (half != null)
+                {
+                    half.Dispose();
+                }
+
+                if (full != null)
+                {
+                    full.Dispose();
+                }
+            }
+        }
+
+        private static void InspectCjkGrayscaleSource(string repo)
+        {
+            string textView = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Editor", "TextView.cs"));
+            int drawLine = textView.IndexOf("private void DrawLineText", StringComparison.Ordinal);
+            int tokenKind = textView.IndexOf("private TokenKind TokenKindAt", StringComparison.Ordinal);
+            Check("DrawLineText found", drawLine >= 0 && tokenKind > drawLine);
+            if (drawLine >= 0 && tokenKind > drawLine)
+            {
+                string body = textView.Substring(drawLine, tokenKind - drawLine);
+                Check("DrawLineText ApplyTextRenderingHint", body.IndexOf("ApplyTextRenderingHint", StringComparison.Ordinal) >= 0);
+            }
+
+            int drawRun = textView.IndexOf("private void DrawRun", StringComparison.Ordinal);
+            int measureRun = textView.IndexOf("private float MeasureRun", StringComparison.Ordinal);
+            Check("DrawRun found", drawRun >= 0 && measureRun > drawRun);
+            if (drawRun >= 0 && measureRun > drawRun)
+            {
+                string body = textView.Substring(drawRun, measureRun - drawRun);
+                Check("DrawRun ApplyTextRenderingHint", body.IndexOf("ApplyTextRenderingHint", StringComparison.Ordinal) >= 0);
+            }
+
+            int numDraw = textView.IndexOf("g.DrawString(num", StringComparison.Ordinal);
+            Check("line number DrawString found", numDraw >= 0);
+            if (numDraw >= 0)
+            {
+                int from = numDraw - 400;
+                if (from < 0)
+                {
+                    from = 0;
+                }
+
+                int len = 800;
+                if (from + len > textView.Length)
+                {
+                    len = textView.Length - from;
+                }
+
+                string around = textView.Substring(from, len);
+                Check("line number no AntiAlias", around.IndexOf("AntiAlias", StringComparison.Ordinal) < 0);
+            }
+
+            Check("OnPaint overall ClearTypeGridFit", textView.IndexOf("g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit", StringComparison.Ordinal) >= 0);
+
+            string loader = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Fonts", "FontLoader.cs"));
+            Check("FontLoader probe SingleBitPerPixelGridFit", loader.IndexOf("SingleBitPerPixelGridFit", StringComparison.Ordinal) >= 0);
+        }
+
+        private static void AssertMeasureIndependentOfHint(Font half, Font full, StringFormat fmt)
+        {
+            TextRenderingHint[] hints = new TextRenderingHint[]
+            {
+                TextRenderingHint.SystemDefault,
+                TextRenderingHint.ClearTypeGridFit,
+                TextRenderingHint.AntiAlias,
+                TextRenderingHint.AntiAliasGridFit,
+                TextRenderingHint.SingleBitPerPixelGridFit
+            };
+            string[] texts = new string[] { "あ", "あいうえお", "aiueo", "あいうえおaiueo" };
+            using (Bitmap bmp = new Bitmap(200, 80))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                int t;
+                bool allMatch = true;
+                for (t = 0; t < texts.Length; t++)
+                {
+                    float firstMs = 0f;
+                    float firstDual = 0f;
+                    int h;
+                    for (h = 0; h < hints.Length; h++)
+                    {
+                        g.TextRenderingHint = hints[h];
+                        Font msFont = half;
+                        if (texts[t] != "aiueo")
+                        {
+                            msFont = full;
+                        }
+
+                        float ms = g.MeasureString(texts[t], msFont, PointF.Empty, fmt).Width;
+                        float dual = DualFontPainter.Measure(g, texts[t], half, full, fmt);
+                        if (h == 0)
+                        {
+                            firstMs = ms;
+                            firstDual = dual;
+                        }
+                        else if (ms != firstMs || dual != firstDual)
+                        {
+                            allMatch = false;
+                        }
+                    }
+
+                    if (texts[t] == "あ" || texts[t] == "あいうえお" || texts[t] == "aiueo")
+                    {
+                        Check("MeasureString vs DualFontPainter " + texts[t], firstMs == firstDual);
+                    }
+                }
+
+                Check("measure widths independent of hint", allMatch);
+            }
+        }
+
+        private static void AssertCjkDrawGrayscale(Font half, Font full, StringFormat fmt)
+        {
+            Color bg = Color.FromArgb(0x1A, 0x1B, 0x26);
+            Color fg = Color.FromArgb(0xC0, 0xCA, 0xF5);
+            using (Bitmap bmp = new Bitmap(64, 40, PixelFormat.Format32bppArgb))
+            using (Graphics g = Graphics.FromImage(bmp))
+            using (SolidBrush brush = new SolidBrush(fg))
+            {
+                g.Clear(bg);
+                g.TextRenderingHint = TextRenderingHint.SystemDefault;
+                g.DrawString("あ", full, brush, 4f, 4f, fmt);
+                int sysUnique = CountUniqueArgb(bmp);
+
+                g.Clear(bg);
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                g.DrawString("あ", full, brush, 4f, 4f, fmt);
+                int gridUnique = CountUniqueArgb(bmp);
+
+                g.Clear(bg);
+                g.TextRenderingHint = TextRenderingHint.SystemDefault;
+                DualFontPainter.Draw(g, "あ", half, full, new Rectangle(0, 0, 64, 40), 4f, brush, fmt);
+                Check("Draw restores SystemDefault", g.TextRenderingHint == TextRenderingHint.SystemDefault);
+                int dualUnique = CountUniqueArgb(bmp);
+                Check("DualFontPainter Draw あ unique > 2", dualUnique > 2);
+
+                if (sysUnique == 2)
+                {
+                    Check("SystemDefault あ unique is 2", true);
+                }
+                else
+                {
+                    Check("SystemDefault あ unique is 2 (FromImage observed " + sysUnique.ToString() + "; binary via AntiAliasGridFit)", gridUnique == 2);
+                }
+            }
+        }
+
+        private static void AssertMixedKeepClearType(Font half, Font full, StringFormat fmt)
+        {
+            Color bg = Color.FromArgb(0x1A, 0x1B, 0x26);
+            Color fg = Color.FromArgb(0xC0, 0xCA, 0xF5);
+            Rectangle clip = new Rectangle(0, 0, 96, 48);
+            float originX = 8f;
+            using (Bitmap dualBmp = new Bitmap(96, 48, PixelFormat.Format32bppArgb))
+            using (Bitmap aaBmp = new Bitmap(96, 48, PixelFormat.Format32bppArgb))
+            using (SolidBrush brush = new SolidBrush(fg))
+            {
+                float aWidth;
+                using (Graphics g = Graphics.FromImage(dualBmp))
+                {
+                    g.Clear(bg);
+                    g.TextRenderingHint = TextRenderingHint.SystemDefault;
+                    aWidth = DualFontPainter.Measure(g, "A", half, full, fmt);
+                    DualFontPainter.Draw(g, "Aあ", half, full, clip, originX, brush, fmt);
+                }
+
+                using (Graphics g = Graphics.FromImage(aaBmp))
+                {
+                    g.Clear(bg);
+                    g.TextRenderingHint = TextRenderingHint.AntiAlias;
+                    float cell = half.Height;
+                    if (full.Height > cell)
+                    {
+                        cell = full.Height;
+                    }
+
+                    float y = clip.Y + (clip.Height - cell) / 2f;
+                    g.DrawString("A", half, brush, originX, y + DualFontPainter.BaselineOffset(half, half, full), fmt);
+                    g.DrawString("あ", full, brush, originX + aWidth, y + DualFontPainter.BaselineOffset(full, half, full), fmt);
+                }
+
+                int splitX = (int)Math.Ceiling((double)(originX + aWidth));
+                int halfMaxRb = 0;
+                int fullMidMaxChan = 0;
+                int differ = 0;
+                int yPix;
+                for (yPix = 0; yPix < dualBmp.Height; yPix++)
+                {
+                    int xPix;
+                    for (xPix = 0; xPix < dualBmp.Width; xPix++)
+                    {
+                        Color c = dualBmp.GetPixel(xPix, yPix);
+                        Color a = aaBmp.GetPixel(xPix, yPix);
+                        if (c.ToArgb() != a.ToArgb())
+                        {
+                            differ++;
+                        }
+
+                        if (c.ToArgb() == bg.ToArgb())
+                        {
+                            continue;
+                        }
+
+                        int rb = Math.Abs(c.R - c.B);
+                        int rg = Math.Abs(c.R - c.G);
+                        int gb = Math.Abs(c.G - c.B);
+                        int chan = rb;
+                        if (rg > chan)
+                        {
+                            chan = rg;
+                        }
+
+                        if (gb > chan)
+                        {
+                            chan = gb;
+                        }
+
+                        bool solidFg = c.R == fg.R && c.G == fg.G && c.B == fg.B;
+                        if (xPix < splitX)
+                        {
+                            if (rb > halfMaxRb)
+                            {
+                                halfMaxRb = rb;
+                            }
+                        }
+                        else if (!solidFg)
+                        {
+                            if (chan > fullMidMaxChan)
+                            {
+                                fullMidMaxChan = chan;
+                            }
+                        }
+                    }
+                }
+
+                Check("mixed Draw differs from all-AntiAlias", differ > 0);
+                Check("mixed half has ClearType |R-B|", halfMaxRb >= 80);
+                Check("mixed full mid channel delta smaller", fullMidMaxChan < 80);
+            }
+        }
+
+        private static int CountUniqueArgb(Bitmap bmp)
+        {
+            Dictionary<int, bool> set = new Dictionary<int, bool>();
+            int y;
+            for (y = 0; y < bmp.Height; y++)
+            {
+                int x;
+                for (x = 0; x < bmp.Width; x++)
+                {
+                    int argb = bmp.GetPixel(x, y).ToArgb();
+                    if (!set.ContainsKey(argb))
+                    {
+                        set[argb] = true;
+                    }
+                }
+            }
+
+            return set.Count;
         }
 
         private static void RunUiMnemonic()

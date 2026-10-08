@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 
 namespace WindowsIDE.Ui.Fonts
 {
@@ -252,6 +253,7 @@ namespace WindowsIDE.Ui.Fonts
                     float w = g.MeasureString(run, font, PointF.Empty, fmt).Width;
                     if (x + w >= clip.Left && x <= clip.Right)
                     {
+                        ApplyTextRenderingHint(g, object.ReferenceEquals(font, half));
                         g.DrawString(run, font, brush, x, y + BaselineOffset(font, half, full), fmt);
                     }
 
@@ -292,6 +294,28 @@ namespace WindowsIDE.Ui.Fonts
 
             string fitted = FitEllipsis(g, text, half, full, bounds.Width, format);
             Draw(g, fitted, half, full, bounds, bounds.X, brush, format);
+        }
+
+        /// <summary>
+        /// 半角は ClearType、全角はグレースケール AA。gasp 無し源ノ角を二値にしない。
+        /// </summary>
+        /// <param name="g">描画先。null なら何もしない。</param>
+        /// <param name="useHalfWidth">半角ランなら true。</param>
+        public static void ApplyTextRenderingHint(Graphics g, bool useHalfWidth)
+        {
+            if (g == null)
+            {
+                return;
+            }
+
+            if (useHalfWidth)
+            {
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            }
+            else
+            {
+                g.TextRenderingHint = TextRenderingHint.AntiAlias;
+            }
         }
 
         /// <summary>

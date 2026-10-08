@@ -1208,47 +1208,26 @@ namespace WindowsIDE.Ui
                     }
                 }
 
-                if (pos + fit < text.Length)
+                MarkdownPreviewSlice slice = MarkdownPreviewText.Take(text, pos, fit);
+                if (slice.DrawText.Length > 0)
                 {
-                    int lastSpace = -1;
-                    int k = 0;
-                    while (k < fit)
-                    {
-                        char ch = text[pos + k];
-                        if (ch == ' ' || ch == '\t')
-                        {
-                            lastSpace = k;
-                        }
-
-                        k++;
-                    }
-
-                    if (lastSpace >= 1)
-                    {
-                        fit = lastSpace + 1;
-                    }
-                }
-
-                string piece = text.Substring(pos, fit).TrimEnd(' ', '\t');
-                if (piece.Length > 0)
-                {
-                    int w = (int)Math.Ceiling(DualFontPainter.Measure(g, piece, half, full, this.typographic));
+                    int w = (int)Math.Ceiling(DualFontPainter.Measure(g, slice.DrawText, half, full, this.typographic));
                     if (codeBand)
                     {
                         this.spans.Add(PreviewSpan.Fill(x, y, w, lineH, Theme.CurrentLine));
                     }
 
-                    this.spans.Add(PreviewSpan.TextRun(x, y, w, lineH, piece, color, half, full, underline, strike));
+                    this.spans.Add(PreviewSpan.TextRun(x, y, w, lineH, slice.DrawText, color, half, full, underline, strike));
                     x += w;
                 }
 
-                pos += fit;
-                while (pos < text.Length && (text[pos] == ' ' || text[pos] == '\t'))
+                if (slice.Consumed < 1)
                 {
-                    pos++;
+                    break;
                 }
 
-                if (pos < text.Length)
+                pos += slice.Consumed;
+                if (slice.BreakLine && pos < text.Length)
                 {
                     x = left;
                     y += lineH;
@@ -1419,6 +1398,142 @@ namespace WindowsIDE.Ui
                 span.CheckClosed = closed;
                 return span;
             }
+        }
+    }
+
+    /// <summary>
+    /// プレビュー 1 行分の切り出し。描く文字列、消費文字数、行を折るかを持つ。
+    /// </summary>
+    internal sealed class MarkdownPreviewSlice
+    {
+        private readonly string drawText;
+        private readonly int consumed;
+        private readonly bool breakLine;
+
+        /// <summary>
+        /// 切り出し結果を作る。
+        /// </summary>
+        /// <param name="drawText">描く文字列。null は空。</param>
+        /// <param name="consumed">消費する文字数。</param>
+        /// <param name="breakLine">行を折るなら true。</param>
+        public MarkdownPreviewSlice(string drawText, int consumed, bool breakLine)
+        {
+            this.drawText = (drawText == null) ? "" : drawText;
+            this.consumed = consumed;
+            this.breakLine = breakLine;
+        }
+
+        /// <summary>描く文字列。空なら幅を進めない。</summary>
+        public string DrawText
+        {
+            get { return this.drawText; }
+        }
+
+        /// <summary>このスライスが消費する文字数。</summary>
+        public int Consumed
+        {
+            get { return this.consumed; }
+        }
+
+        /// <summary>消費のあと行を折るなら true。</summary>
+        public bool BreakLine
+        {
+            get { return this.breakLine; }
+        }
+    }
+
+    /// <summary>
+    /// プレビュー本文の折り返し切り出し。末尾まで届く空白は残し、続きに非空白がある折り返し空白は描かない。
+    /// </summary>
+    internal static class MarkdownPreviewText
+    {
+        /// <summary>
+        /// 残り幅に入る文字数から、描く文字列と消費文字数を決める。末尾まで届く空白は残し、続きに非空白がある折り返し空白は描かない。
+        /// </summary>
+        /// <param name="text">対象文字列。</param>
+        /// <param name="pos">開始位置。</param>
+        /// <param name="fit">今の行の残り幅に入る文字数。</param>
+        /// <returns>描く文字列、消費文字数、行を折るか。</returns>
+        public static MarkdownPreviewSlice Take(string text, int pos, int fit)
+        {
+            if (text == null || pos < 0 || pos >= text.Length || fit < 1)
+            {
+                return new MarkdownPreviewSlice("", 0, false);
+            }
+
+            int remaining = text.Length - pos;
+            if (fit > remaining)
+            {
+                fit = remaining;
+            }
+
+            if (pos + fit >= text.Length)
+            {
+                return new MarkdownPreviewSlice(text.Substring(pos, fit), fit, false);
+            }
+
+            int lastSpace = -1;
+            int k = 0;
+            while (k < fit)
+            {
+                if (IsBreakSpace(text[pos + k]))
+                {
+                    lastSpace = k;
+                }
+
+                k++;
+            }
+
+            if (lastSpace >= 1)
+            {
+                int after = pos + lastSpace + 1;
+                while (after < text.Length && IsBreakSpace(text[after]))
+                {
+                    after++;
+                }
+
+                if (after < text.Length)
+                {
+                    string raw = text.Substring(pos, lastSpace + 1);
+                    return new MarkdownPreviewSlice(raw.TrimEnd(' ', '\t'), after - pos, true);
+                }
+
+                return new MarkdownPreviewSlice(text.Substring(pos, fit), fit, true);
+            }
+
+            if (RestIsBreakSpace(text, pos + fit))
+            {
+                return new MarkdownPreviewSlice(text.Substring(pos, fit), fit, true);
+            }
+
+            int next = pos + fit;
+            while (next < text.Length && IsBreakSpace(text[next]))
+            {
+                next++;
+            }
+
+            return new MarkdownPreviewSlice(text.Substring(pos, fit).TrimEnd(' ', '\t'), next - pos, true);
+        }
+
+        private static bool IsBreakSpace(char ch)
+        {
+            return ch == ' ' || ch == '\t';
+        }
+
+        private static bool RestIsBreakSpace(string text, int index)
+        {
+            int i = index;
+            while (i < text.Length)
+            {
+                if (!IsBreakSpace(text[i]))
+                {
+                    return false;
+                }
+
+                i++;
+            }
+
+            return true;
         }
     }
 }

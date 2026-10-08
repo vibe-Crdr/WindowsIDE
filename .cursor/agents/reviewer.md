@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Always use after WindowsIDE implementation (including docs, Cursor rules, and agent defs) and before completion for an independent, read-only review of freeze environment, C# 5, no NuGet, phase scope, UI/fonts, STA/process/Excel COM boundaries, tests, and compile.ps1 results. Do not edit; return findings to Builder. Pipeline canonical: .cursor/rules/dev-pipeline.mdc.
-model: grok-4.6[effort=xhigh,fast=false]
+model: grok-4.7[context=500k,reasoning_effort=xhigh,fast=false]
 readonly: true
 ---
 

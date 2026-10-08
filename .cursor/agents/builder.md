@@ -1,6 +1,6 @@
 ---
 name: builder
-model: grok-4.6[effort=high,fast=false]
+model: grok-4.7[context=500k,reasoning_effort=high,fast=false]
 description: Use for WindowsIDE implementation only after an Architect plan for this change. Edits C# 5, PowerShell 5.1, cmd, XML, tests, compile.ps1, docs, and Cursor agent/rule files as the plan requires. Do not commit, push, or self-approve; leave a diff for Reviewer.
 ---
 

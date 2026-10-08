@@ -1,6 +1,6 @@
 ---
 name: architect
-model: grok-4.6[effort=xhigh,fast=false]
+model: grok-4.7[context=500k,reasoning_effort=xhigh,fast=false]
 description: Use before any WindowsIDE development that changes repository files (code, tests, docs, Cursor rules, agent defs). Read-only. Always produce a Builder handoff plan; do not skip for small or non-cross-cutting edits. Pipeline canonical: .cursor/rules/dev-pipeline.mdc.
 readonly: true
 ---

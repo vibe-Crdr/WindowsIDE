@@ -70,6 +70,10 @@ GDI 登録系（`gdi32.AddFontMemResourceEx` / `AddFontResourceEx(FR_PRIVATE)`�
 
 ASCII 印字（U+0020–U+007E）と半角カナ（U+FF61–U+FF9F）は Cascadia Mono。それ以外とサロゲートペアは源ノ角（全角側）。P0 / TextView 本文・メニュー・ツリーは Regular のみ。Markdown プレビューは Bold / Italic / BoldItalic（半角は実ファイル、全角 Italic は FontStyle 合成。源ノ角 Italic ファイルは取らない）。
 
+## 描画（GDI+）
+
+二重バッファで SystemDefault は gasp 無し源ノ角を二値にする。全角ランの DrawString 直前だけ AntiAlias。半角は ClearTypeGridFit。測幅は hint に依存させない。
+
 ## ビルド
 
 `build/windows-ide.rsp` に次を足す。

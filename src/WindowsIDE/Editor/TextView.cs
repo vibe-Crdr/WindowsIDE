@@ -1906,6 +1906,7 @@ namespace WindowsIDE.Editor
                 if (x + w >= this.gutterWidth && x <= textArea.Right && ch.Length > 0)
                 {
                     Brush brush = this.BrushForToken(this.TokenKindAt(i), fg, keywordBrush, stringBrush, numberBrush, commentBrush, localBrush, instanceBrush, methodBrush, typeBrush);
+                    DualFontPainter.ApplyTextRenderingHint(g, half);
                     g.DrawString(ch, font, brush, x, y + this.BaselineOffset(font), this.typographic);
                 }
 
@@ -1981,6 +1982,7 @@ namespace WindowsIDE.Editor
                 bool half = GlyphClassifier.UseHalfWidthFont(text, i, out count);
                 Font font = half ? this.halfFont : this.fullFont;
                 string ch = text.Substring(i, count);
+                DualFontPainter.ApplyTextRenderingHint(g, half);
                 g.DrawString(ch, font, fg, x, y + this.BaselineOffset(font), this.typographic);
                 x += g.MeasureString(ch, font, new PointF(0, 0), this.typographic).Width;
                 i += count;

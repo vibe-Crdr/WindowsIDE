@@ -40,7 +40,7 @@ P0 では下パネルを出さない。問題一覧・出力・デバッグ・�
 ### P1 ハイライト
 
 P1 で Local / Instance / Method / Type の 4 色を足す。これ以外の新しい色は足さない。ステータスは **言語 | 行:列 | エンコーディング | フォント**。
-言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Markdown / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP。項目高さは DualFont セル + 2 px。ストリップ Padding は DIP のみ。描画クリップの高さは項目クライアント。トップ／ステータスの幅クリップは DualFont 測幅まで項目内で伸ばす。ドロップダウンの左右は TextRectangle（ショートカット右寄せ）。SizingGrip は出さない。
+言語名は英語（C# / VB.NET / VBA / PowerShell / cmd / Markdown / Plain）。StatusStrip 余白は左右 8 DIP・上下 4 DIP。項目高さは DualFont セル + 2 px。ストリップ Padding は DIP のみ。描画クリップの高さは項目クライアント。トップ／ステータスの幅クリップは DualFont 測幅まで項目内で伸ばす。ドロップダウンの左右の正は TextRectangle ではない（クリップの正は ChromeTextLayout.LayoutDropDownText。ショートカットは共有右端へ右寄せ）。SizingGrip は出さない。
 Ctrl+F は P1 F-FIND。VB.NET のステータス名はフェーズ P9（今は実装しない）。
 
 ### P1 F-CS-BLD / F-PROB（問題一覧）
@@ -163,9 +163,9 @@ VBA UserForm のデザイン面。コード/デザイン切替は FindBar 直下
 
 ツリーは **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。
 
-メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブも同じ **12 DIP** DualFont（本文 `fontSize` 非連動）。About だけシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。ToolStrip の `TextRectangle` を DualFont クリップの正にしない（正は `ChromeTextLayout`。実セル＋項目クライアント。`TextRectangle` は左右の配置ヒント）。
+メニュー（MenuStrip）とステータス（StatusStrip）はツリーと同じ **12 DIP** の `GraphicsUnit.Pixel` で Cascadia Mono + 源ノ角ゴシックをグリフ切替する。本文 `fontSize` には連動しない。タブも同じ **12 DIP** DualFont（本文 `fontSize` 非連動）。About だけシステム UI ファミリを **12 DIP** の `GraphicsUnit.Pixel` のままとする。ToolStrip の `TextRectangle` を DualFont クリップの正にしない（正は `ChromeTextLayout`。実セル＋項目クライアント。`TextRectangle` は左右の配置ヒント）。ドロップダウンのラベルはショートカット列の左でクリップし、ショートカットは内容の共有右端に右寄せする。クリップの正は ChromeTextLayout.LayoutDropDownText。
 
-ドロップダウン項目の幅は DualFont（ニーモニック除去後のラベルと `GetShortcutDisplayText`）に左 24 DIP・タブギャップ・右矢印列（論理 10+8 DIP）を足した行幅と、WinForms の `MaxItemSize`（`base.GetPreferredSize`）の大きい方。兄弟 DualFont 行は同幅にし、ショートカットは共有右端に揃える。本文 `fontSize` 非連動は上記のまま。
+ドロップダウンの見える幅は、兄弟 DualFont 行の最大（ニーモニック除去後のラベル、タブギャップ、GetShortcutDisplayText、左右クローム）とする。レイアウト済みの左クロームは TextRectangle.X。右は、項目幅から TextRectangle 右端を引いた実測が右底+8px 以内ならその実測、超えたら右底 27 DIP。未レイアウトは左 33 DIP・右 27 DIP。GDI の GetTextSize は幅の正にしない。項目の GetPreferredSize だけでは窓と TextRectangle は広がらないので、トップレベル項目の CreateDefaultDropDown が返すドロップダウン側で見える幅を合わせる。兄弟行は同幅、ショートカットは共有右端。MenuStrip の見出し同士は同幅にしない。本文 fontSize 非連動は上記のまま。
 
 同梱の読み込みに失敗したときだけ Consolas / Yu Gothic（UI）/ MS Gothic に退避し、ステータスへエラーを出す。退避時もレイアウトは実フォントのメトリクスに追従する。
 

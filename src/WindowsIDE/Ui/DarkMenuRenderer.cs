@@ -83,24 +83,33 @@ namespace WindowsIDE.Ui
 
             Rectangle rect = e.TextRectangle;
             float textWidth = DualFontPainter.Measure(e.Graphics, visible, this.halfFont, this.fullFont, null);
-            float originX = rect.X;
-            if ((flags & TextFormatFlags.Right) != 0)
+            bool rightAlign = (flags & TextFormatFlags.Right) != 0;
+            bool center = (flags & TextFormatFlags.HorizontalCenter) != 0;
+            bool onDropDown = e.Item != null && e.Item.IsOnDropDown;
+            float originX;
+            Rectangle clip;
+            if (onDropDown)
             {
-                originX = rect.Right - textWidth;
+                clip = this.DropDownColumnClip(e.Item, e.Graphics, rect, rightAlign, textWidth, out originX);
             }
-            else if ((flags & TextFormatFlags.HorizontalCenter) != 0)
+            else
             {
-                originX = rect.X + (rect.Width - textWidth) / 2f;
-            }
+                originX = rect.X;
+                if (rightAlign)
+                {
+                    originX = rect.Right - textWidth;
+                }
+                else if (center)
+                {
+                    originX = rect.X + (rect.Width - textWidth) / 2f;
+                }
 
-            Rectangle clip = rect;
-            if (e.Item != null)
-            {
-                Rectangle itemClient = new Rectangle(0, 0, e.Item.Width, e.Item.Height);
-                bool onDropDown = e.Item.IsOnDropDown;
-                bool rightAlign = (flags & TextFormatFlags.Right) != 0;
-                bool center = (flags & TextFormatFlags.HorizontalCenter) != 0;
-                clip = ChromeTextLayout.ItemTextClip(itemClient, rect, textWidth, onDropDown, rightAlign, center);
+                clip = rect;
+                if (e.Item != null)
+                {
+                    Rectangle itemClient = new Rectangle(0, 0, e.Item.Width, e.Item.Height);
+                    clip = ChromeTextLayout.ItemTextClip(itemClient, rect, textWidth, rightAlign, center);
+                }
             }
 
             using (SolidBrush brush = new SolidBrush(e.TextColor))
@@ -213,6 +222,100 @@ namespace WindowsIDE.Ui
             return converter.ConvertToString(item.ShortcutKeys);
         }
 
+        /// <summary>
+        /// ラベルとショートカットの隙間。16 DIP とタブ幅の大きい方。
+        /// </summary>
+        /// <param name="item">フォントを取る項目。null や Font 無しなら DIP だけ。</param>
+        /// <param name="dpi">画面 DPI。</param>
+        /// <returns>隙間（px）。</returns>
+        internal static int ShortcutGapPx(ToolStripItem item, int dpi)
+        {
+            int gap = DpiUtil.ToPixels(ChromeTextLayout.DropDownLabelGapDip, dpi);
+            if (item != null && item.Font != null)
+            {
+                int tabW = TextRenderer.MeasureText("\t", item.Font).Width;
+                if (tabW > gap)
+                {
+                    gap = tabW;
+                }
+            }
+
+            return gap;
+        }
+
+        /// <summary>
+        /// ドロップダウンのラベル列またはショートカット列。高さは項目クライアント。
+        /// </summary>
+        /// <param name="item">描く項目。</param>
+        /// <param name="g">測幅に使う Graphics。</param>
+        /// <param name="textRect">TextRectangle（配置ヒント）。</param>
+        /// <param name="rightAlign">ショートカット回なら true。</param>
+        /// <param name="passWidth">この回の文字列幅（px）。</param>
+        /// <param name="originX">描画開始 X。</param>
+        /// <returns>その列だけのクリップ。</returns>
+        private Rectangle DropDownColumnClip(ToolStripItem item, Graphics g, Rectangle textRect, bool rightAlign, float passWidth, out float originX)
+        {
+            int dpi = DpiUtil.GetDpi(IntPtr.Zero);
+            if (item.Owner != null && item.Owner.IsHandleCreated)
+            {
+                dpi = DpiUtil.GetDpi(item.Owner.Handle);
+            }
+
+            int dummy;
+            string label = UiMnemonic.Strip(item.Text, out dummy);
+            float labelW = DualFontPainter.Measure(g, label, this.halfFont, this.fullFont, null);
+            int shortcutPx = 0;
+            ToolStripMenuItem menuItem = item as ToolStripMenuItem;
+            if (menuItem != null)
+            {
+                string shortcut = GetShortcutDisplayText(menuItem);
+                if (shortcut != null && shortcut.Length > 0)
+                {
+                    float shortcutW = DualFontPainter.Measure(g, shortcut, this.halfFont, this.fullFont, null);
+                    shortcutPx = (int)Math.Ceiling((double)shortcutW);
+                }
+            }
+
+            int gap = ShortcutGapPx(item, dpi);
+            int leftFloor = DpiUtil.ToPixels(ChromeTextLayout.DropDownLeftChromeDip, dpi);
+            int rightFloor = DpiUtil.ToPixels(ChromeTextLayout.DropDownRightChromeDip, dpi);
+            ChromeTextLayout.MenuTextColumns cols = ChromeTextLayout.LayoutDropDownText(
+                item.Width,
+                textRect.X,
+                textRect.Width,
+                (int)Math.Ceiling((double)labelW),
+                shortcutPx,
+                gap,
+                leftFloor,
+                rightFloor);
+            int height = item.Height;
+            if (height < 0)
+            {
+                height = 0;
+            }
+
+            if (rightAlign)
+            {
+                int width = cols.ShortcutRight - cols.ShortcutLeft;
+                if (width < 0)
+                {
+                    width = 0;
+                }
+
+                originX = cols.ShortcutRight - passWidth;
+                return new Rectangle(cols.ShortcutLeft, 0, width, height);
+            }
+
+            int labelCol = cols.LabelRight - cols.LabelLeft;
+            if (labelCol < 0)
+            {
+                labelCol = 0;
+            }
+
+            originX = cols.LabelLeft;
+            return new Rectangle(cols.LabelLeft, 0, labelCol, height);
+        }
+
         private sealed class DarkColorTable : ProfessionalColorTable
         {
             public override Color MenuStripGradientBegin { get { return Theme.Background; } }
@@ -248,6 +351,18 @@ namespace WindowsIDE.Ui
         public DualFontMenuItem(string text)
             : base(text)
         {
+        }
+
+        /// <summary>
+        /// 見える幅を合わせるドロップダウンを返す。自動生成フラグは DropDown getter が付ける。
+        /// </summary>
+        /// <returns>OwnerItem 付きの空の DualFontDropDownMenu。</returns>
+        protected override ToolStripDropDown CreateDefaultDropDown()
+        {
+            DualFontDropDownMenu menu = new DualFontDropDownMenu();
+            // 公開コンストラクタは所有者を付けない。未設定のまま自動生成だと親の Font 変更で落ちる。
+            menu.OwnerItem = this;
+            return menu;
         }
 
         /// <summary>
@@ -295,16 +410,6 @@ namespace WindowsIDE.Ui
                     dpi = DpiUtil.GetDpi(this.Owner.Handle);
                 }
 
-                int gap = DpiUtil.ToPixels(16, dpi);
-                if (this.Font != null)
-                {
-                    int tabW = TextRenderer.MeasureText("\t", this.Font).Width;
-                    if (tabW > gap)
-                    {
-                        gap = tabW;
-                    }
-                }
-
                 if (this.Owner != null)
                 {
                     foreach (ToolStripItem item in this.Owner.Items)
@@ -320,7 +425,7 @@ namespace WindowsIDE.Ui
                             continue;
                         }
 
-                        int rowW = MeasureDropDownRowWidth(dual, g, half, full, dpi, gap);
+                        int rowW = MeasureDropDownRowWidth(dual, g, half, full, dpi);
                         if (rowW > width)
                         {
                             width = rowW;
@@ -329,7 +434,7 @@ namespace WindowsIDE.Ui
                 }
                 else
                 {
-                    int rowW = MeasureDropDownRowWidth(this, g, half, full, dpi, gap);
+                    int rowW = MeasureDropDownRowWidth(this, g, half, full, dpi);
                     if (rowW > width)
                     {
                         width = rowW;
@@ -399,18 +504,17 @@ namespace WindowsIDE.Ui
         }
 
         /// <summary>
-        /// ドロップダウン1行の DualFont+chrome 幅。GetPreferredSize は呼ばない（兄弟走査の再帰禁止）。
+        /// ドロップダウン1行の DualFont と左右クローム幅。GetPreferredSize と MaxItemSize は呼ばない。
         /// </summary>
         /// <param name="item">測る DualFont 項目。</param>
         /// <param name="g">計測 Graphics。</param>
         /// <param name="half">半角フォント。</param>
         /// <param name="full">全角フォント。</param>
         /// <param name="dpi">物理換算 DPI。</param>
-        /// <param name="gap">ラベルとショートカットの隙間（px）。</param>
         /// <returns>その行の幅（px）。</returns>
-        private static int MeasureDropDownRowWidth(DualFontMenuItem item, Graphics g, Font half, Font full, int dpi, int gap)
+        internal static int MeasureDropDownRowWidth(DualFontMenuItem item, Graphics g, Font half, Font full, int dpi)
         {
-            if (item == null || g == null)
+            if (item == null || g == null || half == null || full == null)
             {
                 return 0;
             }
@@ -418,16 +522,170 @@ namespace WindowsIDE.Ui
             int dummy;
             string visible = UiMnemonic.Strip(item.Text, out dummy);
             float labelW = DualFontPainter.Measure(g, visible, half, full, null);
-            int width = DpiUtil.ToPixels(24, dpi) + (int)Math.Ceiling((double)labelW) + gap;
+            int labelPx = (int)Math.Ceiling((double)labelW);
+            int shortcutPx = 0;
             string shortcut = DarkMenuRenderer.GetShortcutDisplayText(item);
             if (shortcut != null && shortcut.Length > 0)
             {
                 float shortcutW = DualFontPainter.Measure(g, shortcut, half, full, null);
-                width += (int)Math.Ceiling((double)shortcutW);
+                shortcutPx = (int)Math.Ceiling((double)shortcutW);
             }
 
-            width += DpiUtil.ToPixels(10, dpi) + DpiUtil.ToPixels(8, dpi);
-            return width;
+            int gap = DarkMenuRenderer.ShortcutGapPx(item, dpi);
+            int left = DpiUtil.ToPixels(ChromeTextLayout.DropDownLeftChromeDip, dpi);
+            int right = DpiUtil.ToPixels(ChromeTextLayout.DropDownRightChromeDip, dpi);
+            return ChromeTextLayout.DropDownRowWidth(labelPx, shortcutPx, gap, left, right);
+        }
+    }
+
+    /// <summary>
+    /// メニュー項目のドロップダウン。見える幅を兄弟 DualFont 行に合わせる。
+    /// </summary>
+    public sealed class DualFontDropDownMenu : ToolStripDropDownMenu
+    {
+        private int widthPad;
+        private int layoutDepth;
+
+        /// <summary>
+        /// 空のドロップダウンを作る。自動生成フラグは DropDown getter が付ける。
+        /// </summary>
+        public DualFontDropDownMenu()
+        {
+        }
+
+        /// <summary>
+        /// 見える幅。高さは base。幅は base と兄弟 DualFont 行の大きい方に不足分を足す。フォントが無ければ base。
+        /// </summary>
+        protected override Size MaxItemSize
+        {
+            get
+            {
+                Size native = base.MaxItemSize;
+                Font half;
+                Font full;
+                if (!this.TryRendererFonts(out half, out full))
+                {
+                    return native;
+                }
+
+                int row = this.WidestDualFontRowPx(half, full);
+                int width = native.Width;
+                if (row > width)
+                {
+                    width = row;
+                }
+
+                width += this.widthPad;
+                return new Size(width, native.Height);
+            }
+        }
+
+        /// <summary>
+        /// フォント変更で幅の不足分を捨ててから base に渡す。
+        /// </summary>
+        /// <param name="e">イベント引数。</param>
+        protected override void OnFontChanged(EventArgs e)
+        {
+            this.widthPad = 0;
+            base.OnFontChanged(e);
+        }
+
+        /// <summary>
+        /// base のあと、窓が行幅より狭いときだけ不足分を足して PerformLayout を最大 2 回までやり直す。
+        /// </summary>
+        /// <param name="e">レイアウト引数。</param>
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            base.OnLayout(e);
+            if (this.layoutDepth >= 2)
+            {
+                return;
+            }
+
+            Font half;
+            Font full;
+            if (!this.TryRendererFonts(out half, out full))
+            {
+                return;
+            }
+
+            int row = this.WidestDualFontRowPx(half, full);
+            if (this.Width > 0 && this.Width < row)
+            {
+                this.widthPad += row - this.Width;
+                this.layoutDepth++;
+                try
+                {
+                    this.PerformLayout();
+                }
+                finally
+                {
+                    this.layoutDepth--;
+                }
+            }
+        }
+
+        private bool TryRendererFonts(out Font half, out Font full)
+        {
+            half = null;
+            full = null;
+            DarkMenuRenderer renderer = this.Renderer as DarkMenuRenderer;
+            if (renderer == null)
+            {
+                return false;
+            }
+
+            half = renderer.HalfFont;
+            full = renderer.FullFont;
+            return half != null && full != null;
+        }
+
+        /// <summary>
+        /// 兄弟 DualFont 行の最大幅。GetPreferredSize と MaxItemSize は呼ばない。
+        /// </summary>
+        private int WidestDualFontRowPx(Font half, Font full)
+        {
+            int dpi = DpiUtil.GetDpi(IntPtr.Zero);
+            if (this.IsHandleCreated)
+            {
+                dpi = DpiUtil.GetDpi(this.Handle);
+            }
+
+            Bitmap bmp = null;
+            Graphics g = DarkMenuRenderer.CreateMeasureGraphics(this, out bmp);
+            try
+            {
+                int width = 0;
+                foreach (ToolStripItem item in this.Items)
+                {
+                    if (item is ToolStripSeparator)
+                    {
+                        continue;
+                    }
+
+                    DualFontMenuItem dual = item as DualFontMenuItem;
+                    if (dual == null)
+                    {
+                        continue;
+                    }
+
+                    int rowW = DualFontMenuItem.MeasureDropDownRowWidth(dual, g, half, full, dpi);
+                    if (rowW > width)
+                    {
+                        width = rowW;
+                    }
+                }
+
+                return width;
+            }
+            finally
+            {
+                g.Dispose();
+                if (bmp != null)
+                {
+                    bmp.Dispose();
+                }
+            }
         }
     }
 

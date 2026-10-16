@@ -1465,42 +1465,46 @@ namespace WindowsIDE.Tests
 
             Rectangle itemTop = new Rectangle(0, 0, 120, 24);
             Rectangle trTop = new Rectangle(8, 8, 20, 8);
-            Rectangle clipTop = ChromeTextLayout.ItemTextClip(itemTop, trTop, 50f, false, false, false);
+            Rectangle clipTop = ChromeTextLayout.ItemTextClip(itemTop, trTop, 50f, false, false);
             Check("top left clip.Right grows to DualFont", clipTop.Right == 8 + 50);
             Check("top left clip within item", clipTop.Right <= itemTop.Right && clipTop.X >= itemTop.Left && clipTop.X == 8);
             Check("top left clip.Height is item", clipTop.Height == itemTop.Height);
-            Rectangle clipTopCap = ChromeTextLayout.ItemTextClip(itemTop, trTop, 200f, false, false, false);
+            Rectangle clipTopCap = ChromeTextLayout.ItemTextClip(itemTop, trTop, 200f, false, false);
             Check("top left clip.Right not past item", clipTopCap.Right == itemTop.Right);
-
-            Rectangle itemDrop = new Rectangle(0, 0, 300, 24);
-            Rectangle trDrop = new Rectangle(32, 4, 180, 8);
-            Rectangle clipDrop = ChromeTextLayout.ItemTextClip(itemDrop, trDrop, 500f, true, false, false);
-            Check("dropdown clip.X is textRect.X", clipDrop.X == trDrop.X);
-            Check("dropdown clip.Right is textRect.Right", clipDrop.Right == trDrop.Right);
-            Check("dropdown clip.Height is item", clipDrop.Height == itemDrop.Height);
 
             Rectangle itemRight = new Rectangle(0, 0, 300, 24);
             Rectangle trRight = new Rectangle(200, 4, 80, 8);
-            Rectangle clipRight = ChromeTextLayout.ItemTextClip(itemRight, trRight, 50f, false, true, false);
+            Rectangle clipRight = ChromeTextLayout.ItemTextClip(itemRight, trRight, 50f, true, false);
             Check("right align keeps textRect.Right", clipRight.Right == trRight.Right && clipRight.Right <= itemRight.Right);
             Check("right align clip.Height is item", clipRight.Height == itemRight.Height);
 
             Rectangle itemSpring = new Rectangle(0, 0, 400, 20);
             Rectangle trSpring = new Rectangle(0, 4, 40, 8);
-            Rectangle clipSpring = ChromeTextLayout.ItemTextClip(itemSpring, trSpring, 80f, false, false, false);
+            Rectangle clipSpring = ChromeTextLayout.ItemTextClip(itemSpring, trSpring, 80f, false, false);
             Check("spring clip width DualFont", clipSpring.Width == 80 && clipSpring.Width <= itemSpring.Width);
             Check("spring clip.Height is item", clipSpring.Height == itemSpring.Height);
 
             Rectangle itemCenter = new Rectangle(0, 0, 200, 24);
             Rectangle trCenter = new Rectangle(80, 8, 40, 8);
-            Rectangle clipCenter = ChromeTextLayout.ItemTextClip(itemCenter, trCenter, 80f, false, false, true);
+            Rectangle clipCenter = ChromeTextLayout.ItemTextClip(itemCenter, trCenter, 80f, false, true);
             Check("center clip within item", clipCenter.X >= itemCenter.Left && clipCenter.Right <= itemCenter.Right);
             Check("center clip.Height is item", clipCenter.Height == itemCenter.Height);
 
             Rectangle itemMiss = new Rectangle(0, 0, 40, 20);
             Rectangle trMiss = new Rectangle(100, 0, 20, 10);
-            Rectangle clipMiss = ChromeTextLayout.ItemTextClip(itemMiss, trMiss, 30f, false, false, false);
+            Rectangle clipMiss = ChromeTextLayout.ItemTextClip(itemMiss, trMiss, 30f, false, false);
             Check("left clip empty when no overlap", clipMiss.IsEmpty);
+
+            ChromeTextLayout.MenuTextColumns nativeCols = ChromeTextLayout.LayoutDropDownText(297, 33, 236, 120, 70, 16, 33, 27);
+            Check("dropdown label clip is left of shortcut", nativeCols.LabelRight == 183 && nativeCols.ShortcutLeft == 199 && nativeCols.LabelRight < nativeCols.ShortcutLeft && nativeCols.ShortcutRight == 269);
+            ChromeTextLayout.MenuTextColumns shorterShortcut = ChromeTextLayout.LayoutDropDownText(297, 33, 236, 120, 40, 16, 33, 27);
+            Check("dropdown shortcut right edge shared", nativeCols.ShortcutRight == 269 && shorterShortcut.ShortcutRight == 269);
+            ChromeTextLayout.MenuTextColumns stretched = ChromeTextLayout.LayoutDropDownText(420, 33, 236, 180, 80, 16, 33, 27);
+            Check("dropdown stretched shortcut uses item right", stretched.ShortcutRight == 393 && stretched.LabelRight == 297 && stretched.ShortcutLeft == 313 && stretched.LabelRight < stretched.ShortcutLeft);
+            ChromeTextLayout.MenuTextColumns unlaid = ChromeTextLayout.LayoutDropDownText(0, 0, 0, 100, 50, 16, 33, 27);
+            Check("dropdown unlaid uses chrome floor", unlaid.ItemWidth == 226 && unlaid.LabelLeft == 33 && unlaid.LabelRight == 133 && unlaid.ShortcutLeft == 149 && unlaid.LabelRight < unlaid.ShortcutLeft);
+            ChromeTextLayout.MenuTextColumns noShortcut = ChromeTextLayout.LayoutDropDownText(200, 33, 140, 80, 0, 16, 33, 27);
+            Check("dropdown no shortcut clip meets content right", noShortcut.LabelRight == 173 && noShortcut.ShortcutLeft == 173 && noShortcut.ShortcutRight == 173);
 
             using (Font half = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
             using (Font full = new Font("Yu Gothic", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
@@ -2289,7 +2293,7 @@ namespace WindowsIDE.Tests
         }
 
         /// <summary>
-        /// 全角 DrawString は AntiAlias、半角は ClearType。測幅は hint 非依存。
+        /// 全角も半角も DrawString は ClearType。測幅は hint 非依存。
         /// </summary>
         private static void RunCjkGrayscaleHint()
         {
@@ -2302,7 +2306,7 @@ namespace WindowsIDE.Tests
                 DualFontPainter.ApplyTextRenderingHint(hintG, true);
                 Check("half hint ClearTypeGridFit", hintG.TextRenderingHint == TextRenderingHint.ClearTypeGridFit);
                 DualFontPainter.ApplyTextRenderingHint(hintG, false);
-                Check("full hint AntiAlias", hintG.TextRenderingHint == TextRenderingHint.AntiAlias);
+                Check("full hint ClearTypeGridFit", hintG.TextRenderingHint == TextRenderingHint.ClearTypeGridFit);
             }
 
             string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
@@ -2325,8 +2329,8 @@ namespace WindowsIDE.Tests
                 return;
             }
 
-            Font half = fonts.CreateHalfWidth(16f);
-            Font full = fonts.CreateFullWidth(16f);
+            Font half = fonts.CreateHalfWidth(12f);
+            Font full = fonts.CreateFullWidth(12f);
             try
             {
                 using (StringFormat fmt = (StringFormat)StringFormat.GenericTypographic.Clone())
@@ -2396,6 +2400,9 @@ namespace WindowsIDE.Tests
 
             string loader = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Fonts", "FontLoader.cs"));
             Check("FontLoader probe SingleBitPerPixelGridFit", loader.IndexOf("SingleBitPerPixelGridFit", StringComparison.Ordinal) >= 0);
+
+            string painter = File.ReadAllText(Path.Combine(repo, "src", "WindowsIDE", "Ui", "Fonts", "DualFontPainter.cs"));
+            Check("DualFontPainter has no TextRenderingHint.AntiAlias", painter.IndexOf("TextRenderingHint.AntiAlias", StringComparison.Ordinal) < 0);
         }
 
         private static void AssertMeasureIndependentOfHint(Font half, Font full, StringFormat fmt)
@@ -2475,6 +2482,7 @@ namespace WindowsIDE.Tests
                 Check("Draw restores SystemDefault", g.TextRenderingHint == TextRenderingHint.SystemDefault);
                 int dualUnique = CountUniqueArgb(bmp);
                 Check("DualFontPainter Draw あ unique > 2", dualUnique > 2);
+                Check("Draw あ ClearType |R-B|", MaxAbsRedBlue(bmp, bg) >= 80);
 
                 if (sysUnique == 2)
                 {
@@ -2523,7 +2531,7 @@ namespace WindowsIDE.Tests
 
                 int splitX = (int)Math.Ceiling((double)(originX + aWidth));
                 int halfMaxRb = 0;
-                int fullMidMaxChan = 0;
+                int fullMaxRb = 0;
                 int differ = 0;
                 int yPix;
                 for (yPix = 0; yPix < dualBmp.Height; yPix++)
@@ -2544,20 +2552,6 @@ namespace WindowsIDE.Tests
                         }
 
                         int rb = Math.Abs(c.R - c.B);
-                        int rg = Math.Abs(c.R - c.G);
-                        int gb = Math.Abs(c.G - c.B);
-                        int chan = rb;
-                        if (rg > chan)
-                        {
-                            chan = rg;
-                        }
-
-                        if (gb > chan)
-                        {
-                            chan = gb;
-                        }
-
-                        bool solidFg = c.R == fg.R && c.G == fg.G && c.B == fg.B;
                         if (xPix < splitX)
                         {
                             if (rb > halfMaxRb)
@@ -2565,20 +2559,43 @@ namespace WindowsIDE.Tests
                                 halfMaxRb = rb;
                             }
                         }
-                        else if (!solidFg)
+                        else if (rb > fullMaxRb)
                         {
-                            if (chan > fullMidMaxChan)
-                            {
-                                fullMidMaxChan = chan;
-                            }
+                            fullMaxRb = rb;
                         }
                     }
                 }
 
                 Check("mixed Draw differs from all-AntiAlias", differ > 0);
                 Check("mixed half has ClearType |R-B|", halfMaxRb >= 80);
-                Check("mixed full mid channel delta smaller", fullMidMaxChan < 80);
+                Check("mixed full has ClearType |R-B|", fullMaxRb >= 80);
             }
+        }
+
+        private static int MaxAbsRedBlue(Bitmap bmp, Color bg)
+        {
+            int max = 0;
+            int y;
+            for (y = 0; y < bmp.Height; y++)
+            {
+                int x;
+                for (x = 0; x < bmp.Width; x++)
+                {
+                    Color c = bmp.GetPixel(x, y);
+                    if (c.ToArgb() == bg.ToArgb())
+                    {
+                        continue;
+                    }
+
+                    int rb = Math.Abs(c.R - c.B);
+                    if (rb > max)
+                    {
+                        max = rb;
+                    }
+                }
+            }
+
+            return max;
         }
 
         private static int CountUniqueArgb(Bitmap bmp)
@@ -2638,6 +2655,30 @@ namespace WindowsIDE.Tests
             }
         }
 
+        private static bool IsDropDownAutoGenerated(ToolStripDropDown drop)
+        {
+            if (drop == null)
+            {
+                return false;
+            }
+
+            PropertyInfo prop = typeof(ToolStripDropDown).GetProperty(
+                "IsAutoGenerated",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (prop == null)
+            {
+                return false;
+            }
+
+            object value = prop.GetValue(drop, null);
+            if (!(value is bool))
+            {
+                return false;
+            }
+
+            return (bool)value;
+        }
+
         private static void RunDualFontMenuItemPreferredSize()
         {
             using (Font half = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel))
@@ -2646,8 +2687,11 @@ namespace WindowsIDE.Tests
                 DarkMenuRenderer renderer = new DarkMenuRenderer();
                 renderer.SetFonts(half, full);
 
-                using (ToolStripDropDownMenu drop = new ToolStripDropDownMenu())
+                using (DualFontMenuItem edit = new DualFontMenuItem("編集(&E)"))
                 {
+                    ToolStripDropDown drop = edit.DropDown;
+                    Check("drop down is DualFontDropDownMenu", drop is DualFontDropDownMenu);
+                    Check("drop down IsAutoGenerated", IsDropDownAutoGenerated(drop));
                     drop.Renderer = renderer;
                     DualFontMenuItem copy = new DualFontMenuItem("コピー(&C)");
                     copy.ShortcutKeys = Keys.Control | Keys.C;
@@ -2671,26 +2715,68 @@ namespace WindowsIDE.Tests
                     Check("dropdown DualFont widths equal", wCopy == wAll && wAll == wNext && wNext == wPrev);
                     Check("dropdown copy is on drop-down", copy.IsOnDropDown);
 
+                    string[] labels = new string[] { "コピー(C)", "すべて選択(A)", "次を検索", "前を検索" };
+                    string[] shortcuts = new string[] { "Ctrl+C", "Ctrl+A", "F3", "Shift+F3" };
+                    int[] labelPx = new int[labels.Length];
+                    int[] shortcutPx = new int[shortcuts.Length];
                     using (Bitmap bmp = new Bitmap(1, 1))
                     using (Graphics g = Graphics.FromImage(bmp))
                     {
-                        int dummy;
-                        string label = UiMnemonic.Strip("コピー(&C)", out dummy);
                         int dpi = DpiUtil.GetDpi(IntPtr.Zero);
-                        float labelW = DualFontPainter.Measure(g, label, half, full, null);
-                        float shortcutW = DualFontPainter.Measure(g, "Ctrl+C", half, full, null);
-                        int left = DpiUtil.ToPixels(24, dpi);
-                        int gap = DpiUtil.ToPixels(16, dpi);
+                        int left = DpiUtil.ToPixels(ChromeTextLayout.DropDownLeftChromeDip, dpi);
+                        int right = DpiUtil.ToPixels(ChromeTextLayout.DropDownRightChromeDip, dpi);
+                        int gap = DpiUtil.ToPixels(ChromeTextLayout.DropDownLabelGapDip, dpi);
                         int tabW = TextRenderer.MeasureText("\t", copy.Font).Width;
                         if (tabW > gap)
                         {
                             gap = tabW;
                         }
 
-                        int right = DpiUtil.ToPixels(10, dpi) + DpiUtil.ToPixels(8, dpi);
-                        int minW = left + (int)Math.Ceiling((double)labelW) + gap + (int)Math.Ceiling((double)shortcutW) + right;
-                        Check("dropdown width covers copy shortcut chrome", wCopy >= minW);
+                        int i;
+                        for (i = 0; i < labels.Length; i++)
+                        {
+                            labelPx[i] = (int)Math.Ceiling((double)DualFontPainter.Measure(g, labels[i], half, full, null));
+                            shortcutPx[i] = (int)Math.Ceiling((double)DualFontPainter.Measure(g, shortcuts[i], half, full, null));
+                        }
+
+                        int copyRow = ChromeTextLayout.DropDownRowWidth(labelPx[0], shortcutPx[0], gap, left, right);
+                        Check("dropdown width covers copy shortcut chrome", wCopy >= copyRow);
                     }
+
+                    drop.PerformLayout();
+                    if (drop.Width == 0)
+                    {
+                        drop.CreateControl();
+                        drop.PerformLayout();
+                    }
+
+                    int layoutDpi = DpiUtil.GetDpi(IntPtr.Zero);
+                    if (drop.IsHandleCreated)
+                    {
+                        layoutDpi = DpiUtil.GetDpi(drop.Handle);
+                    }
+
+                    int layoutLeft = DpiUtil.ToPixels(ChromeTextLayout.DropDownLeftChromeDip, layoutDpi);
+                    int layoutRight = DpiUtil.ToPixels(ChromeTextLayout.DropDownRightChromeDip, layoutDpi);
+                    int layoutGap = DpiUtil.ToPixels(ChromeTextLayout.DropDownLabelGapDip, layoutDpi);
+                    int layoutTab = TextRenderer.MeasureText("\t", copy.Font).Width;
+                    if (layoutTab > layoutGap)
+                    {
+                        layoutGap = layoutTab;
+                    }
+
+                    int widest = 0;
+                    int rowIndex;
+                    for (rowIndex = 0; rowIndex < labelPx.Length; rowIndex++)
+                    {
+                        int row = ChromeTextLayout.DropDownRowWidth(labelPx[rowIndex], shortcutPx[rowIndex], layoutGap, layoutLeft, layoutRight);
+                        if (row > widest)
+                        {
+                            widest = row;
+                        }
+                    }
+
+                    Check("drop down width covers DualFont row", drop.Width >= widest);
                 }
 
                 using (MenuStrip menu = new MenuStrip())

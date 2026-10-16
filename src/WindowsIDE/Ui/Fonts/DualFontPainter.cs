@@ -297,10 +297,10 @@ namespace WindowsIDE.Ui.Fonts
         }
 
         /// <summary>
-        /// 半角は ClearType、全角はグレースケール AA。gasp 無し源ノ角を二値にしない。
+        /// 半角も全角も ClearTypeGridFit。gasp 無し源ノ角を二値にしない。
         /// </summary>
         /// <param name="g">描画先。null なら何もしない。</param>
-        /// <param name="useHalfWidth">半角ランなら true。</param>
+        /// <param name="useHalfWidth">半角ランなら true。ヒントは半角・全角で同じ。</param>
         public static void ApplyTextRenderingHint(Graphics g, bool useHalfWidth)
         {
             if (g == null)
@@ -308,14 +308,7 @@ namespace WindowsIDE.Ui.Fonts
                 return;
             }
 
-            if (useHalfWidth)
-            {
-                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            }
-            else
-            {
-                g.TextRenderingHint = TextRenderingHint.AntiAlias;
-            }
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
         }
 
         /// <summary>

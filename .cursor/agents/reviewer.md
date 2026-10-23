@@ -2,7 +2,6 @@
 name: reviewer
 description: Always use after WindowsIDE implementation (including docs, Cursor rules, and agent defs) and before completion for an independent, read-only review of freeze environment, C# 5, no NuGet, phase scope, UI/fonts, STA/process/Excel COM boundaries, tests, and compile.ps1 results. Do not edit; return findings to Builder. Pipeline canonical: .cursor/rules/dev-pipeline.mdc.
 model: grok-4.7[context=500k,reasoning_effort=xhigh,fast=false]
-readonly: true
 ---
 
 # WindowsIDE Reviewer
@@ -86,6 +85,29 @@ Residual Risks
 ```
 
 findings が 0 件なら「Findings: none」と書き、確認範囲を省略しない。
+
+## プロジェクト情報の参照（MCP）
+
+参照 MCP は使ってよい。指摘を自分で直すために、書き込み MCP やファイル編集を使わない。`git status` / `diff` / `log` / `show` は参照として可。
+
+許可:
+
+- codebase-memory: 検索、呼び出し追跡、スニペット、カバレッジと索引状態の確認。
+- windows-ide-memory: 検索。一覧・詳細の読み取りは検索に含める。
+- windows-ide-filesystem: 読み取り（一覧、中身、メタデータ）。
+- windows-ide-excel: ブックを変えない読み取り（セル、シート、メタデータ、書き込まない式検証）。
+- GitHub プラグインの読み取り（issue、PR、検索）。PR を開くのは親。
+
+使わない:
+
+- codebase-memory の索引更新・削除（`index_repository`、`delete_project`、ADR の書き込み、トレース取り込み）。`index_repository` は親と stop hook のまま。
+- windows-ide-memory の保存・更新・削除・整理。
+- filesystem の書き込み・移動・削除。
+- excel の書き込み・作成・削除・書式変更・行列の挿入削除。
+- windows-mcp の OS 操作全般（Click、Type、PowerShell、その他のデスクトップ操作）。
+- GitHub の作成・更新・マージ・レビュー投稿。
+- 組み込み Write / StrReplace / Delete / EditNotebook。
+- Git の add、commit、push、checkout、reset、branch 作成。
 
 ## 禁止
 

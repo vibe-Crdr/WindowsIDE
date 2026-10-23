@@ -17,6 +17,8 @@ alwaysApply: true
 
 サブエージェントは `.cursor/agents/` の architect / builder / reviewer の 3 体だけ。言語別・画面別は足さない。コード探索の Explore、長いシェルの Bash は親が使ってよい。Architect が探索を求めたら親が Explore を起動する。Explore の結果で親がファイルを直さない。
 
+architect と reviewer はファイル、Git の書き込み、ビルド成果物、PR、実装をしない。プロジェクト情報の参照に MCP を使ってよい。許可は codebase-memory の検索・追跡・スニペット・カバレッジ確認、windows-ide-memory の検索、filesystem と excel の読み取りである。索引の更新や削除、memory の書き込みや削除、excel の書き込み、filesystem の書き込み・移動・削除、windows-mcp の OS 操作は使わない。index_repository は親と stop hook のままである。この 2 体の frontmatter に readonly: true を付けない。付けると MCP ツールが渡らない。役割の「読み取り専用」はファイルを変えないことであり、Cursor の readonly サンドボックスではない。builder に readonly は足さない。ソース編集を MCP に移す指示も足さない。
+
 ## 例外（これ以外はパイプライン必須）
 
 - ファイルを変えない質問・説明・読み取り。親が答えてよい。Architect が変更不要と返したら Builder / Reviewer / PR はしない。

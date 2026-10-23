@@ -36,6 +36,8 @@
 | `/builder` | Architect 計画後の実装。指定 `csc.exe` で検証する。コミットしない |
 | `/reviewer` | 実装後・完了前の独立レビュー。読み取り専用。修正は Builder へ返す |
 
+architect と reviewer の「読み取り専用」はファイルを変えない役割である。frontmatter の readonly: true は付けない（付けると MCP を受け取れない）。プロジェクト情報の参照には MCP を使ってよい。境界の正は .cursor/rules/dev-pipeline.mdc。
+
 開発（リポジトリのファイルを変える作業）は必ず architect → builder → reviewer。正は `.cursor/rules/dev-pipeline.mdc`。親が「完了」と自己申告しない。実装セッションの完了は `master` 向け PR を開くか更新すること。詳細は `.cursor/rules/pr-finish-workflow.mdc`。
 
 ## Git / PR

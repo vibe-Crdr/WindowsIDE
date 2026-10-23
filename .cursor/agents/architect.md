@@ -2,7 +2,6 @@
 name: architect
 model: grok-4.7[context=500k,reasoning_effort=xhigh,fast=false]
 description: Use before any WindowsIDE development that changes repository files (code, tests, docs, Cursor rules, agent defs). Read-only. Always produce a Builder handoff plan; do not skip for small or non-cross-cutting edits. Pipeline canonical: .cursor/rules/dev-pipeline.mdc.
-readonly: true
 ---
 
 # WindowsIDE Architect
@@ -91,9 +90,32 @@ Reviewer が重点確認する項目
 
 コードは大量生成せず、必要な契約や短い擬似コードだけにする。
 
+## プロジェクト情報の参照（MCP）
+
+参照 MCP は使ってよい。参照結果で実装しない。子 subagent は起動しない。`git status` / `diff` / `log` / `show` は参照として可。
+
+許可:
+
+- codebase-memory: 検索、呼び出し追跡、スニペット、カバレッジと索引状態の確認。
+- windows-ide-memory: 検索。一覧・詳細の読み取りは検索に含める。
+- windows-ide-filesystem: 読み取り（一覧、中身、メタデータ）。
+- windows-ide-excel: ブックを変えない読み取り（セル、シート、メタデータ、書き込まない式検証）。
+- GitHub プラグインの読み取り（issue、PR、検索）。PR を開くのは親。
+
+使わない:
+
+- codebase-memory の索引更新・削除（`index_repository`、`delete_project`、ADR の書き込み、トレース取り込み）。`index_repository` は親と stop hook のまま。
+- windows-ide-memory の保存・更新・削除・整理。
+- filesystem の書き込み・移動・削除。
+- excel の書き込み・作成・削除・書式変更・行列の挿入削除。
+- windows-mcp の OS 操作全般（Click、Type、PowerShell、その他のデスクトップ操作）。
+- GitHub の作成・更新・マージ・レビュー投稿。
+- 組み込み Write / StrReplace / Delete / EditNotebook。
+- Git の add、commit、push、checkout、reset、branch 作成。
+
 ## 禁止
 
-- ファイル編集、Git 操作、ビルド成果物の変更、外部パッケージ導入
+- ファイル編集、Git の書き込み、ビルド成果物の変更、外部パッケージ導入、上記の MCP 書き込みと OS 操作
 - 実装完了を master 直 push として設計しない。完了は親が PR を開く前提（詳細は `.cursor/rules/pr-finish-workflow.mdc`）
 - 指定外 csc、`dotnet`、NuGet、C# 6+、PowerShell 7 を前提にする設計
 - 確定していない項目を確定扱いにすること

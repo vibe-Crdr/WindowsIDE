@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
+using WindowsIDE.Commands;
 using WindowsIDE.Debug;
 using WindowsIDE.Editor;
 using WindowsIDE.Host.Cmd;
@@ -88,6 +89,9 @@ namespace WindowsIDE.Ui
         private HoverInfoControl hoverInfo;
         private bool ctrlKPending;
         private DateTime ctrlKAt;
+        private readonly List<BoundCommand> commandCatalog;
+        private CommandPopupControl commandPopup;
+        private Control pickerRestore;
 
         /// <summary>
         /// フォント読み込み結果を受け取ってシェルを組む。末尾で起動引数を開く。
@@ -97,6 +101,7 @@ namespace WindowsIDE.Ui
         public MainForm(FontLoadResult fonts, string[] startupArgs)
         {
             this.fonts = fonts;
+            this.commandCatalog = new List<BoundCommand>();
             this.Text = "WindowsIDE";
             this.StartPosition = FormStartPosition.Manual;
             this.BackColor = Theme.Background;
@@ -136,6 +141,15 @@ namespace WindowsIDE.Ui
             this.BuildBody();
             this.MainMenuStrip = this.menu;
             this.RecreateChromeFonts();
+
+            this.commandPopup = new CommandPopupControl();
+            this.commandPopup.Accepted += this.OnPickerAccepted;
+            this.commandPopup.Dismissed += this.OnPickerDismissed;
+            this.commandPopup.Abandoned += this.OnPickerAbandoned;
+            this.commandPopup.PreferredHeightChanged += this.OnPickerPreferredHeightChanged;
+            this.Controls.Add(this.commandPopup);
+            this.commandPopup.SetFonts(this.chromeHalfFont, this.chromeFullFont);
+            this.commandPopup.Visible = false;
 
             this.ApplyEditorSettings(WorkspaceSettings.DefaultFontSize, WorkspaceSettings.DefaultTabSize);
             this.ApplyWindowMetrics();
@@ -282,10 +296,18 @@ namespace WindowsIDE.Ui
             this.RefreshWorkspaceTypes();
         }
 
-        /// <summary>DPI 変更は base のみ。本文フォント再生成は TextView の Handle/AfterParent に任せる。</summary>
+        /// <summary>DPI 変更でポップアップを置き直す。本文フォント再生成は TextView の Handle/AfterParent に任せる。</summary>
         protected override void OnDpiChanged(DpiChangedEventArgs e)
         {
             base.OnDpiChanged(e);
+            this.PlaceCommandPopup();
+        }
+
+        /// <summary>リサイズでポップアップを置き直す。</summary>
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            this.PlaceCommandPopup();
         }
 
         /// <summary>Ctrl+Tab など。</summary>
@@ -333,7 +355,7 @@ namespace WindowsIDE.Ui
                 return true;
             }
 
-            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing) || (this.bottomPane != null && this.bottomPane.IsTerminalComposing) || (this.tree != null && this.tree.IsInlineCreateComposing))
+            if ((this.editor != null && this.editor.IsComposing) || (this.findBar != null && this.findBar.IsComposing) || (this.bottomPane != null && this.bottomPane.IsTerminalComposing) || (this.tree != null && this.tree.IsInlineCreateComposing) || (this.commandPopup != null && this.commandPopup.IsQueryComposing))
             {
                 if (keyData == (Keys.Control | Keys.Z)
                     || keyData == (Keys.Control | Keys.Y)
@@ -363,7 +385,9 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.D1)
                     || keyData == (Keys.Control | Keys.Shift | Keys.V)
                     || keyData == (Keys.Control | Keys.Alt | Keys.N)
-                    || keyData == (Keys.Control | Keys.Shift | Keys.N))
+                    || keyData == (Keys.Control | Keys.Shift | Keys.N)
+                    || keyData == (Keys.Control | Keys.Shift | Keys.P)
+                    || keyData == (Keys.Control | Keys.P))
                 {
                     return false;
                 }
@@ -379,6 +403,29 @@ namespace WindowsIDE.Ui
                     || keyData == (Keys.Control | Keys.A))
                 {
                     return false;
+                }
+            }
+
+            if (this.tree != null && this.tree.IsInlineCreateActive)
+            {
+                if (keyData == (Keys.Control | Keys.Shift | Keys.P) || keyData == (Keys.Control | Keys.P))
+                {
+                    return true;
+                }
+            }
+
+            if (this.commandPopup == null || !this.commandPopup.Visible)
+            {
+                if (keyData == (Keys.Control | Keys.Shift | Keys.P))
+                {
+                    this.OpenCommandPalette();
+                    return true;
+                }
+
+                if (keyData == (Keys.Control | Keys.P))
+                {
+                    this.OpenQuickOpen();
+                    return true;
                 }
             }
 
@@ -645,54 +692,54 @@ namespace WindowsIDE.Ui
             this.menu.DpiChangedAfterParent += this.OnChromeDpiChangedAfterParent;
 
             ToolStripMenuItem file = this.CreateTop("ファイル(&F)");
-            file.DropDownItems.Add(this.CreateItem("フォルダを開く(&O)", Keys.Control | Keys.O, this.OnOpenFolder));
-            file.DropDownItems.Add(this.CreateItem("新規(&N)", Keys.Control | Keys.N, this.OnNew));
-            file.DropDownItems.Add(this.CreateDisplayCommand("ファイルを作成(&I)", "Ctrl+Alt+N", this.OnCreateWorkspaceFile));
-            file.DropDownItems.Add(this.CreateDisplayCommand("フォルダを作成(&D)", "Ctrl+Shift+N", this.OnCreateWorkspaceFolder));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("フォルダを開く(&O)", Keys.Control | Keys.O, this.OnOpenFolder), CommandIds.FileOpenFolder, "Ctrl+O", this.OnOpenFolder));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("新規(&N)", Keys.Control | Keys.N, this.OnNew), CommandIds.FileNew, "Ctrl+N", this.OnNew));
+            file.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("ファイルを作成(&I)", "Ctrl+Alt+N", this.OnCreateWorkspaceFile), CommandIds.FileCreateFile, "Ctrl+Alt+N", this.OnCreateWorkspaceFile));
+            file.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("フォルダを作成(&D)", "Ctrl+Shift+N", this.OnCreateWorkspaceFolder), CommandIds.FileCreateFolder, "Ctrl+Shift+N", this.OnCreateWorkspaceFolder));
             file.DropDownItems.Add(new ToolStripSeparator());
-            file.DropDownItems.Add(this.CreateItem("保存(&S)", Keys.Control | Keys.S, this.OnSave));
-            file.DropDownItems.Add(this.CreateItem("名前を付けて保存(&A)", Keys.Control | Keys.Shift | Keys.S, this.OnSaveAs));
-            file.DropDownItems.Add(this.CreateItem("すべて保存(&L)", Keys.None, this.OnSaveAll));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("保存(&S)", Keys.Control | Keys.S, this.OnSave), CommandIds.FileSave, "Ctrl+S", this.OnSave));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("名前を付けて保存(&A)", Keys.Control | Keys.Shift | Keys.S, this.OnSaveAs), CommandIds.FileSaveAs, "Ctrl+Shift+S", this.OnSaveAs));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("すべて保存(&L)", Keys.None, this.OnSaveAll), CommandIds.FileSaveAll, "", this.OnSaveAll));
             file.DropDownItems.Add(new ToolStripSeparator());
-            file.DropDownItems.Add(this.CreateItem("タブを閉じる(&C)", Keys.Control | Keys.W, this.OnCloseTab));
-            file.DropDownItems.Add(this.CreateItem("終了(&X)", Keys.None, this.OnExit));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("タブを閉じる(&C)", Keys.Control | Keys.W, this.OnCloseTab), CommandIds.FileCloseTab, "Ctrl+W", this.OnCloseTab));
+            file.DropDownItems.Add(this.Bind(this.CreateItem("終了(&X)", Keys.None, this.OnExit), CommandIds.FileExit, "", this.OnExit));
 
             ToolStripMenuItem edit = this.CreateTop("編集(&E)");
-            edit.DropDownItems.Add(this.CreateItem("元に戻す(&U)", Keys.Control | Keys.Z, this.OnUndo));
-            edit.DropDownItems.Add(this.CreateItem("やり直し(&R)", Keys.Control | Keys.Y, this.OnRedo));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("元に戻す(&U)", Keys.Control | Keys.Z, this.OnUndo), CommandIds.EditUndo, "Ctrl+Z", this.OnUndo));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("やり直し(&R)", Keys.Control | Keys.Y, this.OnRedo), CommandIds.EditRedo, "Ctrl+Y", this.OnRedo));
             edit.DropDownItems.Add(new ToolStripSeparator());
-            edit.DropDownItems.Add(this.CreateItem("切り取り(&T)", Keys.Control | Keys.X, this.OnCut));
-            edit.DropDownItems.Add(this.CreateItem("コピー(&C)", Keys.Control | Keys.C, this.OnCopy));
-            edit.DropDownItems.Add(this.CreateItem("貼り付け(&P)", Keys.Control | Keys.V, this.OnPaste));
-            edit.DropDownItems.Add(this.CreateItem("すべて選択(&A)", Keys.Control | Keys.A, this.OnSelectAll));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("切り取り(&T)", Keys.Control | Keys.X, this.OnCut), CommandIds.EditCut, "Ctrl+X", this.OnCut));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("コピー(&C)", Keys.Control | Keys.C, this.OnCopy), CommandIds.EditCopy, "Ctrl+C", this.OnCopy));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("貼り付け(&P)", Keys.Control | Keys.V, this.OnPaste), CommandIds.EditPaste, "Ctrl+V", this.OnPaste));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("すべて選択(&A)", Keys.Control | Keys.A, this.OnSelectAll), CommandIds.EditSelectAll, "Ctrl+A", this.OnSelectAll));
             edit.DropDownItems.Add(new ToolStripSeparator());
-            edit.DropDownItems.Add(this.CreateItem("検索(&F)", Keys.Control | Keys.F, this.OnFind));
-            edit.DropDownItems.Add(this.CreateItem("置換(&H)", Keys.Control | Keys.H, this.OnReplace));
-            edit.DropDownItems.Add(this.CreateFindNavItem("次を検索(&N)", Keys.F3, "F3", this.OnFindNext));
-            edit.DropDownItems.Add(this.CreateFindNavItem("前を検索(&B)", Keys.Shift | Keys.F3, "Shift+F3", this.OnFindPrevious));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("検索(&F)", Keys.Control | Keys.F, this.OnFind), CommandIds.EditFind, "Ctrl+F", this.OnFind));
+            edit.DropDownItems.Add(this.Bind(this.CreateItem("置換(&H)", Keys.Control | Keys.H, this.OnReplace), CommandIds.EditReplace, "Ctrl+H", this.OnReplace));
+            edit.DropDownItems.Add(this.Bind(this.CreateFindNavItem("次を検索(&N)", Keys.F3, "F3", this.OnFindNext), CommandIds.EditFindNext, "F3", this.OnFindNext));
+            edit.DropDownItems.Add(this.Bind(this.CreateFindNavItem("前を検索(&B)", Keys.Shift | Keys.F3, "Shift+F3", this.OnFindPrevious), CommandIds.EditFindPrevious, "Shift+F3", this.OnFindPrevious));
             edit.DropDownItems.Add(new ToolStripSeparator());
-            edit.DropDownItems.Add(this.CreateDisplayCommand("定義へ移動(&G)", "F12", this.OnGotoDefinition));
-            edit.DropDownItems.Add(this.CreateDisplayCommand("クイック インフォ(&I)", "Ctrl+K Ctrl+I", this.OnQuickInfo));
-            edit.DropDownItems.Add(this.CreateDisplayCommand("枠コメントを挿入(&D)", "Ctrl+Alt+D", this.OnInsertDocFrame));
+            edit.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("定義へ移動(&G)", "F12", this.OnGotoDefinition), CommandIds.EditGotoDefinition, "F12", this.OnGotoDefinition));
+            edit.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("クイック インフォ(&I)", "Ctrl+K Ctrl+I", this.OnQuickInfo), CommandIds.EditQuickInfo, "Ctrl+K Ctrl+I", this.OnQuickInfo));
+            edit.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("枠コメントを挿入(&D)", "Ctrl+Alt+D", this.OnInsertDocFrame), CommandIds.EditInsertDocFrame, "Ctrl+Alt+D", this.OnInsertDocFrame));
 
             ToolStripMenuItem build = this.CreateTop("ビルド(&B)");
-            build.DropDownItems.Add(this.CreateBuildItem("ビルド(&B)", this.OnBuild));
+            build.DropDownItems.Add(this.Bind(this.CreateBuildItem("ビルド(&B)", this.OnBuild), CommandIds.BuildBuild, "Ctrl+Shift+B", this.OnBuild));
 
             ToolStripMenuItem run = this.CreateTop("実行(&R)");
-            run.DropDownItems.Add(this.CreateDisplayCommand("開始/続行(&C)", "F5", this.OnDebugStartContinue));
-            run.DropDownItems.Add(this.CreateDisplayCommand("停止(&S)", "Shift+F5", this.OnDebugStop));
-            run.DropDownItems.Add(this.CreateDisplayCommand("ステップ オーバー(&O)", "F10", this.OnDebugStepOver));
-            run.DropDownItems.Add(this.CreateDisplayCommand("ステップ イン(&I)", "F11", this.OnDebugStepInto));
+            run.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("開始/続行(&C)", "F5", this.OnDebugStartContinue), CommandIds.RunStartContinue, "F5", this.OnDebugStartContinue));
+            run.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("停止(&S)", "Shift+F5", this.OnDebugStop), CommandIds.RunStop, "Shift+F5", this.OnDebugStop));
+            run.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("ステップ オーバー(&O)", "F10", this.OnDebugStepOver), CommandIds.RunStepOver, "F10", this.OnDebugStepOver));
+            run.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("ステップ イン(&I)", "F11", this.OnDebugStepInto), CommandIds.RunStepInto, "F11", this.OnDebugStepInto));
             run.DropDownItems.Add(new ToolStripSeparator());
-            run.DropDownItems.Add(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun));
-            run.DropDownItems.Add(this.CreateRunSelectionItem("選択行を実行(&L)", this.OnRunSelection));
+            run.DropDownItems.Add(this.Bind(this.CreateRunItem("デバッグなしで実行(&N)", this.OnRun), CommandIds.RunWithoutDebug, "Ctrl+F5", this.OnRun));
+            run.DropDownItems.Add(this.Bind(this.CreateRunSelectionItem("選択行を実行(&L)", this.OnRunSelection), CommandIds.RunSelection, "F8", this.OnRunSelection));
 
             ToolStripMenuItem vba = this.CreateTop("VBA(&A)");
             vba.DropDownOpening += this.OnVbaMenuOpening;
-            vba.DropDownItems.Add(this.CreateItem("ブックを選ぶ(&B)", Keys.None, this.OnVbaPickWorkbook));
-            vba.DropDownItems.Add(this.CreateVbaPullItem("プル(&P)", this.OnVbaPull));
-            vba.DropDownItems.Add(this.CreateVbaPushItem("プッシュ(&H)", this.OnVbaPush));
-            vba.DropDownItems.Add(this.CreateDisplayCommand("コンパイル(&C)", "", this.OnVbaCompile));
+            vba.DropDownItems.Add(this.Bind(this.CreateItem("ブックを選ぶ(&B)", Keys.None, this.OnVbaPickWorkbook), CommandIds.VbaPickWorkbook, "", this.OnVbaPickWorkbook));
+            vba.DropDownItems.Add(this.Bind(this.CreateVbaPullItem("プル(&P)", this.OnVbaPull), CommandIds.VbaPull, "Ctrl+Alt+P", this.OnVbaPull));
+            vba.DropDownItems.Add(this.Bind(this.CreateVbaPushItem("プッシュ(&H)", this.OnVbaPush), CommandIds.VbaPush, "Ctrl+Alt+H", this.OnVbaPush));
+            vba.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("コンパイル(&C)", "", this.OnVbaCompile), CommandIds.VbaCompile, "", this.OnVbaCompile));
             vba.DropDownItems.Add(new ToolStripSeparator());
             ToolStripMenuItem naming = this.CreateTop("名前の付け方(&N)");
             this.vbaNameFilenameItem = this.CreateShellCheckItem("filename", this.OnVbaNamingFilename);
@@ -702,13 +749,16 @@ namespace WindowsIDE.Ui
             vba.DropDownItems.Add(naming);
 
             ToolStripMenuItem view = this.CreateTop("表示(&V)");
-            view.DropDownItems.Add(this.CreateDisplayCommand("エクスプローラー(&E)", "Ctrl+Shift+E", this.OnFocusExplorer));
-            view.DropDownItems.Add(this.CreateDisplayCommand("編集器(&D)", "Ctrl+1", this.OnFocusEditor));
-            view.DropDownItems.Add(this.CreateDisplayCommand("プレビュー(&P)", "Ctrl+Shift+V", this.OnToggleMarkdownPreview));
+            view.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("クイックオープン(&Q)", "Ctrl+P", this.OnQuickOpen), CommandIds.ViewQuickOpen, "Ctrl+P", this.OnQuickOpen));
+            view.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("コマンドパレット(&C)", "Ctrl+Shift+P", this.OnCommandPalette), CommandIds.ViewCommandPalette, "Ctrl+Shift+P", this.OnCommandPalette));
             view.DropDownItems.Add(new ToolStripSeparator());
-            this.viewTerminalItem = this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal);
+            view.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("エクスプローラー(&E)", "Ctrl+Shift+E", this.OnFocusExplorer), CommandIds.ViewExplorer, "Ctrl+Shift+E", this.OnFocusExplorer));
+            view.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("編集器(&D)", "Ctrl+1", this.OnFocusEditor), CommandIds.ViewEditor, "Ctrl+1", this.OnFocusEditor));
+            view.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("プレビュー(&P)", "Ctrl+Shift+V", this.OnToggleMarkdownPreview), CommandIds.ViewPreview, "Ctrl+Shift+V", this.OnToggleMarkdownPreview));
+            view.DropDownItems.Add(new ToolStripSeparator());
+            this.viewTerminalItem = this.Bind(this.CreateTerminalViewItem("ターミナル(&T)", this.OnViewTerminal), CommandIds.ViewTerminal, "Ctrl+`", this.OnViewTerminal);
             view.DropDownItems.Add(this.viewTerminalItem);
-            view.DropDownItems.Add(this.CreateDisplayCommand("デバッグ(&G)", "", this.OnViewDebug));
+            view.DropDownItems.Add(this.Bind(this.CreateDisplayCommand("デバッグ(&G)", "", this.OnViewDebug), CommandIds.ViewDebug, "", this.OnViewDebug));
             view.DropDownItems.Add(new ToolStripSeparator());
             this.viewPowerShellItem = this.CreateShellCheckItem("PowerShell 5.1", this.OnViewPowerShell);
             this.viewPowerShellItem.Checked = true;
@@ -717,7 +767,7 @@ namespace WindowsIDE.Ui
             view.DropDownItems.Add(this.viewCmdItem);
 
             ToolStripMenuItem help = this.CreateTop("ヘルプ(&H)");
-            help.DropDownItems.Add(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout));
+            help.DropDownItems.Add(this.Bind(this.CreateItem("バージョン情報(&A)", Keys.None, this.OnAbout), CommandIds.HelpAbout, "", this.OnAbout));
 
             this.menu.Items.Add(file);
             this.menu.Items.Add(edit);
@@ -847,6 +897,23 @@ namespace WindowsIDE.Ui
             return item;
         }
 
+        /// <summary>
+        /// メニュー項目をカタログへ登録順で足す。チェック項目は渡さない。
+        /// </summary>
+        /// <param name="item">追加する項目。</param>
+        /// <param name="commandId">コマンド ID。</param>
+        /// <param name="shortcutDisplay">表示用ショートカット。無いときは空。</param>
+        /// <param name="handler">メニューと同じ EventHandler。</param>
+        /// <returns>同じ項目。</returns>
+        private ToolStripMenuItem Bind(ToolStripMenuItem item, string commandId, string shortcutDisplay, EventHandler handler)
+        {
+            int mnemonicIndex;
+            string name = UiMnemonic.Strip(item.Text, out mnemonicIndex);
+            string shortcut = (shortcutDisplay == null) ? "" : shortcutDisplay;
+            this.commandCatalog.Add(new BoundCommand(commandId, name, shortcut, handler));
+            return item;
+        }
+
         private ToolStripMenuItem CreateShellCheckItem(string text, EventHandler handler)
         {
             DualFontMenuItem item = new DualFontMenuItem(text);
@@ -923,6 +990,11 @@ namespace WindowsIDE.Ui
                 this.bottomPane.SetFonts(newHalf, newFull);
             }
 
+            if (this.commandPopup != null)
+            {
+                this.commandPopup.SetFonts(newHalf, newFull);
+            }
+
             if (this.tabs != null)
             {
                 this.tabs.SetFonts(newHalf, newFull);
@@ -973,6 +1045,11 @@ namespace WindowsIDE.Ui
             if (this.tabs != null)
             {
                 this.tabs.Invalidate();
+            }
+
+            if (this.commandPopup != null && this.commandPopup.Visible)
+            {
+                this.PlaceCommandPopup();
             }
         }
 
@@ -1517,6 +1594,16 @@ namespace WindowsIDE.Ui
             }
         }
 
+        /// <summary>クイックオープンで選んだファイルを、ツリーと同じ条件で開く。</summary>
+        private void OpenQuickOpenPath(string path)
+        {
+            string error;
+            if (!this.TryOpenFile(path, true, out error) && !string.IsNullOrEmpty(error))
+            {
+                MessageBox.Show(this, error, "WindowsIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         /// <summary>ファイルメニュー／ショートカットからワークスペース内ファイルの行内作成を始める。</summary>
         private void OnCreateWorkspaceFile(object sender, EventArgs e)
         {
@@ -1659,6 +1746,171 @@ namespace WindowsIDE.Ui
         /// </summary>
         private void OnFocusEditor(object sender, EventArgs e)
         {
+            this.FocusEditor();
+        }
+
+        /// <summary>表示メニューと Ctrl+P。ワークスペースが無くても開く。</summary>
+        private void OnQuickOpen(object sender, EventArgs e)
+        {
+            this.OpenQuickOpen();
+        }
+
+        /// <summary>表示メニューと Ctrl+Shift+P。</summary>
+        private void OnCommandPalette(object sender, EventArgs e)
+        {
+            this.OpenCommandPalette();
+        }
+
+        private void OpenQuickOpen()
+        {
+            this.OpenPicker(PickerMode.QuickOpen);
+        }
+
+        private void OpenCommandPalette()
+        {
+            this.OpenPicker(PickerMode.Palette);
+        }
+
+        private void OpenPicker(PickerMode mode)
+        {
+            if (this.commandPopup == null)
+            {
+                return;
+            }
+
+            if (!this.commandPopup.Visible)
+            {
+                this.pickerRestore = this.ActiveControl;
+            }
+
+            bool hasWorkspace = this.workspace != null;
+            string root = null;
+            if (hasWorkspace)
+            {
+                root = this.workspace.RootPath;
+            }
+
+            this.commandPopup.BeginOpenGuard();
+            try
+            {
+                this.commandPopup.ShowMode(mode, this.commandCatalog.ToArray(), hasWorkspace, root);
+                this.commandPopup.Visible = true;
+                this.commandPopup.BringToFront();
+                this.PlaceCommandPopup();
+                this.commandPopup.FocusQuery();
+            }
+            finally
+            {
+                this.commandPopup.EndOpenGuard();
+            }
+        }
+
+        private void PlaceCommandPopup()
+        {
+            if (this.commandPopup == null)
+            {
+                return;
+            }
+
+            int dpi = DpiUtil.GetDpi(this.IsHandleCreated ? this.Handle : IntPtr.Zero);
+            int width = DpiUtil.ToPixels(CommandPopupControl.WidthDip, dpi);
+            int margin = DpiUtil.ToPixels(CommandPopupControl.EdgeMarginDip, dpi);
+            int gap = DpiUtil.ToPixels(CommandPopupControl.TopGapDip, dpi);
+            int height = this.commandPopup.MeasureOuterHeight(dpi);
+            int clientW = this.ClientSize.Width;
+            int clientH = this.ClientSize.Height;
+            int x = (clientW - width) / 2;
+            int menuBottom = (this.menu == null) ? 0 : this.menu.Bottom;
+            int y = menuBottom + gap;
+            if (x < margin)
+            {
+                x = margin;
+            }
+
+            if (y < margin)
+            {
+                y = margin;
+            }
+
+            if (x + width > clientW - margin)
+            {
+                x = clientW - margin - width;
+            }
+
+            if (x < 0)
+            {
+                x = 0;
+            }
+
+            if (y + height > clientH - margin)
+            {
+                y = clientH - margin - height;
+            }
+
+            if (y < 0)
+            {
+                y = 0;
+            }
+
+            this.commandPopup.SetBounds(x, y, width, height);
+            this.commandPopup.LayoutAtDpi(dpi);
+            if (this.commandPopup.Visible)
+            {
+                this.commandPopup.BringToFront();
+            }
+        }
+
+        private void OnPickerPreferredHeightChanged(object sender, EventArgs e)
+        {
+            if (this.commandPopup != null && this.commandPopup.Visible)
+            {
+                this.PlaceCommandPopup();
+            }
+        }
+
+        private void OnPickerAccepted(object sender, EventArgs e)
+        {
+            if (this.commandPopup == null)
+            {
+                return;
+            }
+
+            bool isFile = this.commandPopup.AcceptedIsFile;
+            string path = this.commandPopup.AcceptedPath;
+            EventHandler handler = this.commandPopup.AcceptedHandler;
+            this.pickerRestore = null;
+            if (isFile)
+            {
+                this.OpenQuickOpenPath(path);
+                return;
+            }
+
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
+        }
+
+        private void OnPickerDismissed(object sender, EventArgs e)
+        {
+            this.RestorePickerFocus();
+        }
+
+        private void OnPickerAbandoned(object sender, EventArgs e)
+        {
+            this.pickerRestore = null;
+        }
+
+        private void RestorePickerFocus()
+        {
+            Control target = this.pickerRestore;
+            this.pickerRestore = null;
+            if (target != null && !target.IsDisposed && target.IsHandleCreated && target.CanFocus && target.Visible)
+            {
+                target.Focus();
+                return;
+            }
+
             this.FocusEditor();
         }
 

@@ -2,7 +2,7 @@
 
 VS Code 相当を「全部一度に」ではなく、受け入れ条件付きで並べる。優先度は [requirements.md](requirements.md) のフェーズに合わせる。
 
-凡例: M = 必須（P2 まで）。S = べき（P3–P11。デバッグは P3–P6、編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9、WinForms デザイナーはフェーズ P10、VBA UserForm デザイナーはフェーズ P11。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P11 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB / F-WF-DSN / F-UF-DSN から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
+凡例: M = 必須（P2 まで）。S = べき（P3–P11。デバッグは P3・P4・P6。P5 はパレット、クイックオープン、簡易補完。編集器インテリジェンスはフェーズ P7、Markdown／参照／マクロはフェーズ P8、VB.NET ホストはフェーズ P9、WinForms デザイナーはフェーズ P10、VBA UserForm デザイナーはフェーズ P11。F-IG は P7-A に混ぜず P9 より先でよい）。C = できるとよい（フェーズ P7–P11 内の後回し可）。W = 初期はやらない。F-BR / F-SIND / F-AC / F-LIVE / F-SQU / F-GD / F-HOV / F-DOC / F-VBA-CASE / F-VBA-BLD / F-SIG / F-MD / F-VBA-REF / F-MACRO / F-IG / F-VB-BLD / F-VB-RUN / F-VB-LIVE / F-DBG-VB / F-WF-DSN / F-UF-DSN から新しい M は作らない。P1 F-IND スライスで Enter の前行先頭空白コピーと複数行 Tab/Shift+Tab を入れる。P1 F-FIND スライスでファイル内検索・置換を入れる。P1 F-CS-BLD / F-PROB スライスで手動 `csc` と問題一覧を入れる。P1 F-CS-RUN スライスで手動ビルド成功後の EXE 起動と出力パネルを入れる。P1 F-PS-RUN スライスでディスク上の `.ps1` を PowerShell 5.1 子プロセスで実行する。P1 F-CMD-RUN スライスでディスク上の `.cmd` / `.bat` ファイルと選択行を実行する。F-TERM と混ぜない。P1 F-TERM スライスで下パネルの統合ターミナル（ConPTY）を入れる。P2 F-VBA-SYNC スライスで R7 のプル/プッシュを入れる。
 
 ## P0 スライス
 
@@ -278,6 +278,23 @@ P4-A は F-DBG-CS。ディスク上 `.cs` を手動 csc と同じ単位（`/targ
 
 PS と CS は同時セッション禁止。Stopped の F5 は止まっているエンジンへ Continue。Idle F5: 無題「無題はデバッグできない。」／ディスク `.ps1` は P3／ディスク `.cs` は pendingDebugAfterBuild + `StartManualBuild`／その他「C# のデバッグはディスク上の .cs、PowerShell はディスク上の .ps1 だけです。」CS デバッグ中（Idle 以外、または pendingDebugAfterBuild）の Ctrl+Shift+B は拒否。PS デバッグ中のビルドは現行どおり可。デバッグ中 Ctrl+F5/F8 は現行「デバッグ中は実行できない。」
 
+## フェーズ P5 第1スライス（コマンドパレット / クイックオープン）
+
+R11 の第1スライス。F-PAL と F-QO を一つの細いオーナー描画ポップアップの二モードとして同時に実装する。F-CMP は今のスライスでは実装しない（次スライス。提案 P8 は未確定）。デバッガではない。P4-B、P6、F-IG、F-SIG、F-VBA-REF、F-MACRO、P9 / P10 / P11、D30 / D31、あいまい一致、MRU、履歴 XML、F-GSRCH は混ぜない。Excel / Debug / Host / Build / Languages の契約は変えない。
+
+Ctrl+Shift+P はコマンドパレット、Ctrl+P はクイックオープン。ShortcutKeys は付けない。`ProcessCmdKey` の keyData 完全一致。表示メニューの先頭に「クイックオープン(&Q)」「コマンドパレット(&C)」、直後にセパレータ、その後はエクスプローラー、編集器。表示文字列のみ。IME 変換中（既存 `IsComposing`。START だけでは変換中にしない）は奪わない。インライン作成／リネームがアクティブで変換中でないときは開かない。ターミナルにフォーカスがあっても、FindBar が出ていても開く。左ペイン・下パネル・FindBar・スプリッタは畳まない・閉じない。
+
+ポップアップは Form ではなく MainForm の子（`Dock = None`）。幅 520 DIP。横はクライアント中央。上端はメニュー下端 + 48 DIP。端から 8 DIP 以内。OnResize と DPI 変更で置き直す。入力は DualFontField（12 DIP。本文 fontSize には連動しない。`ImeMode.On`。外周 1 物理 px は Theme.Border。背景 EditorBackground。前景 Foreground）。リストは最大 10 行。行高は 12 DIP フォントのセル + 上下 4 DIP。全体の外周 1 物理 px は Theme.Border。背景 Background。非選択の名前は Foreground。パスまたはショートカットは Comment。選択行は背景 Selection、文字は両方 Foreground。空表示は Comment で選択できない。10 行超だけ縦 ThemedScrollBar 10 DIP。ListBox / DataGrid / RichTextBox / WebBrowser は使わない。全面半透明・ShowDialog・影は置かない。新しい Theme 色、`workspace.xml` 属性、製品 `/r` は足さない。
+
+命令は登録時の既存 EventHandler を、ポップアップを閉じてから呼ぶ。セパレータ、トップメニュー、チェック項目、子を持つだけの「名前の付け方」はカタログに入れない。パレットからクイックオープンまたはコマンドパレットを選ぶと、もう一枚開かずモードを切り替える。最初に開いたときの復帰先は上書きしない。ファイルは閉じてから `TryOpenFile`。ワークスペースが無いときも Ctrl+P は開き、「ワークスペースがありません」（走査しない。MessageBox もフォルダ選択も出さない）。スナップショット 0 件でクエリ空は「ファイルがありません」。クエリ非空の 0 件とパレット 0 件は「該当なし」。
+
+絞り込みは表示名、またはファイル名／相対パスの部分一致（`IndexOf` + OrdinalIgnoreCase）。ショートカットとフルパス（ドライブ文字）は一致に使わない。走査はクイックオープンに入ったとき UI スレッドで一度。ディレクトリ名 bin / obj / .git には降りない。Esc はポップアップだけを閉じ、復帰先へフォーカスする。FindBar とホバーはこの Esc では閉じない。欄の外をクリックしたら閉じ、フォーカスはクリック先のまま。開いているあいだ Ctrl+Tab、Ctrl+S、F5、Ctrl+`、Ctrl+1、Ctrl+Shift+E は実行しない。
+
+| ID | 第1スライスでやる | 第1スライスでやらない |
+| --- | --- | --- |
+| F-PAL | コマンド名の部分一致。既存メニューと同じ EventHandler | F-CMP、ShortcutKeys、チェック項目、`>` 接頭辞、PerformClick の第二バス |
+| F-QO | ワークスペース内のファイル名／相対パスで開く | あいまい一致、MRU、拡張子フィルタ、node_modules 除外、バックグラウンド走査、ワークスペース無しのフォルダ選択 |
+
 ## フェーズ P8（Markdown／参照／マクロ）
 
 P5（F-PAL）と P7 の後。P3–P6 デバッガには押し込まない。**フェーズ番号の P8 は、提案 P8（F-CMP の P5 必須範囲）とは別である。** 新しい M は作らない。設定 XML の新規属性は今増やさない（参照 GUID の `vba-map` は提案 P23。P8 実装時。今は要素を足さない）。F-MD 第1スライスと第2スライスは実装済み。F-VBA-REF / F-MACRO は今は実装しない。
@@ -408,8 +425,8 @@ VBE デザイナー窓の埋め込み、C# WinForms（F-WF-DSN）への相乗り
 | F-EXP | M | フォルダを開く、ツリー、開く/新規作成（線画アイコン＋ツールチップ（文字ラベルなし））/リネーム/削除 | ワークスペース配下が表示され、外部変更は他プロセスからフォアグラウンドに戻ったとき更新（`WM_ACTIVATEAPP`。自前ホバーでは再読込しない）。再読込後も展開・選択・スクロールが残る。OwnerDraw ツリーは MouseDown+GetNodeAt で開く。選択中ファイルは Enter でも開く。AfterSelect では開かない。バーは内容が収まるとき非表示。見切れた名前は横スクロールで末尾まで見える。タッチパッド縦横で中身とバーが動く。スクロールでファイル名が二重描画しない。新規作成は選択フォルダまたはファイルの親または根へ。名前はツリー内インライン（Enter 確定、Esc／空 Enter／他コントロールへフォーカスでキャンセル）。同名は上書きしない。作成したファイルは開く。作成したフォルダは展開して選択。ファイル作成 Ctrl+Alt+N、フォルダ作成 Ctrl+Shift+N（ProcessCmdKey、ShortcutKeys なし、IME 中は奪わない。編集器／ターミナルからも可）。ワークスペース無しは作成バーと同じ MessageBox。Ctrl+N 無題は維持。ツリーへ Ctrl+Shift+E。編集器へ Ctrl+1（左ペイン・下パネルは畳まない。IME 中は奪わない。ShortcutKeys なし。FindBar は閉じない。ワークスペース無しでも可）。リネームは F2 と選択済みラベルの遅延クリック（行内 DualFontField。Enter 確定、Esc／空／同一名／フォーカス離脱でキャンセル。根不可。同名上書きなし）。削除はツリーフォーカス時 Delete（確認のうえごみ箱。根不可。Shift+Delete 完全削除はしない）。開いているタブはリネームでパス追従、削除で閉じる（dirty は既存保存確認。Cancel ならディスクも触らない）。選択行は FileTreeControl.ContainsFocus なら Theme.Selection、さもなくば Theme.CurrentLine。HideSelection=false。インライン DualFontField の枠は Theme.Selection。新しい Theme 色は足さない。ワークスペース未 Bind では左ペイン非表示。起動フォーカスは編集器。Ctrl+Shift+E はワークスペース無しで no-op |
 | F-TAB | M | 複数タブ、未保存印、閉じる | タブ切替でキャレットとスクロールが戻る。閉じる印はタブ矩形内に収まる。溢れ時は横オフセットでスクロール。ホイール（縦も横も）でオフセット。選択変更で選択タブを可視へ寄せる |
 | F-SAVE | M | 保存、すべて保存、名前を付けて保存 | エンコーディング規則どおり書き込む。保存ダイアログは Common Item Dialog |
-| F-PAL | S | コマンドパレット | コマンド名で絞り込み実行 |
-| F-QO | S | クイックオープン | ワークスペース内ファイル名で開く |
+| F-PAL | S | コマンドパレット | 第1スライスの受け入れは「フェーズ P5 第1スライス」 |
+| F-QO | S | クイックオープン | 第1スライスの受け入れは「フェーズ P5 第1スライス」 |
 | F-SET | M | 設定 UI または XML 編集 | フォントサイズと VBA `namingMode` を切替できる。半角フォントは Cascadia Mono 固定。P2 の namingMode は vba-map + VBA メニュー。設定画面なし |
 | F-WF-DSN | S | ユーザー C# WinForms の視覚編集 | ディスク上の対ファイルをデザイン面で編集でき、`InitializeComponent` が `Designer.cs` に書き戻る。IDE 本体 UI と VBA UserForm は対象外。フェーズ P10。今は実装しない |
 | F-UF-DSN | S | VBA UserForm の視覚編集 | ディスク上の `.frm` をデザイン面で編集でき、保存が `.frm` テキストに書き戻る。`.frx` は不透明。Excel Type 3 は Export/Import。C# の F-WF-DSN とは別。フェーズ P11。今は実装しない |
@@ -469,7 +486,7 @@ VBE デザイナー窓の埋め込み、C# WinForms（F-WF-DSN）への相乗り
 
 | ID | 優先 | 内容 | 受け入れ |
 | --- | --- | --- | --- |
-| F-CMP | S | キーワードと開いているファイルの識別子 | P5。全ホスト（P9 以降は VB.NET を含む。今の P5 実装は触らない）。キーワード静的表＋開いているファイルの識別子。cmd はキーワード、`%VAR%` / `!VAR!`、ファイル内ラベル。メンバーリストなし。ワークスペースのシンボル名は P5 必須ではない（提案 P8）。P7 でワークスペース／メンバー（S）。Roslyn ではない |
+| F-CMP | S | キーワードと開いているファイルの識別子 | 今のスライスでは実装しない。次スライス。提案 P8 は未確定 |
 | F-GD | S | 定義へ移動 | F12 でユーザーソース上の定義へジャンプする。BCL / cmd へは入らない。Peek / 参照検索は W。フェーズ P7-B は C# / VBA / PowerShell。VB.NET はフェーズ P9 |
 | F-HOV | S | ホバー / クイックインフォ | C# / VBA / PowerShell / cmd（cmd 含む）で、解決できた定義のシグネチャが常時出る。説明は F-DOC 枠または従来コメント。フェーズ P7-B。VB.NET はフェーズ P9 |
 | F-SIG | C | パラメータヒント | 呼び出し中に粗の引数リストが出る。P5 必須ではない。フェーズ P7-B |

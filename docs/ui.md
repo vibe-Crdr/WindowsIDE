@@ -67,6 +67,14 @@ P1 F-FIND の FindBar はタブ直下・編集器の上（入れ子 `Panel`。`T
 
 デバッグタブの上ペインは停止時ローカルのまま。C# でフレームがあるときだけ先頭に Comment「コールスタック」と粗いフレーム行（メソッド名 + パス + 1 始まり行。上限 32）。PowerShell は Frames 空なので P3 の見た目を維持。ListView / DataGrid / RichTextBox は使わない。新しい Theme 色は足さない。F10 に ShortcutKeys を付けない。
 
+### フェーズ P5 第1スライス（コマンドパレット / クイックオープン）
+
+MainForm の子（Form ではない。`Dock` なし）。表示しても全面は覆わない。幅 520 DIP。横位置はクライアント中央。上端はメニュー下端 + 48 DIP。端から 8 DIP 以内にクランプする。OnResize と DPI 変更で置き直す。起動時は非表示。
+
+入力欄は DualFontField。フォントは同梱 DualFont の 12 DIP（本文 fontSize には連動しない）。`ImeMode.On`。外周 1 物理 px は Theme.Border。背景は EditorBackground。前景は Foreground。リストは最大 10 行。行高は 12 DIP フォントのセル + 上下 4 DIP。全体の外周 1 物理 px は Theme.Border。背景は Background。非選択の名前は Foreground。パスまたはショートカットは Comment。選択行の背景は Selection。選択行の文字は両方 Foreground。空表示（「ワークスペースがありません」「ファイルがありません」「該当なし」）は Comment で選択できない。ファイル行はファイル名、空白、相対パス。ルート直下で相対パスがファイル名と同じなら後半は出さない。命令行は名前を左、ショートカットを右。10 行を超えるときだけ縦 ThemedScrollBar 10 DIP。ListBox は使わない。新しい Theme 色は足さない。全面半透明、ShowDialog、影は置かない。
+
+Ctrl+Shift+P でコマンドパレット、Ctrl+P でクイックオープン。どちらも ShortcutKeys は付けない。変換中は奪わない。開いているあいだ Esc はポップアップだけを閉じる（FindBar とホバーは閉じない）。Enter は選択行を確定する。上下は選択を動かす（端で止め、周回しない）。左右、Home、End、Backspace、Delete、文字、Ctrl+C/X/V/A/Z は入力欄のまま。Ctrl+Y は欄が何もしない既存仕様のまま。Tab はフォーカスを外へ出さない。左ペイン、下パネル、FindBar はポップアップ表示では畳まない。
+
 ### P2 F-VBA-SYNC（VBA メニュー）
 
 トップ `VBA(&A)` を実行と表示の間に置く。ブックを選ぶ / プル（表示 Ctrl+Alt+P）/ プッシュ（表示 Ctrl+Alt+H）/ 名前の付け方。ShortcutKeys は付けず ProcessCmdKey。新しい Theme 色は足さない。ステータス列は増やさない。同期完了で編集フォーカスを奪わない。UseWaitCursor。進捗 UI なし。

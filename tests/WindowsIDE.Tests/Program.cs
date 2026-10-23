@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using WindowsIDE.Build;
+using WindowsIDE.Commands;
 using WindowsIDE.Debug;
 using WindowsIDE.Editor;
 using WindowsIDE.Host.Cmd;
@@ -118,6 +119,14 @@ namespace WindowsIDE.Tests
             InspectCompilePs1();
             RunDiagnosticParser();
             RunCsFileEnumerator();
+            RunCommandQuery();
+            RunPickerNavigation();
+            RunPickerHint();
+            RunQuickOpenQuery();
+            RunQuickOpenIndex();
+            RunQuickOpenJunction();
+            RunScrollBarKeepsFieldFocus();
+            InspectPaletteSource();
             RunCompileUnit();
             RunCscArgumentBuilder();
             RunCscLiveResponse();
@@ -5039,6 +5048,413 @@ namespace WindowsIDE.Tests
                 {
                 }
             }
+        }
+
+        private static void RunCommandQuery()
+        {
+            Check("mode quick open", (int)PickerMode.QuickOpen == 0);
+            Check("mode palette", (int)PickerMode.Palette == 1);
+
+            CommandEntry[] entries = new CommandEntry[]
+            {
+                new CommandEntry("file.save", "保存", "Ctrl+S"),
+                new CommandEntry("file.saveAll", "すべて保存", ""),
+                new CommandEntry("edit.replace", "置換", "Ctrl+H"),
+                new CommandEntry("edit.find", "検索", "Ctrl+F")
+            };
+
+            Check("query null entries", CommandQuery.Match(null, "保存", 10).Length == 0);
+            Check("query max 0", CommandQuery.Match(entries, "保存", 0).Length == 0);
+            Check("query max negative", CommandQuery.Match(entries, "", -1).Length == 0);
+
+            int[] all = CommandQuery.Match(entries, null, 10);
+            Check("query null keeps order", all.Length == 4 && all[0] == 0 && all[1] == 1 && all[2] == 2 && all[3] == 3);
+            int[] blank = CommandQuery.Match(entries, "   ", 2);
+            Check("query blank limit", blank.Length == 2 && blank[0] == 0 && blank[1] == 1);
+
+            int[] saved = CommandQuery.Match(entries, "保存", 10);
+            Check("query name order", saved.Length == 2 && saved[0] == 0 && saved[1] == 1);
+            Check("query shortcut ignored", CommandQuery.Match(entries, "Ctrl+S", 10).Length == 0);
+            Check("query ignore case", CommandQuery.Match(new CommandEntry[] { new CommandEntry("build.build", "Build", "Ctrl+Shift+B") }, "build", 5).Length == 1);
+            int[] find = CommandQuery.Match(entries, "検索", 10);
+            Check("query later index", find.Length == 1 && find[0] == 3);
+            Check("query skips null entry", CommandQuery.Match(new CommandEntry[] { null, entries[3] }, "検索", 5).Length == 1 && CommandQuery.Match(new CommandEntry[] { null, entries[3] }, "検索", 5)[0] == 1);
+        }
+
+        private static void RunPickerNavigation()
+        {
+            Check("nav empty query", PickerNavigation.OnQueryChanged(0) == -1);
+            Check("nav reset", PickerNavigation.OnQueryChanged(4) == 0);
+            Check("nav move empty", PickerNavigation.Move(0, 0, 1) == -1);
+            Check("nav down", PickerNavigation.Move(0, 4, 1) == 1);
+            Check("nav up stops", PickerNavigation.Move(0, 4, -1) == 0);
+            Check("nav down stops", PickerNavigation.Move(3, 4, 1) == 3);
+            Check("nav no wrap", PickerNavigation.Move(0, 3, -1) == 0 && PickerNavigation.Move(2, 3, 1) == 2);
+            Check("nav low snaps", PickerNavigation.Move(-5, 4, 1) == 0);
+            Check("nav high snaps", PickerNavigation.Move(99, 4, -1) == 3);
+            Check("nav middle", PickerNavigation.Move(1, 4, 1) == 2 && PickerNavigation.Move(2, 4, -1) == 1);
+        }
+
+        private static void RunPickerHint()
+        {
+            Check("hint no workspace", PickerHint.QuickOpen(false, 0, 0, "") == PickerHint.NoWorkspace);
+            Check("hint no workspace wins", PickerHint.QuickOpen(false, 3, 3, "a") == PickerHint.NoWorkspace);
+            Check("hint no files", PickerHint.QuickOpen(true, 0, 0, "  ") == PickerHint.NoFiles);
+            Check("hint query miss", PickerHint.QuickOpen(true, 5, 0, "zzz") == PickerHint.NoMatch);
+            Check("hint empty snapshot query", PickerHint.QuickOpen(true, 0, 0, "a") == PickerHint.NoMatch);
+            Check("hint quick open rows", PickerHint.QuickOpen(true, 5, 2, "") == null);
+            Check("hint palette empty", PickerHint.Palette(0) == PickerHint.NoMatch);
+            Check("hint palette rows", PickerHint.Palette(3) == null);
+            Check("hint texts", PickerHint.NoWorkspace == "ワークスペースがありません" && PickerHint.NoFiles == "ファイルがありません" && PickerHint.NoMatch == "該当なし");
+        }
+
+        private static void RunQuickOpenQuery()
+        {
+            QuickOpenFile[] files = new QuickOpenFile[]
+            {
+                new QuickOpenFile("C:\\work\\b\\a.txt", "b\\a.txt", "a.txt"),
+                new QuickOpenFile("C:\\work\\a\\a.txt", "a\\a.txt", "a.txt"),
+                new QuickOpenFile("C:\\work\\readme\\notes.txt", "readme\\notes.txt", "notes.txt"),
+                new QuickOpenFile("C:\\work\\docs\\Readme.txt", "docs\\Readme.txt", "Readme.txt"),
+                new QuickOpenFile("C:\\work\\a b.txt", "a b.txt", "a b.txt"),
+                new QuickOpenFile("C:\\work\\ab.txt", "ab.txt", "ab.txt")
+            };
+
+            Check("qo null", QuickOpenQuery.Match(null, "a", 10).Length == 0);
+            Check("qo max 0", QuickOpenQuery.Match(files, "", 0).Length == 0);
+
+            int[] empty = QuickOpenQuery.Match(files, null, 10);
+            Check("qo empty order", empty.Length == 6 && empty[0] == 4 && empty[1] == 5 && empty[2] == 1 && empty[3] == 0 && empty[4] == 3 && empty[5] == 2);
+            int[] one = QuickOpenQuery.Match(files, "  ", 1);
+            Check("qo empty limit", one.Length == 1 && one[0] == 4);
+
+            int[] names = QuickOpenQuery.Match(files, "a.txt", 10);
+            Check("qo name before path", names.Length == 2 && names[0] == 1 && names[1] == 0);
+            int[] readme = QuickOpenQuery.Match(files, "readme", 10);
+            Check("qo name then relative", readme.Length == 2 && readme[0] == 3 && readme[1] == 2);
+            int[] slash = QuickOpenQuery.Match(files, "docs/Readme", 10);
+            Check("qo slash", slash.Length == 1 && slash[0] == 3);
+            int[] trimmed = QuickOpenQuery.Match(files, "  a.txt  ", 10);
+            Check("qo trim", trimmed.Length == 2 && trimmed[0] == 1 && trimmed[1] == 0);
+            Check("qo inner space miss", QuickOpenQuery.Match(files, "a b", 10).Length == 1 && QuickOpenQuery.Match(files, "a b", 10)[0] == 4);
+            Check("qo inner space kept apart", QuickOpenQuery.Match(files, "a b", 10)[0] != 5);
+            Check("qo drive ignored", QuickOpenQuery.Match(files, "C:", 10).Length == 0);
+            Check("qo full path ignored", QuickOpenQuery.Match(files, "work", 10).Length == 0);
+        }
+
+        private static void RunQuickOpenIndex()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-qo-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "a.cs"), "class A {}");
+                File.WriteAllText(Path.Combine(dir, ".gitignore"), "bin/");
+                Directory.CreateDirectory(Path.Combine(dir, "sub"));
+                File.WriteAllText(Path.Combine(dir, "sub", "b.ps1"), "Write-Output 1");
+                Directory.CreateDirectory(Path.Combine(dir, ".windows-ide"));
+                File.WriteAllText(Path.Combine(dir, ".windows-ide", "workspace.xml"), "<w/>");
+                Directory.CreateDirectory(Path.Combine(dir, "mybin"));
+                File.WriteAllText(Path.Combine(dir, "mybin", "c.txt"), "c");
+                Directory.CreateDirectory(Path.Combine(dir, "node_modules"));
+                File.WriteAllText(Path.Combine(dir, "node_modules", "n.txt"), "n");
+                Directory.CreateDirectory(Path.Combine(dir, "bin"));
+                File.WriteAllText(Path.Combine(dir, "bin", "skip-bin.txt"), "no");
+                Directory.CreateDirectory(Path.Combine(dir, "BIN"));
+                File.WriteAllText(Path.Combine(dir, "BIN", "skip-BIN.txt"), "no");
+                Directory.CreateDirectory(Path.Combine(dir, "obj"));
+                File.WriteAllText(Path.Combine(dir, "obj", "skip-obj.txt"), "no");
+                Directory.CreateDirectory(Path.Combine(dir, ".git"));
+                File.WriteAllText(Path.Combine(dir, ".git", "skip-git.txt"), "no");
+                Directory.CreateDirectory(Path.Combine(dir, "sub", "bin"));
+                File.WriteAllText(Path.Combine(dir, "sub", "bin", "hidden.txt"), "no");
+
+                QuickOpenFile[] listed = QuickOpenIndex.List(dir, QuickOpenIndex.DefaultMax);
+                Check("qo index count", listed != null && listed.Length == 6);
+                Check("qo index gitignore", RelativeAt(listed, 0) == ".gitignore");
+                Check("qo index workspace", RelativeAt(listed, 1) == ".windows-ide\\workspace.xml");
+                Check("qo index a.cs", RelativeAt(listed, 2) == "a.cs" && listed[2].FileName == "a.cs");
+                Check("qo index mybin", RelativeAt(listed, 3) == "mybin\\c.txt" && listed[3].FileName == "c.txt");
+                Check("qo index node", RelativeAt(listed, 4) == "node_modules\\n.txt");
+                Check("qo index sub", RelativeAt(listed, 5) == "sub\\b.ps1" && listed[5].FileName == "b.ps1");
+                Check("qo index drops bin", !HasRelativeFragment(listed, "skip-bin"));
+                Check("qo index drops BIN", !HasRelativeFragment(listed, "skip-BIN"));
+                Check("qo index drops obj", !HasRelativeFragment(listed, "skip-obj"));
+                Check("qo index drops git", !HasRelativeFragment(listed, "skip-git"));
+                Check("qo index drops nested bin", !HasRelativeFragment(listed, "hidden.txt"));
+                Check("qo index null", QuickOpenIndex.List(null, 10).Length == 0);
+                Check("qo index missing", QuickOpenIndex.List(Path.Combine(dir, "missing"), 10).Length == 0);
+                Check("qo index max 0", QuickOpenIndex.List(dir, 0).Length == 0);
+                Check("qo index max negative", QuickOpenIndex.List(dir, -3).Length == 0);
+                QuickOpenFile[] first = QuickOpenIndex.List(dir, 1);
+                Check("qo index max 1", first != null && first.Length == 1 && first[0].RelativePath == ".gitignore");
+                QuickOpenFile[] two = QuickOpenIndex.List(dir, 2);
+                Check("qo index max 2 partial", two != null && two.Length == 2 && two[0].RelativePath == ".gitignore" && two[1].RelativePath == "a.cs");
+                Check("qo index root bin", QuickOpenIndex.List(Path.Combine(dir, "BIN"), 10).Length == 0);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static void RunQuickOpenJunction()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "WindowsIDE-qoj-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string link = Path.Combine(dir, "link");
+            bool made = false;
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "keep.txt"), "k");
+                made = TryCreateJunction(link, dir);
+                if (!made)
+                {
+                    Console.WriteLine("SKIP  qo junction unavailable");
+                    return;
+                }
+
+                QuickOpenFile[] listed = QuickOpenIndex.List(dir, 50);
+                Check("qo junction finished", listed != null);
+                Check("qo junction one file", listed != null && listed.Length == 1 && listed[0].RelativePath == "keep.txt");
+                Check("qo junction no cycle", listed != null && !HasRelativeFragment(listed, "link\\"));
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(link))
+                    {
+                        Directory.Delete(link, false);
+                    }
+                }
+                catch (IOException)
+                {
+                }
+
+                try
+                {
+                    Directory.Delete(dir, true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        private static bool TryCreateJunction(string link, string target)
+        {
+            try
+            {
+                System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
+                info.FileName = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+                info.Arguments = "/d /c mklink /J \"" + link + "\" \"" + target + "\"";
+                info.UseShellExecute = false;
+                info.CreateNoWindow = true;
+                info.RedirectStandardOutput = true;
+                info.RedirectStandardError = true;
+                System.Diagnostics.Process process = System.Diagnostics.Process.Start(info);
+                if (process == null)
+                {
+                    return false;
+                }
+
+                process.WaitForExit();
+                if (process.ExitCode != 0 || !Directory.Exists(link))
+                {
+                    return false;
+                }
+
+                DirectoryInfo created = new DirectoryInfo(link);
+                return (created.Attributes & FileAttributes.ReparsePoint) != 0;
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+
+        private static void RunScrollBarKeepsFieldFocus()
+        {
+            Form host = new Form();
+            host.ShowInTaskbar = false;
+            host.FormBorderStyle = FormBorderStyle.FixedToolWindow;
+            host.StartPosition = FormStartPosition.Manual;
+            host.Location = new System.Drawing.Point(-32000, -32000);
+            host.ClientSize = new System.Drawing.Size(200, 80);
+            DualFontField field = new DualFontField();
+            field.Bounds = new System.Drawing.Rectangle(4, 4, 140, 24);
+            ThemedScrollBar bar = new ThemedScrollBar(true);
+            bar.Bounds = new System.Drawing.Rectangle(160, 4, 16, 60);
+            host.Controls.Add(field);
+            host.Controls.Add(bar);
+            try
+            {
+                host.Show();
+                field.Focus();
+                Application.DoEvents();
+                Check("scroll field focused", field.Focused);
+                bool taken = bar.Focus();
+                Application.DoEvents();
+                Check("scroll bar rejects focus", !taken && !bar.Focused);
+                Check("scroll field keeps focus", field.Focused);
+            }
+            finally
+            {
+                host.Dispose();
+            }
+        }
+
+        private static string RelativeAt(QuickOpenFile[] files, int index)
+        {
+            if (files == null || index < 0 || index >= files.Length || files[index] == null)
+            {
+                return "";
+            }
+
+            return files[index].RelativePath;
+        }
+
+        private static bool HasRelativeFragment(QuickOpenFile[] files, string fragment)
+        {
+            if (files == null || string.IsNullOrEmpty(fragment))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                if (files[i] != null && files[i].RelativePath != null && files[i].RelativePath.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void InspectPaletteSource()
+        {
+            string repo = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
+            string mainPath = Path.Combine(repo, "src", "WindowsIDE", "Ui", "MainForm.cs");
+            string idsPath = Path.Combine(repo, "src", "WindowsIDE", "Commands", "CommandIds.cs");
+            if (!File.Exists(mainPath) || !File.Exists(idsPath))
+            {
+                Check("palette source readable", false);
+                return;
+            }
+
+            string main = File.ReadAllText(mainPath);
+            string ids = File.ReadAllText(idsPath);
+            Check("palette shift p", main.IndexOf("Keys.Control | Keys.Shift | Keys.P", StringComparison.Ordinal) >= 0);
+            Check("palette ctrl p", HasExactCtrlP(main));
+            int quick = main.IndexOf("クイックオープン(&Q)", StringComparison.Ordinal);
+            int explorer = (quick < 0) ? -1 : main.IndexOf("エクスプローラー(&E)", quick, StringComparison.Ordinal);
+            Check("palette menu order", quick >= 0 && explorer > quick && main.IndexOf("コマンドパレット(&C)", quick, StringComparison.Ordinal) > quick);
+            if (quick >= 0 && explorer > quick)
+            {
+                string region = main.Substring(quick, explorer - quick);
+                Check("palette new items no ShortcutKeys", region.IndexOf("ShortcutKeys", StringComparison.Ordinal) < 0);
+            }
+            else
+            {
+                Check("palette new items no ShortcutKeys", false);
+            }
+
+            string marker = "public const string ";
+            int cursor = 0;
+            int names = 0;
+            while (cursor < ids.Length)
+            {
+                int at = ids.IndexOf(marker, cursor, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    break;
+                }
+
+                int start = at + marker.Length;
+                int end = start;
+                while (end < ids.Length && IsIdChar(ids[end]))
+                {
+                    end++;
+                }
+
+                string name = ids.Substring(start, end - start);
+                names++;
+                Check("palette id " + name, HasIdentifier(main, name));
+                cursor = end;
+            }
+
+            Check("palette id count", names == 41);
+        }
+
+        private static bool HasExactCtrlP(string src)
+        {
+            string token = "Keys.Control | Keys.P";
+            int start = 0;
+            while (start < src.Length)
+            {
+                int at = src.IndexOf(token, start, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    return false;
+                }
+
+                int after = at + token.Length;
+                bool boundary = after >= src.Length || !IsIdChar(src[after]);
+                if (boundary)
+                {
+                    return true;
+                }
+
+                start = at + token.Length;
+            }
+
+            return false;
+        }
+
+        private static bool HasIdentifier(string src, string name)
+        {
+            int start = 0;
+            while (start < src.Length)
+            {
+                int at = src.IndexOf(name, start, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    return false;
+                }
+
+                bool left = at == 0 || !IsIdChar(src[at - 1]);
+                int after = at + name.Length;
+                bool right = after >= src.Length || !IsIdChar(src[after]);
+                if (left && right)
+                {
+                    return true;
+                }
+
+                start = at + 1;
+            }
+
+            return false;
+        }
+
+        private static bool IsIdChar(char value)
+        {
+            return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '_';
         }
 
         private static void RunCompileUnit()

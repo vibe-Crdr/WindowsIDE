@@ -23,6 +23,7 @@
 | 編集器インテリジェンス | フェーズ P7 の括弧強調・スマートインデント・自動閉じ・定義へ移動・ホバー・枠コメント・VBA キャピタライズ・常時 csc・波線・VBA Compile 診断。波 A（F-BR / F-AC / F-SIND / F-VBA-CASE）は完了。波 B（F-GD / F-HOV / F-DOC）は完了。波 C（F-LIVE / F-SQU / F-VBA-BLD 手動）は完了。ライブ VBA は今は実装しない。P0–P2 の必須には含めない。 |
 | フェーズ P3 | PowerShell デバッグ（F-DBG-PS / F-DBG-UI 最小）。ディスク上 `.ps1` を同一プロセスの Runspace + SMA Debugger で行 BP・ステップ・ローカル。Host.PowerShell の 1 ショットは子プロセスのまま。 |
 | フェーズ P4 | C# デバッグ（P4-A = F-DBG-CS）と cmd デバッグ（P4-B = F-DBG-CMD。今は実装しない）。P4-A は手動 csc の TEMP `out.exe` を ICorDebug.CreateProcess で別プロセスデバッグする。Ctrl+F5 は Host.Csharp のまま。 |
+| フェーズ P5 | コマンドパレット、クイックオープン、簡易補完。第1スライスは F-PAL と F-QO。F-CMP は次スライス。デバッガではない。 |
 | F-DBG-CS | C# の行ブレーク・ステップ・ローカル・粗いスタック。P4-A。PDB + ICorDebug（インボックス COM）。Host.Csharp の 1 ショット実行（F-CS-RUN）とは別。 |
 | フェーズ P8 | F-MD 第1+第2スライス済み、参照/マクロは今は実装しない。**提案 P8**（F-CMP の P5 必須範囲）とは別。 |
 | フェーズ P9 | VB.NET ホスト（`.vb`、指定 `vbc.exe`、実行。デバッグは段階）。今は実装しない。P7-A / P8 に押し込まない。 |

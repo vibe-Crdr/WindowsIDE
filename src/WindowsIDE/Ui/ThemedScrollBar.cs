@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace WindowsIDE.Ui
@@ -23,7 +24,7 @@ namespace WindowsIDE.Ui
         private int wheelLeftover;
 
         /// <summary>
-        /// 向きを決めて作る。
+        /// 向きを決めて作る。フォーカスは受け取らない。クリックは呼び出し元の入力欄に残る。
         /// </summary>
         /// <param name="vertical">縦向きなら true。</param>
         public ThemedScrollBar(bool vertical)
@@ -34,6 +35,7 @@ namespace WindowsIDE.Ui
             this.smallChange = 1;
             this.trackColor = Theme.Background;
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            this.SetStyle(ControlStyles.Selectable, false);
             this.TabStop = false;
             this.Cursor = Cursors.Default;
             this.BackColor = Theme.Background;
@@ -246,6 +248,29 @@ namespace WindowsIDE.Ui
             }
         }
 
+        /// <summary>
+        /// このビルドの CanFocus は Selectable を見ない。同じトップレベルへフォーカスを戻す。
+        /// </summary>
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == Native.WmSetFocus)
+            {
+                IntPtr previous = m.WParam;
+                if (previous != IntPtr.Zero && previous != this.Handle && Native.SharesRoot(this.Handle, previous))
+                {
+                    Native.SetFocus(previous);
+                    return;
+                }
+            }
+
+            base.WndProc(ref m);
+        }
+
+        /// <summary>コンテナからの選択も受け取らない。</summary>
+        protected override void Select(bool directed, bool forward)
+        {
+        }
+
         private void UpdateDrag(int mouseCoord)
         {
             int trackLen = this.vertical ? this.Height : this.Width;
@@ -355,6 +380,30 @@ namespace WindowsIDE.Ui
             if (h != null)
             {
                 h(this, EventArgs.Empty);
+            }
+        }
+
+        private static class Native
+        {
+            internal const int WmSetFocus = 0x0007;
+            private const uint GaRoot = 2;
+
+            [DllImport("user32.dll", SetLastError = true)]
+            internal static extern IntPtr SetFocus(IntPtr hWnd);
+
+            [DllImport("user32.dll")]
+            private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+            internal static bool SharesRoot(IntPtr hwnd, IntPtr other)
+            {
+                if (hwnd == IntPtr.Zero || other == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                IntPtr left = GetAncestor(hwnd, GaRoot);
+                IntPtr right = GetAncestor(other, GaRoot);
+                return left != IntPtr.Zero && left == right;
             }
         }
     }

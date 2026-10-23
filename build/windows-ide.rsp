@@ -24,6 +24,12 @@
 /resource:assets\fonts\source-han-sans\LICENSE.txt,WindowsIDE.Fonts.SourceHanSansLicense
 src\WindowsIDE\Program.cs
 src\WindowsIDE\StartupArgs.cs
+src\WindowsIDE\Commands\PickerMode.cs
+src\WindowsIDE\Commands\CommandIds.cs
+src\WindowsIDE\Commands\CommandEntry.cs
+src\WindowsIDE\Commands\CommandQuery.cs
+src\WindowsIDE\Commands\PickerNavigation.cs
+src\WindowsIDE\Commands\PickerHint.cs
 src\WindowsIDE\Ui\Theme.cs
 src\WindowsIDE\Ui\DpiUtil.cs
 src\WindowsIDE\Ui\NativeCaption.cs
@@ -43,6 +49,8 @@ src\WindowsIDE\Ui\BottomPane.cs
 src\WindowsIDE\Ui\DebugPaneControl.cs
 src\WindowsIDE\Ui\TerminalControl.cs
 src\WindowsIDE\Ui\DualFontField.cs
+src\WindowsIDE\Ui\BoundCommand.cs
+src\WindowsIDE\Ui\CommandPopupControl.cs
 src\WindowsIDE\Ui\NativeIme.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
 src\WindowsIDE\Ui\TabStripLayout.cs
@@ -109,6 +117,9 @@ src\WindowsIDE\Languages\WorkspaceSymbols.cs
 src\WindowsIDE\Languages\CSharp\CSharpSymbols.cs
 src\WindowsIDE\Languages\CSharp\BclXmlDocs.cs
 src\WindowsIDE\Workspace\CsFileEnumerator.cs
+src\WindowsIDE\Workspace\QuickOpenFile.cs
+src\WindowsIDE\Workspace\QuickOpenIndex.cs
+src\WindowsIDE\Workspace\QuickOpenQuery.cs
 src\WindowsIDE\Workspace\VbaFileEnumerator.cs
 src\WindowsIDE\Workspace\WorkspaceFolder.cs
 src\WindowsIDE\Workspace\PathGuard.cs

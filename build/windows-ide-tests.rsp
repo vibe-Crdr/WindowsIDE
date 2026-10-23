@@ -15,6 +15,12 @@
 /r:C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll
 tests\WindowsIDE.Tests\Program.cs
 src\WindowsIDE\StartupArgs.cs
+src\WindowsIDE\Commands\PickerMode.cs
+src\WindowsIDE\Commands\CommandIds.cs
+src\WindowsIDE\Commands\CommandEntry.cs
+src\WindowsIDE\Commands\CommandQuery.cs
+src\WindowsIDE\Commands\PickerNavigation.cs
+src\WindowsIDE\Commands\PickerHint.cs
 src\WindowsIDE\Ui\DpiUtil.cs
 src\WindowsIDE\Ui\Theme.cs
 src\WindowsIDE\Ui\ThemedScrollBar.cs
@@ -32,6 +38,8 @@ src\WindowsIDE\Ui\OutputPanelControl.cs
 src\WindowsIDE\Ui\BottomPane.cs
 src\WindowsIDE\Ui\DebugPaneControl.cs
 src\WindowsIDE\Ui\DualFontField.cs
+src\WindowsIDE\Ui\BoundCommand.cs
+src\WindowsIDE\Ui\CommandPopupControl.cs
 src\WindowsIDE\Ui\CommonItemDialog.cs
 src\WindowsIDE\Ui\TabStripLayout.cs
 src\WindowsIDE\Ui\TabStrip.cs
@@ -81,6 +89,9 @@ src\WindowsIDE\Languages\VbaSemantic.cs
 src\WindowsIDE\Languages\CSharp\BclTypeCache.cs
 src\WindowsIDE\Languages\CSharp\WorkspaceTypeNames.cs
 src\WindowsIDE\Workspace\CsFileEnumerator.cs
+src\WindowsIDE\Workspace\QuickOpenFile.cs
+src\WindowsIDE\Workspace\QuickOpenIndex.cs
+src\WindowsIDE\Workspace\QuickOpenQuery.cs
 src\WindowsIDE\Workspace\VbaFileEnumerator.cs
 src\WindowsIDE\Build\FrameworkCsc.cs
 src\WindowsIDE\Build\Diagnostic.cs

@@ -55,6 +55,8 @@ C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0
 
 P7-B の新規ソースも rsp に列挙する。Languages は `VbaKeywordCase.cs` の次（`SymbolKind` / `DeclaredSymbol` / `IdentifierHit` / `IdentifierAtCaret` / `DefinitionResolver` / `DocCommentRules` / `HoverText` / `WorkspaceSymbols` / `CSharp/CSharpSymbols` / `CSharp/BclXmlDocs`）。`HoverInfoControl.cs` は `FindBar.cs` の次（製品 rsp のみ。テスト rsp には足さない）。`VbaFileEnumerator.cs` は `CsFileEnumerator.cs` の次。製品 `/r` は増やさない。
 
+P5 第1スライスは、`WindowsIDE.Commands` の 6 ファイルを `StartupArgs.cs` の直後（Ui より前）に、`QuickOpenFile.cs` / `QuickOpenIndex.cs` / `QuickOpenQuery.cs` を `CsFileEnumerator.cs` の直後に、`BoundCommand.cs` と `CommandPopupControl.cs` を `DualFontField.cs` の直後に列挙する。製品 rsp とテスト rsp の両方。製品 `/r` は増やさない。
+
 ユーザーコードの常時コンパイル（F-LIVE）も同じ Framework `csc.exe` を使う。live rsp は `/nostdlib /platform:x64 /target:library /utf8output`（`/debug+` も `/debug-` も書かない）。`/noconfig` は rsp に書かない。`/r:` は手動と同じ 6 DLL。`/out` は `%TEMP%\WindowsIDE\build\live\<key>\out.dll`。診断後に live ディレクトリをベストエフォート削除する。生成物は起動しない。製品の `/r` は増やさない。手動 exe 節（`/target:exe /debug+`）は変えない。Framework XML ドキュメントは DLL 隣の `.xml` をディスクから読む（`System.Xml` は既に製品 `/r` 済み）。新しい `/r` は出さない。ユーザー VB.NET（F-VB-BLD、フェーズ P9。今は実装しない）は指定 `vbc.exe` を使う。製品 `/r` に `Microsoft.VisualBasic.dll` を足さない。csc に `.vb` を渡さない。
 
 フェーズ P10（F-WF-DSN。今は実装しない）の製品 `/r` 候補は、同じ Framework フォルダの `System.Design.dll` と `System.Drawing.Design.dll` である。足すときは [decisions.md](decisions.md) の提案 P38 を採用してから。**今は rsp に足さない。** ユーザー手動 csc には足さない（ユーザーは既存 6 DLL で足りる。Design は IDE のホスト用）。`Microsoft.CSharp.dll` は製品にもユーザーにも足さない。

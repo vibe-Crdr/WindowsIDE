@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Drawing.Text;
 using System.IO;
 using System.Windows.Forms;
 using WindowsIDE.Build;
@@ -957,7 +956,6 @@ namespace WindowsIDE.Editor
 
             Graphics g = e.Graphics;
             g.Clear(Theme.EditorBackground);
-            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             this.EnsureMetrics(g);
             if (this.document == null || this.halfFont == null || this.fullFont == null)
             {
@@ -981,6 +979,7 @@ namespace WindowsIDE.Editor
             this.GetGutterPads(out leftPad, out rightPad, out textInset);
 
             Rectangle body = DpiUtil.TextBodyClip(this.gutterWidth, textArea);
+            DualFontPainter.ApplyTextRenderingHint(g, true);
             GraphicsState state = g.Save();
             try
             {
@@ -1982,9 +1981,10 @@ namespace WindowsIDE.Editor
                 bool half = GlyphClassifier.UseHalfWidthFont(text, i, out count);
                 Font font = half ? this.halfFont : this.fullFont;
                 string ch = text.Substring(i, count);
+                float w = g.MeasureString(ch, font, new PointF(0, 0), this.typographic).Width;
                 DualFontPainter.ApplyTextRenderingHint(g, half);
                 g.DrawString(ch, font, fg, x, y + this.BaselineOffset(font), this.typographic);
-                x += g.MeasureString(ch, font, new PointF(0, 0), this.typographic).Width;
+                x += w;
                 i += count;
             }
         }

@@ -11,6 +11,9 @@ namespace WindowsIDE.Ui.Fonts
     /// </summary>
     public static class DualFontPainter
     {
+        private const int HalfWidthTextContrast = 4;
+        private const int FullWidthTextContrast = 12;
+
         /// <summary>
         /// 文字列幅を半角・全角ランごとに合計する。
         /// </summary>
@@ -297,10 +300,10 @@ namespace WindowsIDE.Ui.Fonts
         }
 
         /// <summary>
-        /// 半角も全角も ClearTypeGridFit。gasp 無し源ノ角を二値にしない。
+        /// DrawString 直前のヒント。半角は ClearTypeGridFit と TextContrast 4、全角は AntiAlias と TextContrast 12。
         /// </summary>
         /// <param name="g">描画先。null なら何もしない。</param>
-        /// <param name="useHalfWidth">半角ランなら true。ヒントは半角・全角で同じ。</param>
+        /// <param name="useHalfWidth">半角ランなら true。</param>
         public static void ApplyTextRenderingHint(Graphics g, bool useHalfWidth)
         {
             if (g == null)
@@ -308,7 +311,16 @@ namespace WindowsIDE.Ui.Fonts
                 return;
             }
 
-            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            if (useHalfWidth)
+            {
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                g.TextContrast = HalfWidthTextContrast;
+            }
+            else
+            {
+                g.TextRenderingHint = TextRenderingHint.AntiAlias;
+                g.TextContrast = FullWidthTextContrast;
+            }
         }
 
         /// <summary>

@@ -72,7 +72,7 @@ ASCII 印字（U+0020–U+007E）と半角カナ（U+FF61–U+FF9F）は Cascadi
 
 ## 描画（GDI+）
 
-二重バッファで SystemDefault は gasp 無し源ノ角を二値にする。全角も半角も DrawString 直前は ClearTypeGridFit。グリッドフィット無しの AntiAlias は、ヒント命令も gasp も無い源ノ角を 100% DPI の 12px で中間色のままぼかす。AntiAliasGridFit と SystemDefault は二値か、灰色のまま鋭くならないので使わない。測幅は hint に依存させない。TextRenderer は同梱の PrivateFontCollection を描かず Yu Gothic UI に落ちるので使わない。
+二重バッファで SystemDefault は gasp 無し源ノ角を二値にする。半角の DrawString 直前は ClearTypeGridFit と TextContrast 4。全角の DrawString 直前は AntiAlias と TextContrast 12。12 はグレーアンチエイリアスの鋭い側で、TextContrast 4 のまま中間色を広げる段より一段少ない。ClearType の TextContrast 0–4 は同梱源ノ角のカバレッジを変えない。AntiAliasGridFit と SystemDefault は二値なので使わない。測幅は hint と TextContrast に依存させない。測る前にそれらを変えない。TextRenderer は同梱の PrivateFontCollection を描かず Yu Gothic UI に落ちるので使わない。gasp 追記、DirectWrite、WPF、スーパーサンプリング、フォント再生成、ClearType の上への AntiAlias 重ね描きはしない。
 
 ## ビルド
 
